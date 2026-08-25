@@ -1,0 +1,13 @@
+{
+  "name": "xiao-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "小二 · 语音工作助手桌面壳（Electron）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^31.3.0"
+  }
+}

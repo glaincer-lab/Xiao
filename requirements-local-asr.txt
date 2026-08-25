@@ -1,0 +1,7 @@
+# 本地中文 ASR（体积大，需 torch；按需安装）
+# pip install -r requirements-local-asr.txt
+torch>=2.2
+torchaudio>=2.2
+funasr>=1.1
+modelscope>=1.14
+onnxruntime>=1.17

@@ -1,0 +1,252 @@
+server:
+  host: 127.0.0.1
+  port: 8123
+audio:
+  sample_rate: 16000
+  chunk_ms: 30
+  input_device: null
+wake_word:
+  enabled: true
+  engine: sherpa
+  active: ''
+  models: []
+  keyword: 小二
+  pinyin: x iǎo èr
+  threshold: 0.25
+  model_dir: models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
+bargein:
+  enabled: true
+dismiss:
+  enabled: true
+  phrases:
+  - 你退下吧
+  - 你可以回去了
+  - 退下
+  - 回去吧
+  - 去休息吧
+  - 睡觉吧
+  - 再见
+  reply: 好的，我先退下了，有需要再叫我。
+clear_history:
+  enabled: true
+  phrases:
+  - 清空对话
+  - 清空历史
+  - 忘记之前
+  - 重新开始
+  reply: 已清空，我们重新开始。
+shutdown:
+  enabled: true
+  phrases:
+  - 你把自己关了吧
+  - 把自己关了吧
+  - 关闭自己
+  - 退出程序
+  - 退出吧
+  ask_reply: 确认要完全关闭我吗？说确认关闭，或者说取消。
+  confirm_phrases:
+  - 确认关闭
+  - 确认
+  - 确定
+  - 是的
+  - 关闭
+  - 关吧
+  done_reply: 好的，再见。
+  cancel_reply: 好的，不关了。
+  timeout_ms: 5000
+vad:
+  engine: silero
+  silero_threshold: 0.5
+  mode: 3
+  energy_threshold: 300
+  min_speech_ms: 300
+  silence_ms: 1500
+  session_timeout_ms: 10000
+asr:
+  provider: cloud
+  active: ''
+  models: []
+  cloud:
+    provider: aliyun
+    model: paraformer-realtime-v2
+    api_key: ''
+  local:
+    engine: funasr
+    model: paraformer-zh
+    model_dir: ''
+llm:
+  provider: cloud
+  active: ''
+  models: []
+  cloud:
+    provider: deepseek
+    model: deepseek-v4-pro
+    base_url: https://api.deepseek.com/v1
+    api_key: ''
+    temperature: 0.3
+  local:
+    base_url: http://localhost:11434/v1
+    model: qwen2.5:7b
+    temperature: 0.3
+  omni:
+    base_url: http://localhost:8000/v1
+    model: openbmb/MiniCPM-o-4_5
+    api_key: ''
+    temperature: 0.3
+tts:
+  provider: edge
+  active: ''
+  models: []
+  voice: zh-CN-YunjianNeural
+  rate: +30%
+agent:
+  workspace: D:\04_Work\04_Project\005_Agent\03_Workspace
+  system_prompt: ''
+  max_history: 16
+bridge:
+  dsh_command: dsh
+  timeout_sec: 600
+tasks:
+  max_concurrent: 1
+  log_path: logs/tasks.json
+router:
+  mode: auto
+  log_path: logs/routes.jsonl
+  dsh_keywords:
+  - 写代码
+  - 写脚本
+  - 改代码
+  - 改脚本
+  - 写程序
+  - 实现
+  - 重构
+  - 修复
+  - 调试
+  - 爬虫
+  - 脚本
+  - 代码
+  - 程序
+  - 编译
+  - 部署
+  - git
+  - 知识库
+  - 检索
+  - 解析
+  - 查代码
+  - 终端
+  - 命令行
+  - 跑一下
+  - 运行
+  working_status_phrases:
+  - 进展
+  - 怎么样
+  - 好了吗
+  - 完成了吗
+  - 做到哪
+  - 状态
+  - 还要多久
+  working_cancel_phrases:
+  - 取消
+  - 停
+  - 别做了
+  - 算了
+  - 不用做了
+tools:
+  enabled:
+  - web_search
+  - open_app
+  - weather
+  - reminder
+  web_search:
+    provider: duckduckgo
+devices:
+  enabled: false
+  adapter: huawei
+approval:
+  enabled: true
+  allow_phrases:
+  - 允许
+  - 可以
+  - 同意
+  - 批准
+  - 执行吧
+  - 干吧
+  deny_phrases:
+  - 拒绝
+  - 不允许
+  - 不同意
+  - 不可以
+  - 不行
+  - 取消
+  - 算了
+  - 别做
+  timeout_ms: 15000
+perms:
+  standing_grants:
+  - install
+  - network
+  - write_outside
+  deferred_path: logs/deferred.json
+  rules:
+    network:
+    - 爬虫
+    - 联网
+    - 下载
+    - 抓取
+    - 网页
+    - 网站
+    - 接口
+    - 请求
+    - 在线
+    - 搜索
+    - 微博
+    - 热搜
+    - 新闻
+    - 采集
+    - 抓包
+    - 网络
+    - api
+    - http
+    - fetch
+    - curl
+    - wget
+    write_outside:
+    - 桌面
+    - 下载目录
+    - 文档目录
+    - 工作区外
+    - 别的目录
+    - 移到
+    - 导出到
+    - 备份到
+    delete:
+    - 删除
+    - 删掉
+    - 清理
+    - 清除
+    - 移除
+    - 卸载
+    - 清空文件
+    - rm
+    - delete
+    - remove
+    install:
+    - 安装
+    - 装包
+    - 装依赖
+    - 依赖
+    - pip
+    - npm
+    - apt
+    - brew
+    - 下载安装
+    system:
+    - 注册表
+    - 驱动
+    - 环境变量
+    - 开机启动
+    - 计划任务
+    - 系统设置
+    - 系统服务
+    - 改系统
+    - 修改系统

@@ -1,0 +1,5 @@
+# 小二语音审批桥 —— 供 `dsh plugin add` 安装时作为 bundle patch 生效。
+# 本地直接使用时，也可把下面这行 insert 合并进 profile 的 cordis.patch.yml。
+- insert:
+    - id: xiao-approval-bridge
+      name: xiao-approval-bridge

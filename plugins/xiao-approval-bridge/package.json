@@ -1,0 +1,15 @@
+{
+  "name": "xiao-approval-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
