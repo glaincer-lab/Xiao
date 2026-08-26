@@ -1,8 +1,14 @@
 # 小二（Xiao）· Windows 语音工作助手
 
-一个 Windows 桌面常驻的中文语音工作助手：唤醒词唤醒 → 中文流式识别实时上屏 → 静音自动提交 → 两段式语音回复（先说明「准备干什么」，执行后再「汇报结果」）。
+一个 Windows 桌面常驻的中文语音工作助手：说「小二」唤醒 → 说话实时上屏 → 静音自动提交 → 两段式语音回复（先说明「准备干什么」，执行后再「汇报结果」）。
 
-**本质**：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，做成「语音控制的 Agent 工作台」——不只是查天气、搜网页，还能读文件、写代码、跑命令、多步迭代完成任务。
+**本质**：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，做成「语音控制的 Agent 工作台」——不只是查天气、搜网页，还能读文件、写代码、跑命令、多步迭代完成任务。语音层只负责唤醒、识别、路由，最难的部分（agent 循环、编程工具、subagent、知识库）外包给 DSH。
+
+**核心链路**：Sherpa-ONNX 本地中文唤醒（免费、离线、零训练）→ Silero VAD 断句 → 阿里云 Paraformer 实时流式识别（普通话 + 重庆/四川/粤语方言，本地可切 FunASR）→ 路由（聊天走 DeepSeek/通义/OpenAI/GLM/Kimi 云端，或本地 Ollama/MiniCPM-o；干活走 DSH）→ 危险操作语音审批 → edge-tts 播报。
+
+**多方案管理**：唤醒 / 识别 / 播报 / 大模型四环节均支持多方案（卡片列表 + 新建编辑 + 一键切换，模型名手填、以官方为准）；危险操作（联网 / 写工作区外 / 删除 / 安装 / 改系统）语音审批，DSH 无头模式 fail-closed；长任务后台化 + 完成通知。
+
+技术栈：Python（FastAPI + WebSocket）后端 + React（Vite + TypeScript + Three.js）前端 + Electron 托盘壳；依赖 DeepSeek Harness 作为大脑。
 
 ## 特性
 
