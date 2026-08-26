@@ -198,4 +198,4 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
 
 ## 14. 开源
 
-已开源到 GitHub（`glaincer-lab/Xiao`，MIT）。整体方案见 `OPEN_SOURCE.md`。素材版权（desktop/assets 的 icon/tray 图标）需确认来源，正式对外宣传前替换为自有或可商用素材。
+已开源到 GitHub（`glaincer-lab/Xiao`，MIT）。整体方案见 `OPEN_SOURCE.md`（素材版权已确认无风险）。
