@@ -97,9 +97,9 @@ SCHEMA: list[dict] = [
     # ---- 识别 ----
     {"path": "asr.provider", "label": "识别方式", "type": "select", "group": "asr", "reload": "restart",
      "options": [
-         {"value": "cloud", "label": "云端 Paraformer", "status": "ok"},
+         {"value": "cloud", "label": "云端 Fun-ASR / Qwen", "status": "ok"},
          {"value": "local", "label": "本地 FunASR", "status": "ok"},
-         {"value": "omni", "label": "一体化 MiniCPM-o（自带识别）", "status": "ok"},
+         {"value": "omni", "label": "一体化 MiniCPM-o（本地）", "status": "ok"},
      ]},
     {"path": "asr.cloud.provider", "label": "云端服务商", "type": "select", "group": "asr", "reload": "restart",
      "show_if": {"path": "asr.provider", "value": "cloud"},
@@ -107,10 +107,11 @@ SCHEMA: list[dict] = [
     {"path": "asr.cloud.model", "label": "云端模型", "type": "select", "group": "asr", "reload": "restart",
      "show_if": {"path": "asr.provider", "value": "cloud"},
      "options": [
-         {"value": "paraformer-realtime-v2", "label": "Paraformer（普通话）", "status": "ok"},
-         {"value": "fun-asr-flash-8k-realtime", "label": "Fun-ASR-Flash（方言：重庆话/四川话/粤语）", "status": "ok"},
+         {"value": "fun-asr-flash-8k-realtime", "label": "Fun-ASR（方言：重庆话/四川话/粤语，8k）", "status": "ok"},
+         {"value": "qwen-audio-3.0-asr-flash-streaming", "label": "Qwen-Audio（普通话+方言，16k）", "status": "ok"},
+         {"value": "qwen3-asr-flash-realtime", "label": "Qwen3-ASR（普通话，16k，OmniRealtime）", "status": "ok"},
      ],
-     "hint": "方言模型为 8kHz，自动降采样；方言自动识别（以阿里云文档为准）"},
+     "hint": "fun-asr 为 8kHz 方言（默认）；qwen-audio/qwen3 为 16kHz"},
     {"path": "asr.cloud.api_key", "label": "API Key", "type": "text", "group": "asr", "reload": "restart",
      "show_if": {"path": "asr.provider", "value": "cloud"},
      "hint": "阿里云百炼（Model Studio）的 API Key；留空则读环境变量 DASHSCOPE_API_KEY"},
