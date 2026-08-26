@@ -141,7 +141,7 @@ SCHEMA: list[dict] = [
     {"path": "tts.provider", "label": "播报方式", "type": "select", "group": "tts", "reload": "restart",
      "options": [
          {"value": "edge", "label": "edge-tts 免费云", "status": "ok"},
-         {"value": "cloud", "label": "付费云 TTS（阿里/火山/Azure）", "status": "planned"},
+         {"value": "cloud", "label": "付费云 TTS（阿里 CosyVoice）", "status": "ok"},
          {"value": "piper", "label": "本地 Piper", "status": "planned"},
          {"value": "omni", "label": "一体化 MiniCPM-o（语音输出，可省 TTS）", "status": "planned"},
      ]},
@@ -154,7 +154,7 @@ SCHEMA: list[dict] = [
     {"path": "tts.cloud.provider", "label": "付费云服务商", "type": "select", "group": "tts", "reload": "restart",
      "show_if": {"path": "tts.provider", "value": "cloud"},
      "options": [
-         {"value": "aliyun", "label": "阿里云", "status": "planned"},
+         {"value": "aliyun", "label": "阿里云（CosyVoice）", "status": "ok"},
          {"value": "volcengine", "label": "火山引擎", "status": "planned"},
          {"value": "azure", "label": "Azure", "status": "planned"},
      ]},
@@ -163,7 +163,7 @@ SCHEMA: list[dict] = [
      "hint": "对应服务商的语音合成 API Key"},
     {"path": "tts.cloud.voice", "label": "音色", "type": "text", "group": "tts", "reload": "restart",
      "show_if": {"path": "tts.provider", "value": "cloud"},
-     "hint": "该服务商的音色名，如 cosyvoice 音色"},
+     "hint": "CosyVoice 音色名（如 longxiaochun），完整列表以阿里云官方为准"},
     {"path": "tts.piper.model", "label": "Piper 模型路径", "type": "text", "group": "tts", "reload": "restart",
      "show_if": {"path": "tts.provider", "value": "piper"},
      "hint": "piper 引擎与中文声库（.onnx）的本地路径"},

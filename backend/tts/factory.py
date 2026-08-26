@@ -10,6 +10,12 @@ def _build_edge(voice: str, rate: str) -> TTSEngine:
     return EdgeTTS(voice=voice, rate=rate)
 
 
+def _build_cloud(voice: str, api_key: str | None) -> TTSEngine:
+    from backend.tts.cosyvoice import CosyVoiceEngine
+
+    return CosyVoiceEngine(voice=voice, api_key=api_key)
+
+
 def build_tts() -> TTSEngine:
     models = config.get("tts.models", None)
     if models:
@@ -19,6 +25,8 @@ def build_tts() -> TTSEngine:
             provider = m.get("provider", "edge")
             if provider == "edge":
                 return _build_edge(m.get("voice", "zh-CN-XiaoxiaoNeural"), m.get("rate", "+0%"))
+            if provider == "cloud":
+                return _build_cloud(m.get("voice", "longxiaochun"), m.get("apiKey"))
             raise ValueError(f"TTS 方案尚未接入: {provider}")
 
     provider = config.get("tts.provider", "edge")
@@ -27,4 +35,7 @@ def build_tts() -> TTSEngine:
             config.get("tts.voice", "zh-CN-XiaoxiaoNeural"),
             config.get("tts.rate", "+0%"),
         )
+    if provider == "cloud":
+        cloud_cfg = config.section("tts.cloud")
+        return _build_cloud(cloud_cfg.get("voice", "longxiaochun"), cloud_cfg.get("api_key"))
     raise ValueError(f"未支持的 TTS provider: {provider}")

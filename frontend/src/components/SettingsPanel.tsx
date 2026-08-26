@@ -67,6 +67,22 @@ const LLM_PROVIDERS: LLMProviderDef[] = [
     keyHint: 'pip install vllm → 下载模型 → 启动 vLLM 服务 → 填地址与模型' },
 ]
 
+// 阿里云 CosyVoice 常用音色（完整列表以阿里云官方为准，可手填其它音色名）
+const COSYVOICE_VOICES = [
+  { value: 'longxiaochun', label: '龙小春（女）' },
+  { value: 'longxiaoxia', label: '龙小夏（女）' },
+  { value: 'longchen', label: '龙辰（男）' },
+  { value: 'longhua', label: '龙华（男）' },
+  { value: 'longshu', label: '龙书（男）' },
+  { value: 'longjing', label: '龙靖（男）' },
+  { value: 'longjie', label: '龙杰（男）' },
+  { value: 'longmiao', label: '龙淼（女）' },
+  { value: 'longwan', label: '龙婉（女）' },
+  { value: 'longyin', label: '龙音（女）' },
+  { value: 'longtong', label: '龙彤（女）' },
+  { value: 'longfei', label: '龙飞（男）' },
+]
+
 // 已保存的模型条目（多模型管理列表）
 type SavedModel = {
   id: string
@@ -932,8 +948,11 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                   <input type="password" value={ttsForm.apiKey} placeholder="语音合成 Key" onChange={(e) => setTtsForm({ ...ttsForm, apiKey: e.target.value })} />
                 </label>
                 <label className="settings-field">
-                  <span className="settings-field-label">音色</span>
-                  <input type="text" value={ttsForm.voice} placeholder="音色名（以官方为准）" onChange={(e) => setTtsForm({ ...ttsForm, voice: e.target.value })} />
+                  <span className="settings-field-label">音色（下拉选 / 可手填）</span>
+                  <input type="text" list="cosyvoice-voices" value={ttsForm.voice} placeholder="如 longxiaochun（以官方为准）" onChange={(e) => setTtsForm({ ...ttsForm, voice: e.target.value })} />
+                  <datalist id="cosyvoice-voices">
+                    {COSYVOICE_VOICES.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
+                  </datalist>
                 </label>
               </>
             )}
