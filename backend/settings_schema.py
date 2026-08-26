@@ -142,7 +142,7 @@ SCHEMA: list[dict] = [
      "options": [
          {"value": "edge", "label": "edge-tts 免费云", "status": "ok"},
          {"value": "cloud", "label": "付费云 TTS（阿里 CosyVoice）", "status": "ok"},
-         {"value": "piper", "label": "本地 Piper", "status": "planned"},
+         {"value": "piper", "label": "本地 Piper（离线）", "status": "ok"},
          {"value": "omni", "label": "一体化 MiniCPM-o（语音输出，可省 TTS）", "status": "planned"},
      ]},
     {"path": "tts.voice", "label": "音色", "type": "select", "group": "tts", "reload": "restart",
@@ -166,7 +166,7 @@ SCHEMA: list[dict] = [
      "hint": "CosyVoice 音色名（如 longxiaochun），完整列表以阿里云官方为准"},
     {"path": "tts.piper.model", "label": "Piper 模型路径", "type": "text", "group": "tts", "reload": "restart",
      "show_if": {"path": "tts.provider", "value": "piper"},
-     "hint": "piper 引擎与中文声库（.onnx）的本地路径"},
+     "hint": "piper 声库（.onnx）本地路径；先 pip install piper-tts，再从 rhasspy/piper-voices 下载中文声库（如 zh_CN-huayan-medium）"},
     {"path": "tts.piper.voice", "label": "声库语音", "type": "text", "group": "tts", "reload": "restart",
      "show_if": {"path": "tts.provider", "value": "piper"},
      "hint": "中文声库里的语音名，如 zh_CN-huayan-medium"},

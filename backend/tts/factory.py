@@ -16,6 +16,12 @@ def _build_cloud(voice: str, api_key: str | None) -> TTSEngine:
     return CosyVoiceEngine(voice=voice, api_key=api_key)
 
 
+def _build_piper(model_path: str) -> TTSEngine:
+    from backend.tts.piper import PiperEngine
+
+    return PiperEngine(model_path=model_path)
+
+
 def build_tts() -> TTSEngine:
     models = config.get("tts.models", None)
     if models:
@@ -27,6 +33,8 @@ def build_tts() -> TTSEngine:
                 return _build_edge(m.get("voice", "zh-CN-XiaoxiaoNeural"), m.get("rate", "+0%"))
             if provider == "cloud":
                 return _build_cloud(m.get("voice", "longxiaochun"), m.get("apiKey"))
+            if provider == "piper":
+                return _build_piper(m.get("piperModel", ""))
             raise ValueError(f"TTS 方案尚未接入: {provider}")
 
     provider = config.get("tts.provider", "edge")
@@ -38,4 +46,7 @@ def build_tts() -> TTSEngine:
     if provider == "cloud":
         cloud_cfg = config.section("tts.cloud")
         return _build_cloud(cloud_cfg.get("voice", "longxiaochun"), cloud_cfg.get("api_key"))
+    if provider == "piper":
+        piper_cfg = config.section("tts.piper")
+        return _build_piper(piper_cfg.get("model", ""))
     raise ValueError(f"未支持的 TTS provider: {provider}")
