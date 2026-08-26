@@ -1,6 +1,6 @@
 # 开源方案（定稿）
 
-> 状态：**本地 git 已初始化并提交（3 次），尚未建远程仓库**。许可证 MIT、项目名 Xiao（小二）已定；密钥轮换、素材核查、README 双语等留到「正式开源前」完成。本文件随开发持续维护。
+> 状态：**已开源到 GitHub（glaincer-lab/Xiao，MIT）**。密钥轮换见 §二，素材版权核查见 §二.附；本文件随开发持续维护。
 
 ---
 
@@ -93,12 +93,13 @@ xiao/
 
 ## 五、配置与密钥卫生（清单）
 
-- [x] `.env` 在 `.gitignore`；`.env.example` 清掉 Picovoice
-- [x] `logs/`、模型权重（`*.tflite`、`models/`）加入 `.gitignore`
-- [ ] 正式开源前轮换 DeepSeek + 阿里云 key
-- [ ] `config.yaml` 去除本机绝对路径
-- [ ] 开源前 `gitleaks detect` 全历史扫描，零告警
-- [ ] LICENSE（MIT）+ NOTICE 到位
+- [x] `.env` 在 `.gitignore`；`.env.example` 为纯占位符
+- [x] `logs/`、模型权重（`models/`）、`.gh-config/` 加入 `.gitignore`
+- [x] `config.yaml` 工作目录改为相对路径（不写死本机绝对路径）
+- [x] 全历史密钥扫描（git 历史 + 正则），零泄露
+- [ ] 轮换 DeepSeek + 阿里云 key（密钥无资金风险，可暂缓）
+- [x] LICENSE（MIT）
+- [ ] NOTICE（模型/依赖许可声明）
 
 ---
 

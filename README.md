@@ -54,10 +54,10 @@ backend/
   tasks.py          长任务后台化（队列 + 并发 + 持久化）
   bridge/           ★ 唯一知道 DSH 的地方（headless CLI + 多轮上下文）
   audio/            mic.py 采集 / vad.py 断句 / wake.py 唤醒词
-  asr/              抽象 + 云端Paraformer(普通话/方言) + 本地FunASR + 多方案工厂
-  llm/              抽象 + OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama/MiniCPM-o) + 多方案工厂
-  tts/              抽象 + edge-tts + 多方案工厂（付费云/Piper/一体化预留）
-  tools/            可插拔工具（搜索/打开/天气/提醒 + 注册表）
+  asr/              云端 Paraformer(普通话/方言) / 本地 FunASR
+  llm/              云端 DeepSeek/通义/OpenAI/GLM/Kimi / 本地 Ollama/MiniCPM-o
+  tts/              edge-tts（付费云 / Piper 预留）
+  tools/            搜索 / 打开应用 / 天气 / 提醒（注册表）
   devices/          设备接入抽象（华为智能家居预留）
   session/state.py  状态机 + 线程安全事件总线
 frontend/           React 前端（App + Nebula/波形/打字机/设置/权限/任务/工作面板）

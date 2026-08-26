@@ -196,6 +196,6 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
 
 路线图已移至 `ROADMAP.md`（8 阶段，云端 API 优先），此处不再重复，避免双份维护。
 
-## 14. 开源（规划）
+## 14. 开源
 
-后期开源的整体方案见 `OPEN_SOURCE.md`。已定：**许可证 MIT**、**项目名 Xiao（小二）**。开源前待办：轮换密钥（暂缓，正式开源前执行）、Picovoice 残留（已清）、素材版权核查。
+已开源到 GitHub（`glaincer-lab/Xiao`，MIT）。整体方案见 `OPEN_SOURCE.md`。素材版权（desktop/assets 的 icon/tray 图标）需确认来源，正式对外宣传前替换为自有或可商用素材。
