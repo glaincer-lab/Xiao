@@ -134,4 +134,15 @@ xiao/
 
 ## 八、一句话总结
 
-> 开源的最大障碍不是技术也不是许可证，而是纪律活：轮换密钥、清残留、改名。其中「清残留 + 改名」已完成，「轮换密钥」留到正式开源前；许可证 MIT、项目名 Xiao（小二）已定。当前专注开发，开源等成熟。
+> 开源的最大障碍不是技术也不是许可证，而是纪律活：轮换密钥、清残留、改名。其中「清残留 + 改名 + 密钥检查」已完成；许可证 MIT、项目名 Xiao（小二）。
+
+## 九、开源完成小结（2026-08）
+
+已开源：**https://github.com/glaincer-lab/Xiao**（MIT）
+
+- 仓库内容：后端 + 前端 + Electron 壳 + 审批桥插件 + 文档 + 测试集
+- 开源前清理：openwakeword/tflite 残留、本机绝对路径、日志/任务记录、个人信息——全部清除
+- 密钥：确认未进仓、git 历史无 key（4 重验证）；轮换暂缓（无资金风险）
+- 文档：README（含界面截图 + 完整描述）、DESIGN、ROADMAP、LICENSE、NOTICE
+- Topics：voice-assistant / agent / speech-recognition / deepseek / windows / chinese
+- 素材：图标为自制抽象图形，版权无风险
