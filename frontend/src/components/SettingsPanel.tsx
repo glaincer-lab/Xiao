@@ -161,7 +161,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [addForm, setAddForm] = useState({ provider: 'deepseek', model: 'deepseek-v4-pro', name: '', apiKey: '', baseUrl: 'https://api.deepseek.com/v1', temperature: 0.3 })
   const [editModelId, setEditModelId] = useState<string | null>(null)
   const [showAddASR, setShowAddASR] = useState(false)
-  const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'paraformer-realtime-v2', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
+  const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'fun-asr-flash-8k-realtime', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
   const [editASRId, setEditASRId] = useState<string | null>(null)
   const [showAddTTS, setShowAddTTS] = useState(false)
   const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'cloud' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; cloudProvider: string; piperModel: string; piperVoice: string }>({ provider: 'edge', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', name: '', apiKey: '', cloudProvider: 'aliyun', piperModel: '', piperVoice: '' })
@@ -652,7 +652,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
 
     const startNewASR = () => {
       setEditASRId(null)
-      setAsrForm({ provider: 'cloud', model: 'paraformer-realtime-v2', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
+      setAsrForm({ provider: 'cloud', model: 'fun-asr-flash-8k-realtime', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
       setShowAddASR(true)
     }
 
@@ -716,11 +716,11 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               <span className="settings-field-label">识别方式</span>
               <select value={asrForm.provider} onChange={(e) => {
                 const p = e.target.value as 'cloud' | 'local' | 'omni'
-                setAsrForm({ ...asrForm, provider: p, model: p === 'cloud' ? 'paraformer-realtime-v2' : p === 'local' ? 'paraformer-zh' : '' })
+                setAsrForm({ ...asrForm, provider: p, model: p === 'cloud' ? 'fun-asr-flash-8k-realtime' : p === 'local' ? 'paraformer-zh' : '' })
               }}>
-                <option value="cloud">✅ 云端（Paraformer / 方言）</option>
+                <option value="cloud">✅ 云端（Fun-ASR / Qwen）</option>
                 <option value="local">✅ 本地 FunASR</option>
-                <option value="omni">⬜ 一体化 MiniCPM-o</option>
+                <option value="omni">⬜ 一体化 MiniCPM-o（本地）</option>
               </select>
             </label>
 
@@ -729,8 +729,9 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                 <label className="settings-field">
                   <span className="settings-field-label">云端模型</span>
                   <select value={asrForm.model} onChange={(e) => setAsrForm({ ...asrForm, model: e.target.value })}>
-                    <option value="paraformer-realtime-v2">✅ Paraformer（普通话）</option>
-                    <option value="fun-asr-flash-8k-realtime">✅ Fun-ASR-Flash（方言：重庆话/四川话/粤语）</option>
+                    <option value="fun-asr-flash-8k-realtime">✅ Fun-ASR（方言：重庆话/四川话/粤语，8k）</option>
+                    <option value="qwen-audio-3.0-asr-flash-streaming">✅ Qwen-Audio（普通话+方言，16k）</option>
+                    <option value="qwen3-asr-flash-realtime">✅ Qwen3-ASR（普通话，16k）</option>
                   </select>
                 </label>
                 <label className="settings-field">
@@ -760,7 +761,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             )}
 
             {asrForm.provider === 'omni' && (
-              <div className="settings-guide">一体化 MiniCPM-o 会接管识别。请在【大模型】板块添加「一体化 MiniCPM-o」并设为主用。</div>
+              <div className="settings-guide">一体化 MiniCPM-o 会接管识别。请配置 omni 服务地址（config.yaml 的 llm.omni）。</div>
             )}
 
             <label className="settings-field">
@@ -1223,7 +1224,17 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   }
 
   const allTabs = [...groups, ...EXTRA_TABS]
-  const activeTab = allTabs.find((t) => t.key === tab) ?? allTabs[0]
+  const mode = config ? (getPath(config, 'dialogue.mode') || 'pipeline') : 'pipeline'
+  const HIDDEN_IN_E2E = ['asr', 'tts', 'llm']
+  const visibleTabs = mode === 'e2e' ? allTabs.filter((t) => !HIDDEN_IN_E2E.includes(t.key)) : allTabs
+  const activeTab = visibleTabs.find((t) => t.key === tab) ?? visibleTabs[0]
+
+  const switchMode = (m: 'pipeline' | 'e2e') => {
+    setField('dialogue.mode', m)
+    if (m === 'e2e' && HIDDEN_IN_E2E.includes(tab)) {
+      setTab('wake')
+    }
+  }
   const currentInput = config ? getPath(config, 'audio.input_device') : undefined
 
   return (
@@ -1236,7 +1247,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
 
         <div className="settings-layout">
           <div className="settings-nav">
-            {allTabs.map((t) => (
+            {visibleTabs.map((t) => (
               <button key={t.key} className={`settings-nav-item ${tab === t.key ? 'settings-nav-item--on' : ''}`} onClick={() => setTab(t.key)}>
                 {t.label}
               </button>
@@ -1244,6 +1255,12 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           </div>
 
           <div className="settings-body">
+          <div className="dialogue-mode-bar">
+            <span className="dialogue-mode-label">对话模式</span>
+            <button className={`dialogue-mode-btn ${mode === 'pipeline' ? 'dialogue-mode-btn--on' : ''}`} onClick={() => switchMode('pipeline')}>打工牛马</button>
+            <button className={`dialogue-mode-btn ${mode === 'e2e' ? 'dialogue-mode-btn--on' : ''}`} onClick={() => switchMode('e2e')}>陪聊小二</button>
+            <span className="settings-hint">切换后保存并重启后端生效</span>
+          </div>
           {!config ? (
             <p className="settings-msg">{msg || '读取中…'}</p>
           ) : tab === 'ui' ? (

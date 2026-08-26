@@ -5,6 +5,9 @@ audio:
   sample_rate: 16000
   chunk_ms: 30
   input_device: null
+dialogue:
+  mode: pipeline
+  e2e_provider: cloud
 wake_word:
   enabled: true
   engine: sherpa
@@ -81,20 +84,45 @@ asr:
   active: asr_aliyun
   models:
   - id: asr_aliyun
-    name: 阿里云 Paraformer（普通话）
+    name: Fun-ASR（方言，默认）
     provider: cloud
-    model: paraformer-realtime-v2
+    model: fun-asr-flash-8k-realtime
+    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    localEngine: funasr
+    localModelDir: ''
+  - id: asr_qwen_audio
+    name: Qwen-Audio（普通话+方言）
+    provider: cloud
+    model: qwen-audio-3.0-asr-flash-streaming
+    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    localEngine: funasr
+    localModelDir: ''
+  - id: asr_qwen3
+    name: Qwen3-ASR（普通话）
+    provider: cloud
+    model: qwen3-asr-flash-realtime
     apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
     localEngine: funasr
     localModelDir: ''
   cloud:
     provider: aliyun
-    model: paraformer-realtime-v2
+    model: fun-asr-flash-8k-realtime
     api_key: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
   local:
     engine: funasr
     model: paraformer-zh
     model_dir: ''
+minicpm_cloud:
+  host: minicpmo45.modelbest.cn
+  api_key: ''
+  model: MiniCPM-o-4.5
+  system_prompt: ''
+minicpm_local:
+  host: localhost:8099
+  api_key: ''
+  model: openbmb/MiniCPM-o-4_5
+  instructions: ''
+  ref_audio: ''
 llm:
   provider: cloud
   active: llm_deepseek

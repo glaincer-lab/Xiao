@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import queue
 import threading
 import time
 from collections import deque
@@ -27,6 +28,12 @@ class Pipeline:
         self._lock = threading.Lock()
         self._running = False
         self._loop = None
+        self._dialogue_mode = str(config.get("dialogue.mode", "pipeline"))
+        self._e2e = None
+        self._e2e_audio_queue = None
+        self._e2e_audio_thread = None
+        self._e2e_started_at = 0.0
+        self._e2e_timeout = 600.0  # MiniCPM-o 云端单次会话建议 600s 内
 
         self._wake_enabled = bool(config.get("wake_word.enabled", True))
         self._wake = build_wake_word() if self._wake_enabled else None
@@ -163,6 +170,9 @@ class Pipeline:
 
     # ---- 内部 ----
     def _on_wake(self) -> None:
+        if self._dialogue_mode == "e2e":
+            self._start_e2e()
+            return
         self._in_utterance = False
         self._pre_roll.clear()
         self._last_active = time.time()
@@ -204,6 +214,8 @@ class Pipeline:
                     if not self._in_utterance and time.time() - self._last_active > self._session_timeout:
                         self._in_utterance = False
                         self.set_state(State.SLEEPING)
+                elif s == State.E2E:
+                    self._handle_e2e(chunk)
                 elif s == State.CONFIRM_SHUTDOWN:
                     self._handle_listening(chunk)
                     if not self._in_utterance and time.time() - self._last_active > self._shutdown_timeout:
@@ -245,6 +257,117 @@ class Pipeline:
                 self._asr.feed(chunk)
         else:
             self._pre_roll.append(chunk)
+
+    # ---- 端到端一体化对话（陪聊小二：MiniCPM-o realtime 直接应答）----
+    def _start_e2e(self) -> None:
+        if self._e2e is not None:
+            return
+        self._e2e_audio_queue = queue.Queue()
+        self._e2e_audio_thread = threading.Thread(target=self._e2e_audio_loop, daemon=True)
+        self._e2e_audio_thread.start()
+
+        provider = str(config.get("dialogue.e2e_provider", "cloud"))
+        if provider == "local":
+            from backend.asr.minicpm_local import MiniCPMLocalRealtime
+
+            mc = config.section("minicpm_local")
+            self._e2e = MiniCPMLocalRealtime(
+                on_result=self._e2e_text,
+                host=mc.get("host", "localhost:8099"),
+                model=mc.get("model", "openbmb/MiniCPM-o-4_5"),
+                on_audio=self._e2e_audio,
+                instructions=mc.get("instructions") or None,
+                ref_audio=mc.get("ref_audio") or None,
+            )
+        else:
+            from backend.asr.minicpm_cloud import MiniCPMCloudASR
+
+            mc = config.section("minicpm_cloud")
+            self._e2e = MiniCPMCloudASR(
+                on_result=self._e2e_text,
+                host=mc.get("host", "minicpmo45.modelbest.cn"),
+                api_key=mc.get("api_key"),
+                system_prompt=mc.get("system_prompt", ""),
+                on_audio=self._e2e_audio,
+            )
+        try:
+            self._e2e.start()
+        except Exception as e:  # noqa: BLE001
+            emit("assistant_result", text=f"陪聊模式启动失败：{e}")
+            self._e2e = None
+            self.set_state(State.SLEEPING)
+            return
+        self._e2e_started_at = time.time()
+        self.set_state(State.E2E)
+        emit("wake")
+
+    def _handle_e2e(self, chunk: bytes) -> None:
+        if self._e2e is None:
+            self.set_state(State.SLEEPING)
+            return
+        try:
+            self._e2e.feed(chunk)
+        except Exception:
+            self._stop_e2e()
+            return
+        if time.time() - self._e2e_started_at > self._e2e_timeout:
+            self._stop_e2e()
+
+    def _stop_e2e(self) -> None:
+        if self._e2e is not None:
+            try:
+                self._e2e.stop()
+            except Exception:
+                pass
+            try:
+                self._e2e.close()
+            except Exception:
+                pass
+            self._e2e = None
+        self._in_utterance = False
+        self._pre_roll.clear()
+        self._last_active = time.time()
+        self.set_state(State.SLEEPING)
+
+    def _e2e_text(self, is_final: bool, text: str) -> None:
+        emit("assistant_result", text=text)
+
+    def _e2e_audio(self, pcm16: bytes, sample_rate: int) -> None:
+        if self._e2e_audio_queue is not None:
+            self._e2e_audio_queue.put((pcm16, sample_rate))
+
+    def _e2e_audio_loop(self) -> None:
+        import os
+        import tempfile
+        import wave
+
+        try:
+            import pygame
+
+            pygame.mixer.init(frequency=24000)
+        except Exception:
+            return
+        while self._running:
+            try:
+                pcm16, sample_rate = self._e2e_audio_queue.get(timeout=0.5)
+            except Exception:
+                continue
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                    path = f.name
+                with wave.open(path, "wb") as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)
+                    w.setframerate(sample_rate)
+                    w.writeframes(pcm16)
+                pygame.mixer.music.load(path)
+                pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():
+                    pygame.time.wait(30)
+                pygame.mixer.music.unload()
+                os.unlink(path)
+            except Exception:
+                pass
 
     def _dispatch(self, text: str) -> None:
         if self.state == State.CONFIRM_SHUTDOWN:

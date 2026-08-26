@@ -20,6 +20,7 @@ class State(str, enum.Enum):
     CONFIRM_SHUTDOWN = "confirm_shutdown"  # 等待用户确认关闭程序
     WORKING = "working"        # DSH 长任务执行中（仍监听进展/取消）
     AWAIT_APPROVAL = "await_approval"  # 等待用户语音确认是否允许执行（A2 审批）
+    E2E = "e2e"                # 端到端一体化对话中（陪聊小二：MiniCPM-o realtime 直接应答）
 
 
 class EventBus:
