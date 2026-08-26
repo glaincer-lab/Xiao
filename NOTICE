@@ -1,0 +1,24 @@
+小二（Xiao）· Windows 语音工作助手
+=============================
+Copyright (c) 2025 Xiao（小二）
+
+本项目源代码以 MIT 许可证发布（见 LICENSE 文件）。
+
+模型与权重
+----------
+本仓库只分发源代码，不分发受非商用或商用限制的模型权重：
+
+* Sherpa-ONNX KWS 中文唤醒模型（models/）—— Apache-2.0，可由用户自行下载。
+* Silero VAD 模型（models/silero_vad.onnx）—— 非商用免费、商用需授权，不随仓库分发，请自行下载。
+* FunASR（paraformer-zh）本地模型 —— 非商用免费、商用需阿里授权，不随仓库分发。
+
+云端服务
+--------
+阿里云 Paraformer（流式 ASR）、edge-tts（语音合成）为在线云服务，遵循各自服务条款；使用需自备 API Key。
+
+第三方依赖
+----------
+关键依赖的许可证（其余详见各依赖包内 LICENSE 与 requirements.txt）：
+* sherpa-onnx（Apache-2.0）、onnxruntime（MIT）、dashscope（Apache-2.0）
+* pygame（LGPL）—— 动态链接、不修改源码即可使用，不传染本项目代码
+* 其余（fastapi、edge-tts、openai 等）—— 详见各依赖包内 LICENSE
