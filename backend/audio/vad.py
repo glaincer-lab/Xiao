@@ -25,19 +25,15 @@ class SileroVAD:
 
     @staticmethod
     def _find_model() -> str:
-        import os
+        from backend.config import ROOT
 
-        import openwakeword
-
-        p = os.path.join(
-            os.path.dirname(os.path.abspath(openwakeword.__file__)),
-            "resources",
-            "models",
-            "silero_vad.onnx",
-        )
-        if not os.path.exists(p):
-            raise FileNotFoundError(f"缺少 Silero VAD 模型：{p}（首次会随唤醒词模型一起下载）")
-        return p
+        p = ROOT / "models" / "silero_vad.onnx"
+        if not p.exists():
+            raise FileNotFoundError(
+                f"缺少 Silero VAD 模型：{p}\n"
+                "请下载 silero_vad.onnx 到 models/（Silero VAD 非商用免费，不随仓库分发）"
+            )
+        return str(p)
 
     def predict(self, pcm: bytes) -> float:
         """返回该帧的语音概率 0~1。"""

@@ -45,7 +45,7 @@
 ## 3. 目录结构
 
 ```
-005_Agent\
+xiao\
 ├── 01_DSH\            ← DSH 插件开发（不动）
 ├── 02_Assistant\      ← ★ 语音系统（一套系统一个文件夹，独立可运行）
 │   ├── backend\
@@ -150,7 +150,7 @@ DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `c
 ## 11. 关键配置
 
 ```yaml
-agent.workspace     → D:\04_Work\04_Project\005_Agent\03_Workspace
+agent.workspace     → ../03_Workspace（相对项目根；DSH 工作区）
 agent.system_prompt / agent.max_history  → 系统提示词 / 记忆轮数（软配置，保存即生效）
 bridge.dsh_command  → dsh（.ps1 自动用 powershell 拉起）
 bridge.timeout_sec  → 600

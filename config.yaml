@@ -100,7 +100,7 @@ tts:
   voice: zh-CN-YunjianNeural
   rate: +30%
 agent:
-  workspace: D:\04_Work\04_Project\005_Agent\03_Workspace
+  workspace: ../03_Workspace
   system_prompt: ''
   max_history: 16
 bridge:

@@ -87,7 +87,7 @@ xiao/
 
 - DSH 是**外部依赖**，用户自己安装。README 明确写「前置条件：先装 DeepSeek Harness」。
 - 本仓库**不含任何 DSH 代码**，只通过 `backend/bridge/` 一个模块调用它的 CLI/RPC。
-- `config.yaml` 的 `bridge.dsh_command`、`agent.workspace` 不写死 `D:\04_Work\...`，做成可配置。
+- `config.yaml` 的 `bridge.dsh_command`、`agent.workspace` 不写死本机绝对路径，做成可配置（默认相对路径）。
 
 ---
 
