@@ -99,7 +99,7 @@ xiao/
 - [x] 全历史密钥扫描（git 历史 + 正则），零泄露
 - [ ] 轮换 DeepSeek + 阿里云 key（密钥无资金风险，可暂缓）
 - [x] LICENSE（MIT）
-- [ ] NOTICE（模型/依赖许可声明）
+- [x] NOTICE（模型/依赖许可声明）
 
 ---
 
