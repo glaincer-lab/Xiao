@@ -10,6 +10,10 @@
 
 技术栈：Python（FastAPI + WebSocket）后端 + React（Vite + TypeScript + Three.js）前端 + Electron 托盘壳；依赖 DeepSeek Harness 作为大脑。
 
+## 界面预览
+
+![小二 · 语音工作助手界面](docs/screenshot.png)
+
 ## 特性
 
 - **唤醒**：本地 Sherpa-ONNX 关键词识别，中文原生「小二」，零训练、离线
