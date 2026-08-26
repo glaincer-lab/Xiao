@@ -39,15 +39,6 @@ def _build_scheme(m: dict) -> LLMClient:
             temperature=temperature,
         )
 
-    if p == "omni":
-        # vLLM 提供 OpenAI 兼容端点，跟 Ollama/云端一样填地址接入
-        return OpenAICompatClient(
-            base_url=base_url or "http://localhost:8000/v1",
-            model=model or "openbmb/MiniCPM-o-4_5",
-            api_key=api_key or "EMPTY",  # 本地 vLLM 无需真实 key
-            temperature=temperature,
-        )
-
     # 云端 5 家（OpenAI 兼容）
     if p not in _CLOUD_DEFAULTS:
         raise ValueError(f"未支持的 LLM provider: {p}")
@@ -78,15 +69,6 @@ def build_llm() -> LLMClient:
             base_url=cfg.get("base_url", "http://localhost:11434/v1"),
             model=cfg.get("model", "qwen2.5:7b"),
             api_key="EMPTY",
-            temperature=float(cfg.get("temperature", 0.3)),
-        )
-
-    if provider == "omni":
-        cfg = config.section("llm.omni")
-        return OpenAICompatClient(
-            base_url=cfg.get("base_url", "http://localhost:8000/v1"),
-            model=cfg.get("model", "openbmb/MiniCPM-o-4_5"),
-            api_key=cfg.get("api_key") or "EMPTY",
             temperature=float(cfg.get("temperature", 0.3)),
         )
 

@@ -13,6 +13,7 @@ venv/
 .uv-tmp/
 .uv-python/
 .npm-cache/
+.gh-config/
 
 # Node / 前端
 node_modules/

@@ -74,7 +74,6 @@ SCHEMA: list[dict] = [
     {"path": "wake_word.engine", "label": "唤醒方式", "type": "select", "group": "wake", "reload": "restart",
      "options": [
          {"value": "sherpa", "label": "本地关键词 sherpa-ONNX（普通话）", "status": "ok"},
-         {"value": "cloud", "label": "云端方言识别（重庆话/四川话/粤语）", "status": "ok"},
          {"value": "omni", "label": "一体化 MiniCPM-o（方言、端到端）", "status": "ok"},
      ]},
     {"path": "wake_word.enabled", "label": "唤醒开关", "type": "checkbox", "group": "wake", "reload": "restart",
@@ -184,7 +183,6 @@ SCHEMA: list[dict] = [
      "options": [
          {"value": "cloud", "label": "云端（供应商 API）", "status": "ok"},
          {"value": "local", "label": "本地 Ollama（OpenAI 兼容）", "status": "ok"},
-         {"value": "omni", "label": "一体化 MiniCPM-o（vLLM 本地）", "status": "ok"},
      ]},
     {"path": "llm.cloud.provider", "label": "云端服务商", "type": "select", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "cloud"},

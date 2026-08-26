@@ -62,9 +62,6 @@ const LLM_PROVIDERS: LLMProviderDef[] = [
     exampleModel: 'kimi-k3', needsKey: true, status: 'ok', keyHint: '到 platform.moonshot.cn 创建 API Key', recommend: '模型名以官方文档为准，手填最新名称' },
   { id: 'ollama', name: '本地 Ollama', kind: 'local', baseUrl: 'http://localhost:11434/v1',
     exampleModel: 'qwen3', needsKey: false, status: 'ok', keyHint: '装好 Ollama 后执行 ollama pull <模型>，模型名填下方' },
-  { id: 'omni', name: '一体化 MiniCPM-o（vLLM）', kind: 'omni', baseUrl: 'http://localhost:8000/v1',
-    exampleModel: 'openbmb/MiniCPM-o-4_5', needsKey: false, status: 'ok',
-    keyHint: 'pip install vllm → 下载模型 → 启动 vLLM 服务 → 填地址与模型' },
 ]
 
 // 阿里云 CosyVoice 常用音色（完整列表以阿里云官方为准，可手填其它音色名）
@@ -1135,12 +1132,11 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             <label className="settings-field">
               <span className="settings-field-label">唤醒方式</span>
               <select value={wakeForm.engine} onChange={(e) => {
-                const p = e.target.value as 'sherpa' | 'cloud' | 'omni'
+                const p = e.target.value as 'sherpa' | 'omni'
                 setWakeForm({ ...wakeForm, engine: p })
               }}>
                 <option value="sherpa">✅ 本地关键词 sherpa（普通话）</option>
-                <option value="cloud">⬜ 云端方言（重庆话/四川话/粤语）</option>
-                <option value="omni">⬜ 一体化 MiniCPM-o</option>
+                <option value="omni">✅ 一体化 MiniCPM-o</option>
               </select>
             </label>
 
