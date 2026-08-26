@@ -12,6 +12,17 @@
 
 技术栈：Python（FastAPI + WebSocket）后端 + React（Vite + TypeScript + Three.js）前端 + Electron 托盘壳；依赖 DeepSeek Harness 作为大脑。
 
+## 关于 DeepSeek Harness
+
+小二不是「从零造的语音大脑」，而是给 **DeepSeek Harness（DSH）** 装上语音前端。
+
+- **DSH 是什么**：一个「一切皆插件」的通用 Agent 框架，负责真正的智能——agent 循环、编程工具（读写文件 / 跑命令）、subagent、workflow、知识库检索等。
+- **小二的角色**：只做语音三件事——唤醒、识别、路由；一句话走「聊天」还是「干活(DSH)」由路由层决定。
+- **如何桥接**：经 `backend/bridge/`（全系统唯一知道 DSH 的地方）调用 `dsh --profile headless`，多轮上下文由桥接层自己维护；危险操作经 `plugins/xiao-approval-bridge` 审批桥插件回传到语音做审批。
+- **DSH 是外部依赖**：本仓库不含任何 DSH 代码，使用前需自行安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（本机测试版本 `0.1.1-rc.2`）。
+
+> 一句话：DSH 提供「能改文件、跑命令、多步迭代」的大脑，小二提供语音这层皮。
+
 ## 界面预览
 
 ![小二 · 语音工作助手界面](docs/screenshot.png)

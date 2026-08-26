@@ -12,6 +12,17 @@ An always-on Chinese voice assistant for Windows: wake it with「小二」(Xiao 
 
 Stack: Python (FastAPI + WebSocket) backend + React (Vite + TypeScript + Three.js) frontend + Electron tray shell; depends on DeepSeek Harness as the brain.
 
+## About DeepSeek Harness
+
+Xiao is not a voice brain built from scratch — it is a **voice frontend for DeepSeek Harness (DSH)**.
+
+- **What DSH is**: an "everything is a plugin" general-purpose agent framework that provides the real intelligence — agent loops, coding tools (read/write files, run commands), subagents, workflows, knowledge-base retrieval.
+- **Xiao's role**: only three voice jobs — wake, transcribe, and route. Whether a sentence goes to "chat" or "work (DSH)" is decided by the routing layer.
+- **How it bridges**: via `backend/bridge/` (the only place that knows DSH), calling `dsh --profile headless`; multi-turn context is maintained by the bridge. Dangerous actions flow back to voice approval through the `plugins/xiao-approval-bridge` plugin.
+- **DSH is an external dependency**: this repo contains no DSH code. Install [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) first (tested with version `0.1.1-rc.2`).
+
+> In one line: DSH provides the "read files, run commands, multi-step iteration" brain; Xiao provides the voice layer.
+
 ## Screenshot
 
 ![Xiao interface](docs/screenshot.png)
