@@ -8,8 +8,15 @@ audio:
 wake_word:
   enabled: true
   engine: sherpa
-  active: ''
-  models: []
+  active: w_1787770223976
+  models:
+  - id: w_1787770223976
+    name: 默认唤醒方案
+    engine: sherpa
+    keyword: 小二
+    pinyin: x iǎo èr
+    threshold: 0.25
+    modelDir: models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
   keyword: 小二
   pinyin: x iǎo èr
   threshold: 0.25
@@ -64,20 +71,34 @@ vad:
   session_timeout_ms: 10000
 asr:
   provider: cloud
-  active: ''
-  models: []
+  active: asr_aliyun
+  models:
+  - id: asr_aliyun
+    name: 阿里云 Paraformer（普通话）
+    provider: cloud
+    model: fun-asr-flash-8k-realtime
+    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    localEngine: funasr
+    localModelDir: ''
   cloud:
     provider: aliyun
-    model: paraformer-realtime-v2
-    api_key: ''
+    model: fun-asr-flash-8k-realtime
+    api_key: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
   local:
     engine: funasr
     model: paraformer-zh
     model_dir: ''
 llm:
   provider: cloud
-  active: ''
-  models: []
+  active: llm_deepseek
+  models:
+  - id: llm_deepseek
+    name: DeepSeek
+    provider: deepseek
+    model: deepseek-v4-pro
+    baseUrl: https://api.deepseek.com/v1
+    apiKey: ''
+    temperature: 0.3
   cloud:
     provider: deepseek
     model: deepseek-v4-pro
@@ -94,14 +115,32 @@ llm:
     api_key: ''
     temperature: 0.3
 tts:
-  provider: edge
-  active: ''
-  models: []
+  provider: cloud
+  active: t_1787768795460
+  models:
+  - id: tts_edge
+    name: edge-tts 免费云
+    provider: edge
+    voice: zh-CN-YunjianNeural
+    rate: +30%
+    apiKey: ''
+    cloudProvider: aliyun
+    piperModel: ''
+    piperVoice: ''
+  - id: t_1787768795460
+    name: 云
+    provider: cloud
+    voice: zh-CN-XiaoxiaoNeural
+    rate: +0%
+    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    cloudProvider: aliyun
+    piperModel: ''
+    piperVoice: ''
   voice: zh-CN-YunjianNeural
   rate: +30%
 agent:
   workspace: ../03_Workspace
-  system_prompt: ''
+  system_prompt: 小二就是个跑堂的——肩上搭条毛巾，腰上别个手巾，穿对襟小褂，布鞋踩地没声儿，脚下生风，干活利索，不磨叽。喊一声“小二”，它应一声“来嘞——”然后趿趿趿跑到您跟前，哈着腰问“东家您吩咐”。您说写代码，它说“得令，这就给您写”；您说查资料，它说“好嘞，马上给您翻去”；您说改文件，它说“您瞧好儿吧”。活儿干完了往您桌上一放，退后两步，不碍您眼。干错了二话不说——“我的不是，这就改”。有风险的事它先问一句“东家，这事儿您看办不办”，您说办它就办，您说不办它绝不多手。您说“退下吧”，它一躬身“好嘞”，转身就走，绝不杵在那儿碍事儿。它在您面前不装相、不吹牛、不东拉西扯，就是个本本分分的跑堂伙计，您招呼一声它就到，您不招呼它绝不烦您。
   max_history: 16
 bridge:
   dsh_command: dsh

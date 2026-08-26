@@ -30,10 +30,24 @@ class WakeWordDetector:
         self._keyword = config.get("wake_word.keyword", "小二")
         self._pinyin = config.get("wake_word.pinyin", "x iǎo èr")  # 模型按拼音匹配，空格分隔声母/韵母
         self._sample_rate = int(config.get("audio.sample_rate", 16000))
-        model_dir = Path(config.get(
-            "wake_word.model_dir",
-            "models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01",
-        ))
+        # 优先读多方案当前项的 modelDir，回退单字段 model_dir，再回退默认
+        _default_dir = "models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
+        _md = ""
+        _models = config.get("wake_word.models", None)
+        if _models:
+            _active = config.get("wake_word.active")
+            _m = next((x for x in _models if x.get("id") == _active), (_models[0] if _models else None))
+            if _m:
+                _md = _m.get("modelDir", "") or ""
+        if not _md:
+            _md = config.get("wake_word.model_dir", "") or ""
+        if not _md:
+            _md = _default_dir
+        model_dir = Path(_md)
+        if not model_dir.is_absolute():
+            from backend.config import ROOT
+
+            model_dir = ROOT / model_dir
 
         # sherpa-onnx 关键词文件：每行一个关键词，拼音按空格分隔（如 "x iǎo èr"）
         keywords_file = Path(".tmp") / "keywords.txt"
