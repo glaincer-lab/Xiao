@@ -92,9 +92,6 @@ SCHEMA: list[dict] = [
      "hint": "sherpa-onnx KWS 模型目录，含 tokens.txt 与 encoder/decoder/joiner 三个 onnx"},
     {"path": "_guide.wake.omni", "label": "引导", "type": "guide", "group": "wake",
      "show_if": {"path": "wake_word.engine", "value": "omni"}, "guide": OMNI_GUIDE},
-    {"path": "_guide.wake.cloud", "label": "引导", "type": "guide", "group": "wake",
-     "show_if": {"path": "wake_word.engine", "value": "cloud"},
-     "guide": "云端方言唤醒：走云端方言识别，支持重庆话 / 四川话 / 粤语。\n需在【识别】板块选「云端 Paraformer」，服务商选阿里云，并填好 API Key（阿里云百炼 Model Studio 获取）。\n（当前为预留接口）"},
     {"path": "bargein.enabled", "label": "播报中可打断", "type": "checkbox", "group": "wake", "reload": "soft"},
 
     # ---- 识别 ----

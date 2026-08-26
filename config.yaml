@@ -17,6 +17,13 @@ wake_word:
     pinyin: x iǎo èr
     threshold: 0.25
     modelDir: models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
+  - id: w_omni
+    name: 一体化 MiniCPM-o
+    engine: omni
+    keyword: 小二
+    pinyin: ''
+    threshold: 0.25
+    modelDir: ''
   keyword: 小二
   pinyin: x iǎo èr
   threshold: 0.25
@@ -76,13 +83,13 @@ asr:
   - id: asr_aliyun
     name: 阿里云 Paraformer（普通话）
     provider: cloud
-    model: fun-asr-flash-8k-realtime
+    model: paraformer-realtime-v2
     apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
     localEngine: funasr
     localModelDir: ''
   cloud:
     provider: aliyun
-    model: fun-asr-flash-8k-realtime
+    model: paraformer-realtime-v2
     api_key: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
   local:
     engine: funasr

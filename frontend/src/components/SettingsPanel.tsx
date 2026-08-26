@@ -116,7 +116,7 @@ type SavedTTS = {
 type SavedWake = {
   id: string
   name: string
-  engine: 'sherpa' | 'cloud' | 'omni'
+  engine: 'sherpa' | 'omni'
   keyword: string
   pinyin: string
   threshold: number
@@ -167,9 +167,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'cloud' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; cloudProvider: string; piperModel: string; piperVoice: string }>({ provider: 'edge', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', name: '', apiKey: '', cloudProvider: 'aliyun', piperModel: '', piperVoice: '' })
   const [editTTSId, setEditTTSId] = useState<string | null>(null)
   const [showAddWake, setShowAddWake] = useState(false)
-  const [wakeForm, setWakeForm] = useState<{ engine: 'sherpa' | 'cloud' | 'omni'; keyword: string; pinyin: string; threshold: number; modelDir: string; name: string }>({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '' })
-  const [editWakeId, setEditWakeId] = useState<string | null>(null)
-
+  const [wakeForm, setWakeForm] = useState<{ engine: 'sherpa' | 'omni'; keyword: string; pinyin: string; threshold: number; modelDir: string; name: string; baseUrl: string; model: string }>({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '', baseUrl: 'http://localhost:8000/v1', model: 'openbmb/MiniCPM-o-4_5' })
   useEffect(() => {
     fetch('http://127.0.0.1:8123/api/config/schema')
       .then((r) => r.json())
@@ -1047,9 +1045,37 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const renderWakeConfig = () => {
     const savedWake: SavedWake[] = config ? (getPath(config, 'wake_word.models') || []) : []
     const activeWake = config ? (getPath(config, 'wake_word.active') || '') : ''
-    const activeWakeScheme = savedWake.find((m) => m.id === activeWake)
+
+    // 唤醒固定两个方案：默认 sherpa + 可选 omni（缺哪个就兜底构造，确保始终显示）
+    const sherpaWake: SavedWake = savedWake.find((m) => m.engine === 'sherpa') || {
+      id: 'w_sherpa',
+      name: '本地关键词 sherpa（普通话）',
+      engine: 'sherpa',
+      keyword: '小二',
+      pinyin: 'x iǎo èr',
+      threshold: 0.25,
+      modelDir: '',
+    }
+    const omniWake: SavedWake = savedWake.find((m) => m.engine === 'omni') || {
+      id: 'w_omni',
+      name: '一体化 MiniCPM-o',
+      engine: 'omni',
+      keyword: '小二',
+      pinyin: '',
+      threshold: 0.25,
+      modelDir: '',
+    }
+    const fixedWakes: SavedWake[] = [sherpaWake, omniWake]
+    const activeWakeScheme = fixedWakes.find((m) => m.id === activeWake) || sherpaWake
+
+    const upsertWake = (m: SavedWake) => {
+      const exists = savedWake.some((x) => x.id === m.id)
+      const next = exists ? savedWake.map((x) => (x.id === m.id ? m : x)) : [...savedWake, m]
+      setField('wake_word.models', next)
+    }
 
     const applyWake = (m: SavedWake) => {
+      upsertWake(m)
       setField('wake_word.active', m.id)
       setField('wake_word.engine', m.engine)
       if (m.engine === 'sherpa') {
@@ -1060,127 +1086,90 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       }
     }
 
-    const updateWake = (id: string, patch: Partial<SavedWake>) => {
-      const next = savedWake.map((m) => (m.id === id ? { ...m, ...patch } : m))
-      setField('wake_word.models', next)
-      const updated = next.find((m) => m.id === id)
-      if (updated && activeWake === id) applyWake(updated)
-    }
-
-    const startNewWake = () => {
-      setEditWakeId(null)
-      setWakeForm({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '' })
-      setShowAddWake(true)
-    }
-
     const startEditWake = (m: SavedWake) => {
-      setEditWakeId(m.id)
-      setWakeForm({ engine: m.engine, keyword: m.keyword, pinyin: m.pinyin, threshold: m.threshold, modelDir: m.modelDir, name: m.name })
+      const omni = config ? (getPath(config, 'llm.omni') || {}) : {}
+      setWakeForm({
+        engine: m.engine,
+        keyword: m.keyword,
+        pinyin: m.pinyin,
+        threshold: m.threshold,
+        modelDir: m.modelDir,
+        name: m.name,
+        baseUrl: omni.base_url || 'http://localhost:8000/v1',
+        model: omni.model || 'openbmb/MiniCPM-o-4_5',
+      })
       setShowAddWake(true)
     }
 
     const saveWakeForm = () => {
-      if (editWakeId) {
-        updateWake(editWakeId, {
-          name: wakeForm.name || '唤醒方案',
-          engine: wakeForm.engine,
-          keyword: wakeForm.keyword,
-          pinyin: wakeForm.pinyin,
-          threshold: wakeForm.threshold,
-          modelDir: wakeForm.modelDir,
-        })
+      if (wakeForm.engine === 'sherpa') {
+        const next = { ...sherpaWake, name: wakeForm.name || sherpaWake.name, keyword: wakeForm.keyword, pinyin: wakeForm.pinyin, threshold: wakeForm.threshold, modelDir: wakeForm.modelDir }
+        upsertWake(next)
+        if (activeWake === sherpaWake.id) applyWake(next)
       } else {
-        const m: SavedWake = {
-          id: 'w_' + Date.now(),
-          name: wakeForm.name || (wakeForm.engine === 'sherpa' ? '默认唤醒方案' : wakeForm.engine === 'cloud' ? '云端方言' : '一体化'),
-          engine: wakeForm.engine,
-          keyword: wakeForm.keyword,
-          pinyin: wakeForm.pinyin,
-          threshold: wakeForm.threshold,
-          modelDir: wakeForm.modelDir,
-        }
-        setField('wake_word.models', [...savedWake, m])
-        applyWake(m)
+        // omni 方案：只编辑一体化 MiniCPM-o 的地址/模型（唤醒/识别/播报共用）
+        setField('llm.omni.base_url', wakeForm.baseUrl)
+        setField('llm.omni.model', wakeForm.model)
       }
       setShowAddWake(false)
-      setEditWakeId(null)
-    }
-
-    const removeWake = (id: string) => {
-      const next = savedWake.filter((m) => m.id !== id)
-      setField('wake_word.models', next)
-      if (activeWake === id) {
-        setField('wake_word.active', next.length ? next[0].id : '')
-        if (next.length) applyWake(next[0])
-      }
     }
 
     return (
       <>
-        <div className="settings-actions">
-          <button className="btn" onClick={startNewWake}>＋ 新建唤醒方案</button>
-        </div>
         {showAddWake && (
-          <div className="modal-overlay" onClick={() => { setShowAddWake(false); setEditWakeId(null) }}>
+          <div className="modal-overlay" onClick={() => { setShowAddWake(false) }}>
             <div className="modal settings-form-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
-                <span className="modal-role">{editWakeId ? '编辑方案' : '新建方案'}</span>
-                <button className="modal-close" onClick={() => { setShowAddWake(false); setEditWakeId(null) }}>✕ 关闭</button>
+                <span className="modal-role">编辑方案</span>
+                <button className="modal-close" onClick={() => { setShowAddWake(false) }}>✕ 关闭</button>
               </div>
               <div className="modal-body">
                 <div className="settings-fields">
-            <label className="settings-field">
-              <span className="settings-field-label">唤醒方式</span>
-              <select value={wakeForm.engine} onChange={(e) => {
-                const p = e.target.value as 'sherpa' | 'omni'
-                setWakeForm({ ...wakeForm, engine: p })
-              }}>
-                <option value="sherpa">✅ 本地关键词 sherpa（普通话）</option>
-                <option value="omni">✅ 一体化 MiniCPM-o</option>
-              </select>
-            </label>
-
-            {wakeForm.engine === 'sherpa' && (
-              <>
-                <label className="settings-field">
-                  <span className="settings-field-label">唤醒词</span>
-                  <input type="text" value={wakeForm.keyword} onChange={(e) => setWakeForm({ ...wakeForm, keyword: e.target.value })} />
-                </label>
-                <label className="settings-field">
-                  <span className="settings-field-label">拼音</span>
-                  <input type="text" value={wakeForm.pinyin} placeholder="声母韵母空格分隔，如 x iǎo èr" onChange={(e) => setWakeForm({ ...wakeForm, pinyin: e.target.value })} />
-                </label>
-                <label className="settings-field">
-                  <span className="settings-field-label">灵敏度</span>
-                  <span className="settings-range">
-                    <input type="range" min={0.1} max={1} step={0.05} value={wakeForm.threshold} onChange={(e) => setWakeForm({ ...wakeForm, threshold: Number(e.target.value) })} />
-                    <em className="settings-val">{wakeForm.threshold}</em>
-                  </span>
-                </label>
-                <label className="settings-field">
-                  <span className="settings-field-label">本地模型目录</span>
-                  <input type="text" value={wakeForm.modelDir} placeholder="sherpa KWS 模型目录（含 tokens/encoder/decoder/joiner）" onChange={(e) => setWakeForm({ ...wakeForm, modelDir: e.target.value })} />
-                </label>
-              </>
-            )}
-
-            {wakeForm.engine === 'cloud' && (
-              <div className="settings-guide">云端方言唤醒走云端方言识别。请在【识别】板块新建并选择「Fun-ASR-Flash 方言」方案。</div>
-            )}
-
-            {wakeForm.engine === 'omni' && (
-              <div className="settings-guide">一体化 MiniCPM-o 会接管唤醒。请在【大模型】板块添加并设为主用。</div>
-            )}
-
-            <label className="settings-field">
-              <span className="settings-field-label">名称（可选）</span>
-              <input type="text" value={wakeForm.name} placeholder="如「普通话唤醒」「重庆话唤醒」" onChange={(e) => setWakeForm({ ...wakeForm, name: e.target.value })} />
-            </label>
-
-            <div className="settings-actions">
-              <button className="btn" onClick={saveWakeForm}>保存</button>
-              <button className="btn" onClick={() => { setShowAddWake(false); setEditWakeId(null) }}>取消</button>
-            </div>
+                  {wakeForm.engine === 'sherpa' && (
+                    <>
+                      <label className="settings-field">
+                        <span className="settings-field-label">唤醒词</span>
+                        <input type="text" value={wakeForm.keyword} onChange={(e) => setWakeForm({ ...wakeForm, keyword: e.target.value })} />
+                      </label>
+                      <label className="settings-field">
+                        <span className="settings-field-label">拼音</span>
+                        <input type="text" value={wakeForm.pinyin} placeholder="声母韵母空格分隔，如 x iǎo èr" onChange={(e) => setWakeForm({ ...wakeForm, pinyin: e.target.value })} />
+                      </label>
+                      <label className="settings-field">
+                        <span className="settings-field-label">灵敏度</span>
+                        <span className="settings-range">
+                          <input type="range" min={0.1} max={1} step={0.05} value={wakeForm.threshold} onChange={(e) => setWakeForm({ ...wakeForm, threshold: Number(e.target.value) })} />
+                          <em className="settings-val">{wakeForm.threshold}</em>
+                        </span>
+                        <span className="settings-hint">越小越灵敏，也越容易误唤醒；仅对本地关键词方案生效。</span>
+                      </label>
+                      <label className="settings-field">
+                        <span className="settings-field-label">本地模型目录</span>
+                        <input type="text" value={wakeForm.modelDir} placeholder="sherpa KWS 模型目录（含 tokens/encoder/decoder/joiner）" onChange={(e) => setWakeForm({ ...wakeForm, modelDir: e.target.value })} />
+                      </label>
+                      <label className="settings-field">
+                        <span className="settings-field-label">名称（可选）</span>
+                        <input type="text" value={wakeForm.name} placeholder="如「本地关键词唤醒」" onChange={(e) => setWakeForm({ ...wakeForm, name: e.target.value })} />
+                      </label>
+                    </>
+                  )}
+                  {wakeForm.engine === 'omni' && (
+                    <>
+                      <div className="settings-guide">一体化 MiniCPM-o 的服务地址与模型名，唤醒/识别/播报共用。</div>
+                      <label className="settings-field">
+                        <span className="settings-field-label">服务地址（base_url）</span>
+                        <input type="text" value={wakeForm.baseUrl} placeholder="如 http://localhost:8000/v1" onChange={(e) => setWakeForm({ ...wakeForm, baseUrl: e.target.value })} />
+                      </label>
+                      <label className="settings-field">
+                        <span className="settings-field-label">模型名</span>
+                        <input type="text" value={wakeForm.model} placeholder="如 openbmb/MiniCPM-o-4_5（以官方为准）" onChange={(e) => setWakeForm({ ...wakeForm, model: e.target.value })} />
+                      </label>
+                    </>
+                  )}
+                  <div className="settings-actions">
+                    <button className="btn" onClick={saveWakeForm}>保存</button>
+                    <button className="btn" onClick={() => { setShowAddWake(false) }}>取消</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1188,24 +1177,27 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
         )}
 
         <label className="settings-field">
-          <span className="settings-field-label">已保存方案</span>
+          <span className="settings-field-label">可选方案</span>
           <div className="scheme-list">
-            {savedWake.length === 0 && <p className="settings-msg">还没有方案，点上方「新建方案」。</p>}
-            {savedWake.map((m) => {
+            {fixedWakes.map((m) => {
               const isActive = m.id === activeWake
+              const isDefault = m.engine === 'sherpa'
               return (
                 <div key={m.id} className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
                   <div className="scheme-item-main" onClick={() => applyWake(m)}>
-                    <span className="scheme-item-icon">{m.engine === 'sherpa' ? '✅' : '⬜'}</span>
+                    <span className="scheme-item-icon">{isDefault ? '✅' : '⬜'}</span>
                     <div className="scheme-item-info">
-                      <div className="scheme-item-name">{m.name}{isActive && <span className="scheme-item-tag">当前</span>}</div>
-                      <div className="scheme-item-sub">{m.engine === 'sherpa' ? '本地关键词' : m.engine === 'cloud' ? '云端方言' : '一体化'} · {m.keyword}</div>
+                      <div className="scheme-item-name">
+                        {m.name}
+                        {isDefault && <span className="scheme-item-tag">默认</span>}
+                        {isActive && <span className="scheme-item-tag">当前</span>}
+                      </div>
+                      <div className="scheme-item-sub">{isDefault ? '本地关键词' : '一体化 MiniCPM-o'} · {m.keyword}</div>
                     </div>
                   </div>
                   <div className="scheme-item-actions">
                     {!isActive && <button type="button" className="btn btn--sm" onClick={() => applyWake(m)}>设为当前</button>}
                     <button type="button" className="btn btn--sm" onClick={() => startEditWake(m)}>编辑</button>
-                    <button type="button" className="btn btn--sm" onClick={() => removeWake(m.id)}>删除</button>
                   </div>
                 </div>
               )
@@ -1217,7 +1209,11 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           <label className="settings-field">
             <span className="settings-field-label">灵敏度</span>
             <span className="settings-range">
-              <input type="range" min={0.1} max={1} step={0.05} value={activeWakeScheme.threshold} onChange={(e) => updateWake(activeWake, { threshold: Number(e.target.value) })} />
+              <input type="range" min={0.1} max={1} step={0.05} value={activeWakeScheme.threshold} onChange={(e) => {
+                const next = { ...sherpaWake, threshold: Number(e.target.value) }
+                upsertWake(next)
+                if (activeWake === sherpaWake.id) setField('wake_word.threshold', next.threshold)
+              }} />
               <em className="settings-val">{activeWakeScheme.threshold}</em>
             </span>
           </label>
