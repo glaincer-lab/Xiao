@@ -1,6 +1,6 @@
 # 开源方案（定稿）
 
-> 状态：**已定方向，未到发布**。许可证、项目名已定；密钥轮换与素材核查留到「基本成熟、正式开源前」再做。当前专注开发，本文件随开发持续维护。
+> 状态：**本地 git 已初始化并提交（3 次），尚未建远程仓库**。许可证 MIT、项目名 Xiao（小二）已定；密钥轮换、素材核查、README 双语等留到「正式开源前」完成。本文件随开发持续维护。
 
 ---
 
@@ -24,7 +24,7 @@
 
 ### 2. 清理 Picovoice 残留 ✅ 已完成
 
-- `.env.example` 里的 Porcupine/Picovoice 字段已删除，唤醒词统一为 openWakeWord（免费开源，Apache-2.0）。
+- `.env.example` 里的 Porcupine/Picovoice 字段已删除；唤醒词统一为 **Sherpa-ONNX KWS 本地中文「小二」**（免费开源，Apache-2.0，零训练）。
 
 ### 3. 改名 ✅ 已完成
 
@@ -45,7 +45,7 @@
 | 依赖 | 许可证 |
 |---|---|
 | edge-tts / pygame | **LGPLv3**（动态链接、不改源码即可，**不传染**） |
-| openwakeword / openai / dashscope | Apache-2.0 |
+| sherpa-onnx / openai / dashscope | Apache-2.0 |
 | onnxruntime / webrtcvad-wheels / fastapi | MIT |
 | numpy / requests / beautifulsoup4 / websockets 等 | BSD / Apache / MIT |
 
@@ -53,7 +53,7 @@
 
 | 模型 | 许可证 | 处理 |
 |---|---|---|
-| openWakeWord 唤醒模型 | Apache-2.0 | 可随仓或让用户下载 |
+| Sherpa-ONNX KWS 中文模型（3.3MB） | Apache-2.0 | 可随仓或让用户下载 |
 | Silero VAD 模型 | 非商用免费，商用需授权 | 不随仓，文档注明 |
 | Paraformer 本地模型（FunASR） | 非商用免费，商用需阿里授权 | 不随仓，默认走云端 DashScope |
 | Paraformer 实时 / edge-tts 语音 | 云服务 ToS | 用户自备 key |
@@ -105,7 +105,7 @@ xiao/
 ## 六、命名
 
 - **Xiao（小二）**：英文标识 `Xiao`，中文交互名「小二」。
-- 唤醒词与名字解耦：当前可用唤醒词是 openWakeWord 英文预置 `hey jarvis`；**中文唤醒词「小二」需自训练 openWakeWord 模型（开发项，非开源项）**。
+- 唤醒词与名字解耦：唤醒词用 **Sherpa-ONNX 本地 KWS 模型**识别中文「小二」，免费、离线、零训练，无需自训练。
 
 ---
 
