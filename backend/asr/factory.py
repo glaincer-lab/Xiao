@@ -21,6 +21,18 @@ def _build_local(on_result: ResultCallback, model: str, model_dir: str = "") -> 
     return FunASRLocal(on_result, model=model, model_dir=model_dir)
 
 
+def _build_omni(on_result: ResultCallback) -> ASREngine:
+    from backend.asr.omni import OmniASREngine
+
+    omni_cfg = config.section("llm.omni")
+    return OmniASREngine(
+        on_result,
+        base_url=omni_cfg.get("base_url", "http://localhost:8000/v1"),
+        model=omni_cfg.get("model", "openbmb/MiniCPM-o-4_5"),
+        api_key=omni_cfg.get("api_key"),
+    )
+
+
 def build_asr(on_result: ResultCallback) -> ASREngine:
     # 多方案：读 active 指向的方案
     models = config.get("asr.models", None)
@@ -33,10 +45,14 @@ def build_asr(on_result: ResultCallback) -> ASREngine:
                 return _build_cloud(on_result, m.get("model", "paraformer-realtime-v2"), m.get("apiKey"))
             if provider == "local":
                 return _build_local(on_result, m.get("model", "paraformer-zh"), m.get("localModelDir", ""))
-            raise ValueError("一体化 ASR（omni）尚未接入")
+            if provider == "omni":
+                return _build_omni(on_result)
+            raise ValueError(f"未支持的 ASR provider: {provider}")
 
     # 回退旧单一字段（兼容旧配置）
     provider = config.get("asr.provider", "cloud")
+    if provider == "omni":
+        return _build_omni(on_result)
     if provider in ("cloud", "auto"):
         cloud_cfg = config.section("asr.cloud")
         p = cloud_cfg.get("provider", "aliyun")

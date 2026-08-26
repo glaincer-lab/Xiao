@@ -74,8 +74,8 @@ SCHEMA: list[dict] = [
     {"path": "wake_word.engine", "label": "唤醒方式", "type": "select", "group": "wake", "reload": "restart",
      "options": [
          {"value": "sherpa", "label": "本地关键词 sherpa-ONNX（普通话）", "status": "ok"},
-         {"value": "cloud", "label": "云端方言识别（重庆话/四川话/粤语）", "status": "planned"},
-         {"value": "omni", "label": "一体化 MiniCPM-o（方言、端到端）", "status": "planned"},
+         {"value": "cloud", "label": "云端方言识别（重庆话/四川话/粤语）", "status": "ok"},
+         {"value": "omni", "label": "一体化 MiniCPM-o（方言、端到端）", "status": "ok"},
      ]},
     {"path": "wake_word.enabled", "label": "唤醒开关", "type": "checkbox", "group": "wake", "reload": "restart",
      "show_if": {"path": "wake_word.engine", "value": "sherpa"}},
@@ -103,7 +103,7 @@ SCHEMA: list[dict] = [
      "options": [
          {"value": "cloud", "label": "云端 Paraformer", "status": "ok"},
          {"value": "local", "label": "本地 FunASR", "status": "ok"},
-         {"value": "omni", "label": "一体化 MiniCPM-o（自带识别）", "status": "planned"},
+         {"value": "omni", "label": "一体化 MiniCPM-o（自带识别）", "status": "ok"},
      ]},
     {"path": "asr.cloud.provider", "label": "云端服务商", "type": "select", "group": "asr", "reload": "restart",
      "show_if": {"path": "asr.provider", "value": "cloud"},
@@ -143,7 +143,7 @@ SCHEMA: list[dict] = [
          {"value": "edge", "label": "edge-tts 免费云", "status": "ok"},
          {"value": "cloud", "label": "付费云 TTS（阿里 CosyVoice）", "status": "ok"},
          {"value": "piper", "label": "本地 Piper（离线）", "status": "ok"},
-         {"value": "omni", "label": "一体化 MiniCPM-o（语音输出，可省 TTS）", "status": "planned"},
+         {"value": "omni", "label": "一体化 MiniCPM-o（语音输出，可省 TTS）", "status": "ok"},
      ]},
     {"path": "tts.voice", "label": "音色", "type": "select", "group": "tts", "reload": "restart",
      "show_if": {"path": "tts.provider", "value": "edge"},

@@ -70,5 +70,25 @@ class WakeWordDetector:
         return False
 
 
-def build_wake_word() -> WakeWordDetector:
+def build_wake_word():
+    """按 wake_word.engine 选择唤醒引擎：sherpa（本地）/ cloud（云端方言）/ omni（一体化）。"""
+    engine = config.get("wake_word.engine", "sherpa")
+    keyword = config.get("wake_word.keyword", "小二")
+
+    if engine == "cloud":
+        from backend.audio.wake_cloud import CloudWakeDetector
+
+        return CloudWakeDetector(keyword=keyword)
+
+    if engine == "omni":
+        from backend.audio.wake_omni import OmniWakeDetector
+
+        omni_cfg = config.section("llm.omni")
+        return OmniWakeDetector(
+            base_url=omni_cfg.get("base_url", "http://localhost:8000/v1"),
+            model=omni_cfg.get("model", "openbmb/MiniCPM-o-4_5"),
+            api_key=omni_cfg.get("api_key"),
+            keyword=keyword,
+        )
+
     return WakeWordDetector()

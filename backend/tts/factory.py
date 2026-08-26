@@ -22,6 +22,17 @@ def _build_piper(model_path: str) -> TTSEngine:
     return PiperEngine(model_path=model_path)
 
 
+def _build_omni() -> TTSEngine:
+    from backend.tts.omni import OmniTTSEngine
+
+    omni_cfg = config.section("llm.omni")
+    return OmniTTSEngine(
+        base_url=omni_cfg.get("base_url", "http://localhost:8000/v1"),
+        model=omni_cfg.get("model", "openbmb/MiniCPM-o-4_5"),
+        api_key=omni_cfg.get("api_key"),
+    )
+
+
 def build_tts() -> TTSEngine:
     models = config.get("tts.models", None)
     if models:
@@ -35,6 +46,8 @@ def build_tts() -> TTSEngine:
                 return _build_cloud(m.get("voice", "longxiaochun"), m.get("apiKey"))
             if provider == "piper":
                 return _build_piper(m.get("piperModel", ""))
+            if provider == "omni":
+                return _build_omni()
             raise ValueError(f"TTS 方案尚未接入: {provider}")
 
     provider = config.get("tts.provider", "edge")
@@ -49,4 +62,6 @@ def build_tts() -> TTSEngine:
     if provider == "piper":
         piper_cfg = config.section("tts.piper")
         return _build_piper(piper_cfg.get("model", ""))
+    if provider == "omni":
+        return _build_omni()
     raise ValueError(f"未支持的 TTS provider: {provider}")
