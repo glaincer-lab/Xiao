@@ -7,6 +7,8 @@
 > v2 变更：新增「风险与应对」「语音审批」「长任务异步」三节；路线图把 **A2 流式桥**提到「工作面板 UI」之前。
 >
 > v2.1 修订（吸收外部分析）：DSH 版本更正为 `0.1.1-rc.2`；§8 补 DSH 审批栈源码核实结论（headless fail-closed；A2 走 web 模式注入）；§9 补并发任务列表与失败/超时反馈；§10 增风险 5；§12 对比表拆分并软化表述；§13 增「失败回退」「历史摘要压缩」两项。
+>
+> v2.2 修订：§8 审批更新为**双层结构**——预测式语音审批（第一层）+ 运行时审批桥 `xiao-approval-bridge`（第二层，**已落地**：插件 answerer + 回环 `/api/dsh/approval`，源码核实）；A2 收窄为纯流式桥，审批注入不再依赖 `dsh web`。
 
 ---
 
@@ -108,24 +110,26 @@ LISTENING ──说「关闭」──► CONFIRM_SHUTDOWN（两步确认）─�
 - **A1（已落地并验证）**：`dsh --profile headless "任务"`，走最稳定的 CLI 面。headless 无状态，`backend/bridge/dsh_bridge.py` **自己维护多轮上下文**——记录最近 N 轮任务与结果摘要（`_context_max=6`，结果摘要截断 500 字），每轮把「历史 + 当前任务」打包成一条 prompt 发给 DSH，绕开 headless 的 stateless。
   - 清空历史 / 退下 / 设置面板「一键清空记忆」都会同步清 DSH 上下文（`reset_context()`）。
   - 代价：非流式、进程冷启动、每轮重发历史 token。
-- **A2（规划，优先级高于工作面板）**：耦合 DSH 的 WS/RPC（即常驻 `dsh web` + 连其回环 WS/HTTP，而非 headless CLI），实现流式 + 连续会话 + 工具事件回传 + 审批注入（见 §8）。
+- **A2（规划，优先级高于工作面板）**：耦合 DSH 的 WS/RPC（即常驻 `dsh web` + 连其回环 WS/HTTP，而非 headless CLI），实现流式 + 连续会话 + 工具事件回传（审批注入已由运行时审批桥落地，见 §8，不再依赖 A2）。
   - 代价：DSH 处于 rc 阶段（实测 `0.1.1-rc.2（读自本机发行版 package.json）`），耦合越深、版本一变越痛。**先 A1 稳、后 A2 快，是权衡而非偷懒。**
 - **版本风险应对**：锁版本 + 单一适配层（`bridge/`）+ 优先走稳定 CLI 面；DSH 变动只改一个文件。
 
 ## 8. 语音审批（安全）
 
-DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `ctx.approval`；不是 `dsh-authorization`，那是凭据/OAuth 授权）。缺口是**审批如何回到语音**。以下结论已读 DSH 源码核实。
+DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `ctx.approval`；不是 `dsh-authorization`，那是凭据/OAuth 授权）。缺口「审批如何回到语音」**已由运行时审批桥闭合**（v2.2 落地，见下）。以下结论已读 DSH 源码核实。
 
 - **A1 阶段（已核实：fail-closed 安全默认）**：`dsh --profile headless` 默认审批策略 `ask`，但 headless 不挂 Web/应答者，审批请求解析为 `unavailable` → 工具层映射 `deny`（"no approval channel is available"）。即**危险操作在无头模式下默认拒绝，且无外部注入点**。语音侧告知“这个操作被无头模式安全拦截了”，不静默执行。
   - ⚠ 别被 `DSH_PERMISSION_MODE=danger-full-access` 的名字骗了：它把审批策略切成 `never`，语义是**确定性拒绝**（源码 `NEVER_SENTENCE`：“actions that require approval are rejected automatically”），不是放行。
-- **语音审批（已落地）**：状态机已有 `AWAIT_APPROVAL`；DSH 任务执行前，`core.py` 用权限关键词预测「需要哪些权限」，语音播报询问，用户可说「允许/拒绝」或点屏幕按钮（`answer_approval` 回填 future）。A1 阶段 DSH 自身审批在无头模式下 fail-closed（默认拒绝，见下），语音侧不静默执行。
-  > ⚠ **预测式审批的局限（须知情）**：当前语音审批是**「预测式」**——`core.py` 在 DSH 执行**前**用权限关键词猜「这次要哪些权限」再问。这是**近似**，不是 DSH 内部的精确审批（那要等 A2 走 web 模式注入）。关键词预测会**误报**（多问无关权限）和**漏报**（没命中关键词的高危动作不拦截）。尤其对**「调软件」类**（点鼠标/键盘、发消息、删数据）这种高危动作，漏报风险会被放大，**不能只靠预测式审批兜底**——届时需优先走 UIA/COM 这类可控接口，并对危险动作单独从严。
-- **A2 阶段（交互式审批，规划；路径已核实可行）**：审批句柄存在（`approvalId` 审计 UUID + `rpcId` 应答句柄），但**只在 Web 模式对外暴露**，headless 拿不到。可行路径：
-  1. 把桥从 headless CLI 换成 **`dsh web`**，语音后端连它回环 WebSocket `/api/events.mux` 订阅 `approval/requested` 帧（含 `rpcId`/`approvalId`/`toolName`/`reason`）
-  2. 进入 `AWAIT_APPROVAL`，语音问“要执行「…」吗？”
-  3. 决策经 **`POST /api/respond`** 注入：`{rpcId, result:{ok:true, value:{sessionId, approvalId, outcome:'allowed-once'|'rejected'}}}`
-  - 约束：无认证（仅回环/trustedHosts 可达）；无“列出待审批”接口（只能订阅推送流拿句柄）；只有一次性授权 `allowed-once`（无“始终允许”）。
-  - 代价：A2 从“薄桥 CLI”变成“常驻 DSH web + 语音↔HTTP 桥”，安全边界靠回环。
+- **第一层·预测式语音审批（已落地）**：状态机已有 `AWAIT_APPROVAL`；DSH 任务执行前，`core.py` 用权限关键词预测「需要哪些权限」，语音播报询问，用户可说「允许/拒绝」或点屏幕按钮（`answer_approval` 回填 future）。
+  > ⚠ **预测式的局限（须知情）**：关键词预测会**误报**（多问无关权限）和**漏报**（没命中关键词的高危动作不拦截）。尤其对**「调软件」类**（点鼠标/键盘、发消息、删数据）这种高危动作，漏报风险会被放大，**不能只靠预测式兜底**——届时需优先走 UIA/COM 这类可控接口，并对危险动作单独从严。DSH 内部真实触发的审批已由第二层精确接住。
+- **第二层·运行时审批桥（v2.2 已落地；源码核实 `plugins/xiao-approval-bridge/` + `backend/main.py`）**：headless 缺的「应答者」由 DSH Host-only 插件补上——插件在 `approval/request` 瀑布里注册 answerer，把 DSH 内部**真实审批请求**引回语音链路：
+  1. DSH 工具触发审批（触发面 = `bash`/`pwsh` 沙箱升权重试、`write`/`edit` 写工作区外；网络访问**不触发** DSH 审批）；
+  2. 插件先查 `XIAO_GRANT` 环境变量预授权（`BUCKET_OF_TOOL`：bash/pwsh→`command`，write/edit→`write_outside`），命中直接放行；
+  3. 否则回环 `POST http://127.0.0.1:8123/api/dsh/approval`（仅 127.0.0.1/::1，否则 403）→ `core.request_approval()` 进 `AWAIT_APPROVAL`，语音 + 屏幕按钮双通道询问；
+  4. 决策回填：`allowed-once`（一次性放行）/ `rejected` / `unavailable`（fail-closed）。
+  - 这一层是**精确审批**：DSH 内部真触发了才问，不靠关键词预测、无误报；A1 的 fail-closed 结论对「不装本插件的原生 headless」依然成立（裸 headless 无 answerer → 默认拒绝）。
+- **A2 阶段（流式桥，规划；v2.2 收窄）**：审批注入**已由运行时审批桥实现**，A2 剩余价值 = `dsh web` 的流式输出 / 连续会话（免每轮冷启动、重发历史）/ 工具事件回传（实时进度而非等终态）。web 模式的审批通道（回环 WS `/api/events.mux` 订阅 `approval/requested` 帧，经 `POST /api/respond` 注入 `{rpcId, approvalId, outcome:'allowed-once'|'rejected'}`；无认证、仅回环可达、只有一次性授权）作为插件桥的**备选路径**保留记录，不再阻塞路线图。
+  - 代价：A2 从“薄桥 CLI”变成“常驻 DSH web + 语音↔HTTP 桥”，安全边界靠回环；DSH 仍在 rc 阶段，耦合越深、版本一变越痛。**先 A1 稳、后 A2 快，是权衡而非偷懒。**
 
 ## 9. 长任务与异步交互
 

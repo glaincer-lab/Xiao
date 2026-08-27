@@ -78,7 +78,7 @@ vad:
   session_timeout_ms: 10000
 asr:
   provider: cloud
-  active: asr_aliyun
+  active: asr_qwen_audio
   models:
   - id: asr_aliyun
     name: Fun-ASR（方言，默认）
@@ -103,7 +103,7 @@ asr:
     localModelDir: ''
   cloud:
     provider: aliyun
-    model: fun-asr-flash-8k-realtime
+    model: qwen-audio-3.0-asr-flash-streaming
     api_key: ''
   local:
     engine: funasr
@@ -158,7 +158,7 @@ tts:
   - id: tts_cosyvoice
     name: CosyVoice v3（付费云，高音质）
     provider: cosyvoice
-    voice: longanyang
+    voice: longanlang_v3
     tier: flash
     rate: +0%
     apiKey: ''
@@ -273,9 +273,7 @@ approval:
   timeout_ms: 15000
 perms:
   standing_grants:
-  - install
   - network
-  - write_outside
   deferred_path: logs/deferred.json
   rules:
     network:

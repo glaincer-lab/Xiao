@@ -1,8 +1,13 @@
 """最小冒烟/单测集：状态机 / 路由 / 审批词表 / config 校验 + app 导入冒烟。
 
-运行（标准库 unittest，零额外依赖）：
+运行（标准库 unittest）：
     python -m unittest discover -s tests -v
 也可用 pytest 直接跑（pytest tests/）。
+
+依赖说明：虽用标准库 unittest 作 runner，但被测模块链需要后端依赖——
+backend.config 需要 pyyaml；test_app_imports 导入 backend.main 还需要
+fastapi / uvicorn 及 main.py 顶层 import 的各模块。缺依赖时先：
+    pip install -r requirements.txt
 """
 from __future__ import annotations
 
