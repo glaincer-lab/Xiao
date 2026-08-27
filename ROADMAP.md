@@ -37,7 +37,7 @@
 | **Phase 5** | DSH 薄插件：语音桥 + 审批转发（XIAO_GRANT 环境变量） | 桥接跑通 | ✅ |
 | **Phase 6** | 语音审批：`AWAIT_APPROVAL` + 屏幕按钮/语音「允许/拒绝」 | 语音审批可用 | ✅ |
 | **Phase 7** | 长任务后台化：任务列表 + 后台跑/进展/取消 + 完成通知 | 异步长任务体验 | ✅ |
-| **Phase 8** | 集成测试 + 打包 + 文档 | 可分发版本 | 🟡 文档已刷新，打包/集成测试待做 |
+| **Phase 8** | 集成测试 + 打包 + 文档 | 可分发版本 | 🟡 文档已刷新；打包/集成测试待做 |
 
 ### 已落地但超出原始规划的功能
 
@@ -49,6 +49,12 @@
 | 软配置热加载 | 可打断/审批词表/DSH 关键词/提示词等保存即生效，引擎类提示重启 | ✅ |
 | 多轮 DSH 上下文 | `bridge/` 记录最近任务与结果摘要，每轮打包传给 headless DSH | ✅ |
 | 星云状态形态 | 状态→3D 形态映射（待机球体/聆听八面体/思考∞/干活螺旋/播报圆柱/审批立方体） | ✅ |
+| 真实麦克风声线动画 | 后端采集麦克风算 RMS 电平，约 100ms 经 WebSocket 推送，前端 `VoiceLine` 画真实声线（替换假波纹 `Waveform` 与呼吸球 `Orb`） | ✅ |
+| 播报 6 方案管理 | `edge-tts` / `Qwen 实时流式` / `CosyVoice v3` / `Qwen-Audio-TTS` / `Piper` / `MiniCPM-o`，付费云各带 flash/plus 档位，音色中文名展示 | ✅ |
+| Qwen 实时流式播报 | `qwen3-tts-flash-realtime` 边合成边播，首音约 0.4s，语音紧跟字幕；连接预热复用 | ✅ |
+| Piper 本地离线保底 | `piper-tts` + `zh_CN-huayan-medium` 声库，断网也能播报（GPL-3.0，列为可选依赖） | ✅ |
+| 项目规则 AGENTS.md | 第三使用者视角 + 引擎分层 | ✅ |
+| 密钥卫生 | config 明文 key 清空改走 .env；历史泄露的阿里云 key 已作废轮换 | ✅ |
 
 ---
 
@@ -79,4 +85,4 @@
 
 ## 五、一句话总结
 
-> 唤醒词本地「小二」（Sherpa-ONNX），其余全走云端 API（Paraformer ASR + DeepSeek/千问 LLM + edge-tts TTS），Python 语音引擎 + DSH 薄插件 + Electron 星云界面，分 8 个阶段、约 22 天落地。
+> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（fun-asr 默认），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地，剩打包与集成测试。
