@@ -20,7 +20,7 @@ from backend.session.state import State, bus, emit
 from backend.tasks import TaskManager
 from backend.tools import register_builtin_tools
 from backend.tools.base import registry
-from backend.tts.factory import build_tts
+from backend.tts.factory import build_preview_tts, build_tts
 
 app = FastAPI(title="Xiao Voice Assistant")
 
@@ -38,7 +38,7 @@ async def loopback_guard(request: Request, call_next):
 
     覆盖 config / memory / tasks / perms / dsh 等全部 REST 端点，一处兜底，
     避免逐端点遗漏（保留 dsh_approval / dsh_step 的内联校验作双保险）。
-    /health 与 /ws 由本机浏览器直连，天然走回环。
+    /health 天然走回环；/ws 在端点内另有显式回环校验。
     """
     if request.url.path.startswith("/api/"):
         host = request.client.host if request.client is not None else None
@@ -85,8 +85,19 @@ async def startup() -> None:
     pipeline.start(loop)
 
 
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    """优雅关停：结束音频线程、取消挂起的审批，避免进程残留音频设备占用。"""
+    if pipeline is not None:
+        pipeline.stop()
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
+    # 回环校验：与 /api/* 中间件同一安全红线，/ws 也仅接受本机连接
+    if ws.client is not None and ws.client.host not in ("127.0.0.1", "::1"):
+        await ws.close(code=1008)
+        return
     await ws.accept()
     out_q: asyncio.Queue = asyncio.Queue()
 
@@ -190,14 +201,31 @@ async def audio_devices() -> dict:
 
 @app.post("/api/tts/preview")
 async def tts_preview(payload: dict) -> dict:
-    """试听：用指定音色/语速合成一句话并播放。"""
-    from backend.tts.edge_tts import EdgeTTS
-
-    voice = str(payload.get("voice") or config.get("tts.voice", "zh-CN-XiaoxiaoNeural"))
-    rate = str(payload.get("rate") or config.get("tts.rate", "+0%"))
+    """试听：优先按指定方案（model）构建一次性实例，用其音色/语速合成一句话并播放；
+    未指定方案时回退当前激活引擎。用完即释放（close/stop），避免云引擎的连接池被试听反复占用。
+    """
+    voice = payload.get("voice")
+    rate = payload.get("rate")
+    model = payload.get("model")
     text = str(payload.get("text") or "你好，欢迎使用语音助手。").strip()
-    engine = EdgeTTS(voice=voice, rate=rate)
-    await engine.speak(text)
+    engine = None
+    try:
+        engine = build_preview_tts(
+            model=model if isinstance(model, dict) else None,
+            voice=str(voice) if voice else None,
+            rate=str(rate) if rate else None,
+        )
+        await engine.speak(text)
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "msg": f"试听失败: {e}"}
+    finally:
+        if engine is not None:
+            release = getattr(engine, "close", None) or getattr(engine, "stop", None)
+            if release is not None:
+                try:
+                    release()
+                except Exception:
+                    pass
     return {"ok": True}
 
 
@@ -330,6 +358,9 @@ async def decide_deferred(item_id: str, payload: dict) -> dict:
     item = perms.get_deferred(item_id)
     if item is None:
         return {"ok": False, "msg": "任务不存在"}
+    # 先原子消费决定（仅 pending 态返回 True），防止重复点击重放授权与重执行
+    if not perms.decide_deferred(item_id, approved):
+        return {"ok": False, "msg": "任务已处理过"}
     if approved:
         # 允许 = 把这些分类纳入常驻授权（授权有记忆）+ 重新提交执行
         for c in item.get("needed", []):
@@ -337,9 +368,8 @@ async def decide_deferred(item_id: str, payload: dict) -> dict:
                 perms.set_granted(c, True)
             except ValueError:
                 pass
-    perms.decide_deferred(item_id, approved)
-    if approved and pipeline is not None and item.get("text"):
-        pipeline.submit_text(str(item["text"]))
+        if pipeline is not None and item.get("text"):
+            pipeline.submit_text(str(item["text"]))
     return {"ok": True, "deferred": perms.list_deferred()}
 
 

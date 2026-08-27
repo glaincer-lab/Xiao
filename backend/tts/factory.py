@@ -65,52 +65,82 @@ _PROVIDER_DEFAULTS = {
 }
 
 
-def build_tts() -> TTSEngine:
+def _active_model() -> dict:
+    """解析当前激活的 TTS 方案，统一成 model dict 形态（新多方案 / 旧单字段兼容）。"""
     models = config.get("tts.models", None)
     if models:
         active = config.get("tts.active")
         m = next((x for x in models if x.get("id") == active), (models[0] if models else None))
         if m:
-            provider = m.get("provider", "edge")
-            if provider == "edge":
-                return _build_edge(m.get("voice", "zh-CN-YunjianNeural"), m.get("rate", "+30%"))
-            if provider == "qwen_rt":
-                return _build_qwen_rt(m.get("voice", "Ethan"), m.get("apiKey"))
-            if provider in ("cosyvoice", "qwen"):
-                return _build_cloud(
-                    provider,
-                    m.get("tier", "flash"),
-                    m.get("voice", _PROVIDER_DEFAULTS[provider]["voice"]),
-                    m.get("apiKey"),
-                )
-            if provider == "piper":
-                return _build_piper(m.get("piperModel", "models/zh_CN-huayan-medium.onnx"))
-            if provider == "omni":
-                return _build_omni()
-            raise ValueError(f"TTS 方案尚未接入: {provider}")
+            return m
 
-    # 回退旧单一字段（兼容旧配置）
-    provider = config.get("tts.provider", "edge")
-    if provider == "edge":
-        return _build_edge(
-            config.get("tts.voice", "zh-CN-YunjianNeural"),
-            config.get("tts.rate", "+30%"),
-        )
-    if provider == "qwen_rt":
-        return _build_qwen_rt(config.get("tts.voice", "Ethan"), config.get("tts.api_key"))
-    if provider in ("cosyvoice", "qwen", "cloud"):
-        # 旧配置的 provider=cloud 视作 cosyvoice
-        p = "cosyvoice" if provider == "cloud" else provider
+    # 回退旧单一字段 → 映射成与新方案同一形态
+    provider = str(config.get("tts.provider", "edge") or "edge")
+    if provider == "cloud":  # 旧配置的 provider=cloud 视作 cosyvoice
+        provider = "cosyvoice"
+    m: dict = {"provider": provider}
+    if provider in ("cosyvoice", "qwen"):
         cloud_cfg = config.section("tts.cloud")
+        m["tier"] = config.get("tts.tier", "flash")
+        m["voice"] = cloud_cfg.get("voice", _PROVIDER_DEFAULTS[provider]["voice"])
+        m["apiKey"] = cloud_cfg.get("api_key")
+    elif provider == "qwen_rt":
+        m["voice"] = config.get("tts.voice", "Ethan")
+        m["apiKey"] = config.get("tts.api_key")
+    elif provider == "piper":
+        m["piperModel"] = config.section("tts.piper").get("model", "models/zh_CN-huayan-medium.onnx")
+    else:  # edge
+        m["voice"] = config.get("tts.voice", "zh-CN-YunjianNeural")
+        m["rate"] = config.get("tts.rate", "+30%")
+    return m
+
+
+def _dispatch(m: dict) -> TTSEngine:
+    provider = m.get("provider", "edge")
+    if provider == "edge":
+        return _build_edge(m.get("voice", "zh-CN-YunjianNeural"), m.get("rate", "+30%"))
+    if provider == "qwen_rt":
+        return _build_qwen_rt(m.get("voice", "Ethan"), m.get("apiKey"))
+    if provider in ("cosyvoice", "qwen"):
         return _build_cloud(
-            p,
-            config.get("tts.tier", "flash"),
-            cloud_cfg.get("voice", _PROVIDER_DEFAULTS[p]["voice"]),
-            cloud_cfg.get("api_key"),
+            provider,
+            m.get("tier", "flash"),
+            m.get("voice", _PROVIDER_DEFAULTS[provider]["voice"]),
+            m.get("apiKey"),
         )
     if provider == "piper":
-        piper_cfg = config.section("tts.piper")
-        return _build_piper(piper_cfg.get("model", "models/zh_CN-huayan-medium.onnx"))
+        return _build_piper(m.get("piperModel", "models/zh_CN-huayan-medium.onnx"))
     if provider == "omni":
         return _build_omni()
-    raise ValueError(f"未支持的 TTS provider: {provider}")
+    raise ValueError(f"TTS 方案尚未接入: {provider}")
+
+
+def build_tts() -> TTSEngine:
+    return _dispatch(_active_model())
+
+
+# 试听方案白名单：只接受这些键，前端多传的字段（id/name 等）一律忽略
+_PREVIEW_KEYS = ("provider", "voice", "rate", "tier", "apiKey", "piperModel")
+
+
+def build_preview_tts(
+    model: dict | None = None, voice: str | None = None, rate: str | None = None
+) -> TTSEngine:
+    """试听用：优先按「指定方案」构建引擎——试听哪个方案就构建哪个；
+    未指定时回退当前激活方案。voice/rate 覆盖仅在适用时生效（兼容旧调用）。
+
+    - model：tts.models 里的一项（provider/voice/rate/tier/apiKey/piperModel）
+    - edge：voice / rate 生效
+    - qwen_rt / cosyvoice / qwen：voice 生效（无 rate 概念）
+    - piper / omni：本地方案按方案参数构建，覆盖不适用
+    """
+    if isinstance(model, dict) and model.get("provider"):
+        m: dict = {k: model[k] for k in _PREVIEW_KEYS if model.get(k) is not None}
+    else:
+        m = dict(_active_model())
+    provider = m.get("provider", "edge")
+    if voice and provider in ("edge", "qwen_rt", "cosyvoice", "qwen"):
+        m["voice"] = voice
+    if rate and provider == "edge":
+        m["rate"] = rate
+    return _dispatch(m)
