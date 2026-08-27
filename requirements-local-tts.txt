@@ -1,0 +1,8 @@
+# 本地离线播报（可选，按需安装）
+#
+# ⚠️ piper-tts 为 GPL-3.0-or-later 强传染许可证，与主仓库 MIT 冲突，
+# 故作为可选依赖单列。仅在需要「断网也能播报」的离线保底场景安装：
+#   pip install -r requirements-local-tts.txt
+#
+# 声库：models/zh_CN-huayan-medium.onnx（约 63MB）+ 同名 .onnx.json 已随项目提供。
+piper-tts>=1.2
