@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { API_BASE } from '../api'
 
 type FieldOption = { value: string; label: string; status?: 'ok' | 'planned' }
 type Field = {
@@ -184,6 +185,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [groups, setGroups] = useState<Group[]>([])
   const [fields, setFields] = useState<Field[]>([])
   const [config, setConfig] = useState<Record<string, any> | null>(null)
+  const [origConfig, setOrigConfig] = useState<Record<string, any> | null>(null)
   const [tab, setTab] = useState('wake')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -203,7 +205,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [showAddWake, setShowAddWake] = useState(false)
   const [wakeForm, setWakeForm] = useState<{ engine: 'sherpa' | 'omni'; keyword: string; pinyin: string; threshold: number; modelDir: string; name: string; baseUrl: string; model: string }>({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '', baseUrl: 'http://localhost:8000/v1', model: 'openbmb/MiniCPM-o-4_5' })
   useEffect(() => {
-    fetch('http://127.0.0.1:8123/api/config/schema')
+    fetch(`${API_BASE}/api/config/schema`)
       .then((r) => r.json())
       .then((j) => {
         if (j.ok) {
@@ -213,12 +215,17 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       })
       .catch(() => setMsg('读取设置结构失败（后端未启动？）'))
 
-    fetch('http://127.0.0.1:8123/api/config')
+    fetch(`${API_BASE}/api/config`)
       .then((r) => r.json())
-      .then((j) => (j.ok ? setConfig(j.config) : setMsg('读取配置失败')))
+      .then((j) => {
+        if (j.ok) {
+          setConfig(j.config)
+          setOrigConfig(j.config)
+        } else setMsg('读取配置失败')
+      })
       .catch(() => setMsg('读取配置失败（后端未启动？）'))
 
-    fetch('http://127.0.0.1:8123/api/audio/devices')
+    fetch(`${API_BASE}/api/audio/devices`)
       .then((r) => r.json())
       .then((j) => (j.ok ? setInputs(j.inputs || []) : null))
       .catch(() => null)
@@ -238,16 +245,24 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     if (!config) return
     setSaving(true)
     setMsg('')
-    // 统计本次是否动了「需重启」的字段
-    const restartChanged = fields.some((f) => f.reload === 'restart')
+    // 仅当「需重启」字段的值真的变了才提示重启（与保存前的快照逐字段比对）
+    const restartChanged = !!origConfig && fields.some(
+      (f) =>
+        f.reload === 'restart' &&
+        JSON.stringify(getPath(config, f.path) ?? null) !== JSON.stringify(getPath(origConfig, f.path) ?? null),
+    )
     try {
-      const r = await fetch('http://127.0.0.1:8123/api/config', {
+      const r = await fetch(`${API_BASE}/api/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates: config }),
       })
       const j = await r.json()
       if (j.ok) {
+        if (j.config) {
+          setConfig(j.config)
+          setOrigConfig(j.config)
+        }
         setMsg(restartChanged ? '已保存。含引擎类设置，需重启后端生效。' : '已保存，软配置即时生效。')
       } else {
         setMsg('保存失败：' + (j.msg || ''))
@@ -259,25 +274,37 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     }
   }
 
-  const preview = async () => {
-    const voice = getPath(config || {}, 'tts.voice')
-    const rate = getPath(config || {}, 'tts.rate')
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const preview = async (m?: SavedTTS | null) => {
+    // 试听哪个方案就按哪个方案构建引擎：优先用调用方传入的方案，
+    // 否则取前端当前激活方案（未点「保存」也能试听，不再依赖后端激活态）
+    const models: any[] | undefined = getPath(config || {}, 'tts.models')
+    const activeId = getPath(config || {}, 'tts.active')
+    const passed = m && typeof m === 'object' && 'provider' in m ? m : null
+    const scheme = passed || (Array.isArray(models) && models.length ? models.find((x) => x && x.id === activeId) || models[0] : null)
+    const voice = (scheme && scheme.voice) || getPath(config || {}, 'tts.voice')
+    const rate = (scheme && scheme.rate) || getPath(config || {}, 'tts.rate')
+    if (previewBusy) return
     setMsg('正在合成试听…')
+    setPreviewBusy(true)
     try {
-      await fetch('http://127.0.0.1:8123/api/tts/preview', {
+      const r = await fetch(`${API_BASE}/api/tts/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voice, rate, text: previewText }),
+        body: JSON.stringify({ model: scheme || undefined, voice, rate, text: previewText }),
       })
-      setMsg('试听播放完毕。')
+      const j = await r.json()
+      setMsg(j.ok ? '试听播放完毕。' : '试听失败：' + (j.msg || ''))
     } catch {
       setMsg('试听失败（网络错误）')
+    } finally {
+      setPreviewBusy(false)
     }
   }
 
   const clearMemory = async () => {
     try {
-      const r = await fetch('http://127.0.0.1:8123/api/memory/clear', { method: 'POST' })
+      const r = await fetch(`${API_BASE}/api/memory/clear`, { method: 'POST' })
       const j = await r.json()
       setMsg(j.ok ? '对话记忆已清空。' : '清空失败：' + (j.msg || ''))
     } catch {
@@ -289,7 +316,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     setEchoBusy(true)
     setEchoMsg('正在录音，请对麦克风说话…（录完自动回放）')
     try {
-      const r = await fetch('http://127.0.0.1:8123/api/mic/echo', {
+      const r = await fetch(`${API_BASE}/api/mic/echo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duration: 3 }),
@@ -1029,6 +1056,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                     </div>
                   </div>
                   <div className="scheme-item-actions">
+                    <button type="button" className="btn btn--sm" disabled={previewBusy} onClick={() => preview(m)}>▶ 试听</button>
                     {!isActive && <button type="button" className="btn btn--sm" onClick={() => applyTTS(m)}>设为当前</button>}
                     <button type="button" className="btn btn--sm" onClick={() => startEditTTS(m)}>编辑</button>
                     <button type="button" className="btn btn--sm" onClick={() => removeTTS(m.id)}>删除</button>
@@ -1368,7 +1396,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                 <textarea className="settings-textarea" rows={2} value={previewText} onChange={(e) => setPreviewText(e.target.value)} />
               </label>
               <div className="settings-actions">
-                <button className="btn" onClick={preview}>▶ 试听</button>
+                <button className="btn" disabled={previewBusy} onClick={() => preview()}>{previewBusy ? '合成中…' : '▶ 试听当前方案'}</button>
               </div>
             </div>
           ) : tab === 'wake' ? (

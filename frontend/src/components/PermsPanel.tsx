@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { API_BASE } from '../api'
 
 type Category = { id: string; label: string; desc: string }
 type Deferred = { id: string; ts: string; text: string; needed: string[]; status: string }
@@ -18,7 +19,7 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
   const [msg, setMsg] = useState('')
 
   const load = useCallback(() => {
-    fetch('http://127.0.0.1:8123/api/perms')
+    fetch(`${API_BASE}/api/perms`)
       .then((r) => r.json())
       .then((j) => {
         if (j.ok) {
@@ -55,7 +56,7 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
   const decide = async (id: string, approved: boolean) => {
     setMsg('')
     try {
-      const r = await fetch(`http://127.0.0.1:8123/api/perms/deferred/${id}`, {
+      const r = await fetch(`${API_BASE}/api/perms/deferred/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approved }),

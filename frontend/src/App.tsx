@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { API_BASE, WS_URL } from './api'
 import { connectWS, type ServerEvent, type WSHandle } from './ws'
 import { Nebula } from './components/Nebula'
 import { VoiceLine } from './components/VoiceLine'
@@ -313,16 +314,10 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
-    // 直接连后端 WS（绕过 vite 代理，dev/prod 后端都在 127.0.0.1:8123）
-    const ws = connectWS('ws://127.0.0.1:8123/ws', handleEvent, setConnected)
-    wsRef.current = ws
-    return () => ws.close()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    fetch('http://127.0.0.1:8123/api/status')
+  // 快照补偿：状态 + 任务列表一起拉，挂载时与 WS 重连成功后各调一次，
+  // 避免断线期间丢事件导致前端状态与后端不同步
+  const refreshSnapshot = useCallback(() => {
+    fetch(`${API_BASE}/api/status`)
       .then((r) => r.json())
       .then((d) => {
         if (d && d.ok) {
@@ -334,10 +329,7 @@ export default function App() {
       .catch(() => {
         /* 后端未就绪时保持「检测中」，连接状态由 WS 的 conn 灯单独体现 */
       })
-  }, [])
-
-  useEffect(() => {
-    fetch('http://127.0.0.1:8123/api/tasks')
+    fetch(`${API_BASE}/api/tasks`)
       .then((r) => r.json())
       .then((d) => {
         if (d && d.ok && Array.isArray(d.tasks)) setTasks(d.tasks)
@@ -345,6 +337,18 @@ export default function App() {
       .catch(() => {
         /* 后端未就绪时忽略 */
       })
+  }, [])
+
+  useEffect(() => {
+    const onStatus = (ok: boolean) => {
+      setConnected(ok)
+      if (ok) refreshSnapshot()
+    }
+    const ws = connectWS(WS_URL, handleEvent, onStatus)
+    wsRef.current = ws
+    refreshSnapshot()
+    return () => ws.close()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

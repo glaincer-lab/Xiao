@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { API_BASE } from '../api'
 
 export type Task = {
   id: string
@@ -32,7 +33,7 @@ export function TaskPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => vo
     setMsg('')
     setBusy(id)
     try {
-      const r = await fetch(`http://127.0.0.1:8123/api/tasks/${id}/cancel`, { method: 'POST' })
+      const r = await fetch(`${API_BASE}/api/tasks/${id}/cancel`, { method: 'POST' })
       const j = await r.json()
       if (!j.ok) setMsg('取消失败')
     } catch {
