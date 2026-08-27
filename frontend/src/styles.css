@@ -233,83 +233,6 @@ body {
   justify-content: flex-end;
 }
 
-/* ---------- 核心球体 ---------- */
-.orb-wrap {
-  display: grid;
-  place-items: center;
-}
-
-.orb {
-  position: relative;
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #1b2f52, #0a1120 70%);
-  box-shadow:
-    inset 0 0 40px rgba(74, 125, 255, 0.25),
-    0 0 0 1px rgba(120, 170, 255, 0.18),
-    0 0 60px rgba(74, 125, 255, 0.18);
-  transition: box-shadow 0.6s, transform 0.6s;
-}
-
-.orb-core {
-  position: absolute;
-  inset: 30%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--cyan), var(--violet));
-  filter: blur(10px);
-  opacity: 0.7;
-  animation: breathe 4s ease-in-out infinite;
-}
-
-.orb-ring {
-  position: absolute;
-  inset: -14px;
-  border-radius: 50%;
-  border: 1px solid rgba(74, 125, 255, 0.25);
-  opacity: 0.7;
-}
-
-.orb-scan {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent, rgba(74, 125, 255, 0.55), transparent 40%);
-  opacity: 0;
-  animation: spin 1.6s linear infinite;
-}
-
-.orb--listening .orb,
-.orb--speaking .orb {
-  transform: scale(1.12);
-  box-shadow:
-    inset 0 0 50px rgba(74, 125, 255, 0.35),
-    0 0 0 1px rgba(120, 170, 255, 0.3),
-    0 0 90px var(--glow);
-}
-.orb--speaking .orb {
-  box-shadow:
-    inset 0 0 50px rgba(129, 140, 248, 0.4),
-    0 0 0 1px rgba(129, 140, 248, 0.35),
-    0 0 90px rgba(129, 140, 248, 0.55);
-}
-.orb--processing .orb-scan,
-.orb--executing .orb-scan {
-  opacity: 1;
-}
-
-@keyframes breathe {
-  50% {
-    transform: scale(1.25);
-    opacity: 1;
-  }
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* ---------- 实时识别区 ---------- */
 .livebox {
   position: relative;
@@ -339,37 +262,11 @@ body {
   color: var(--text-dim);
 }
 
-/* ---------- 波形 ---------- */
-.wave {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  height: 26px;
-  opacity: 0.4;
-}
-
-.wave-bar {
-  width: 3px;
-  height: 6px;
-  border-radius: 2px;
-  background: linear-gradient(var(--cyan), var(--violet));
-}
-
-.wave--on {
-  opacity: 1;
-}
-.wave--on .wave-bar {
-  animation: wave 0.9s ease-in-out infinite;
-}
-
-@keyframes wave {
-  0%,
-  100% {
-    height: 5px;
-  }
-  50% {
-    height: 24px;
-  }
+.voiceline {
+  width: 100%;
+  max-width: 520px;
+  height: 48px;
+  display: block;
 }
 
 /* ---------- 对话面板 ---------- */
@@ -729,41 +626,6 @@ body {
   min-height: 0;
   overflow-y: auto;
   padding: 20px 22px;
-}
-.dialogue-mode-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 12px 14px;
-  margin-bottom: 16px;
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-}
-.dialogue-mode-label {
-  font-size: 13px;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-.dialogue-mode-btn {
-  padding: 8px 16px;
-  font-size: 14px;
-  color: var(--text-dim);
-  background: transparent;
-  border: 1px solid var(--panel-border);
-  border-radius: 9px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.dialogue-mode-btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-}
-.dialogue-mode-btn--on {
-  color: var(--cyan);
-  background: rgba(74, 125, 255, 0.12);
-  border-color: rgba(74, 125, 255, 0.25);
 }
 .settings-form-modal {
   width: min(560px, 92vw);
@@ -1405,6 +1267,12 @@ body {
   border: 1px solid rgba(74, 125, 255, 0.18);
   animation: breathe 3s ease-in-out infinite;
   pointer-events: none;
+}
+@keyframes breathe {
+  50% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
 }
 .approval-q {
   margin: 0;

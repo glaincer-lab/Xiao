@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { connectWS, type ServerEvent, type WSHandle } from './ws'
-import { Waveform } from './components/Waveform'
 import { Nebula } from './components/Nebula'
+import { VoiceLine } from './components/VoiceLine'
 import { Typewriter } from './components/Typewriter'
 import { SettingsPanel } from './components/SettingsPanel'
 import { PermsPanel } from './components/PermsPanel'
@@ -149,6 +149,7 @@ export default function App() {
   const [sessionState, setSessionState] = useState('idle')
   const [connected, setConnected] = useState(false)
   const [liveText, setLiveText] = useState('')
+  const [micLevel, setMicLevel] = useState(0)
   const [messages, setMessages] = useState<Message[]>([])
   const [toolActivity, setToolActivity] = useState('')
   const [input, setInput] = useState('')
@@ -235,6 +236,10 @@ export default function App() {
       case 'asr_partial': {
         // 实时识别中间结果是「累积全文」，直接覆盖显示，避免旧文本重复拼接
         setLiveText(String(e.text ?? ''))
+        break
+      }
+      case 'mic_level': {
+        setMicLevel(Number(e.level ?? 0))
         break
       }
       case 'asr_final': {
@@ -396,7 +401,6 @@ export default function App() {
     wsRef.current?.send({ type: 'router_mode', mode: m })
   }
 
-  const active = sessionState === 'listening' || sessionState === 'speaking' || sessionState === 'confirm_shutdown' || sessionState === 'working'
   const activeTaskCount = tasks.filter((t) => t.status === 'pending' || t.status === 'running').length
 
   const dshBusy = sessionState === 'executing' || sessionState === 'working'
@@ -501,7 +505,7 @@ export default function App() {
                         : toolActivity || '我在听…'}
                 </p>
               )}
-              <Waveform active={active} />
+              <VoiceLine level={micLevel} />
             </div>
           )}
         </section>

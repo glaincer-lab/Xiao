@@ -291,7 +291,7 @@ export function Nebula({ state }: { state: string }) {
       if (shape === 'hyperboloid') {
         breathe = 1 + Math.sin(time * 1.2) * 0.16 // 说话：约 5 秒一收一缩
       } else if (shape === 'octahedron') {
-        breathe = 1 + Math.sin(time * 0.8) * 0.05 // 聆听：约 8 秒，轻微平滑
+        breathe = 1 + Math.sin(time * 1.4) * 0.14 // 聆听：约 4.5 秒，明显一缩一张
       }
       uniforms.uBreathe.value = breathe
 
