@@ -136,8 +136,8 @@ llm:
     api_key: ''
     temperature: 0.3
 tts:
-  provider: edge
-  active: tts_edge
+  provider: cosyvoice
+  active: tts_cosyvoice
   models:
   - id: tts_edge
     name: edge-tts 免费云
