@@ -1,13 +1,14 @@
 """TTS 工厂。支持多方案（tts.models[] + tts.active）。
 
-provider 收敛为 5 类：
+provider 收敛为 6 类：
 - edge       edge-tts 免费云
-- cosyvoice  阿里云 CosyVoice v3（flash / plus）
-- qwen       阿里云 Qwen-Audio-TTS（flash / plus）
+- qwen_rt    阿里云 Qwen 实时流式（qwen3-tts-flash-realtime，边合成边播，首音快）
+- cosyvoice  阿里云 CosyVoice v3（flash / plus，非流式高音质）
+- qwen       阿里云 Qwen-Audio-TTS（flash / plus，非流式）
 - piper      本地 Piper（离线保底）
 - omni       一体化 MiniCPM-o（本地 vLLM-omni）
 
-付费云（cosyvoice/qwen）通过 tier 字段区分 flash/plus，音色统一存短名，
+付费云非流式（cosyvoice/qwen）通过 tier 字段区分 flash/plus，音色统一存短名，
 运行时由 CloudTTSEngine 按 provider+tier 拼完整 voice。
 """
 from __future__ import annotations
@@ -24,13 +25,23 @@ def _build_edge(voice: str, rate: str) -> TTSEngine:
 def _build_cloud(provider: str, tier: str, voice: str, api_key: str | None) -> TTSEngine:
     from backend.tts.cosyvoice import CloudTTSEngine
 
-    return CloudTTSEngine(provider=provider, tier=tier, voice=voice, api_key=api_key)
+    engine = CloudTTSEngine(provider=provider, tier=tier, voice=voice, api_key=api_key)
+    engine._warm_pool()  # 后台预热 WebSocket 连接池，降低首句播报延迟
+    return engine
 
 
 def _build_piper(model_path: str) -> TTSEngine:
     from backend.tts.piper import PiperEngine
 
     return PiperEngine(model_path=model_path)
+
+
+def _build_qwen_rt(voice: str, api_key: str | None) -> TTSEngine:
+    from backend.tts.qwen_realtime import QwenRealtimeTTS
+
+    engine = QwenRealtimeTTS(voice=voice, api_key=api_key)
+    engine.warm()  # 启动即预热连接，首句播报首音约 0.4s
+    return engine
 
 
 def _build_omni() -> TTSEngine:
@@ -47,6 +58,7 @@ def _build_omni() -> TTSEngine:
 # provider → 默认参数（音色存短名）
 _PROVIDER_DEFAULTS = {
     "edge": {"voice": "zh-CN-YunjianNeural", "rate": "+30%"},
+    "qwen_rt": {"voice": "Ethan"},
     "cosyvoice": {"tier": "flash", "voice": "longanyang"},
     "qwen": {"tier": "flash", "voice": "longyingsongliu"},
     "piper": {"model": "models/zh_CN-huayan-medium.onnx"},
@@ -62,6 +74,8 @@ def build_tts() -> TTSEngine:
             provider = m.get("provider", "edge")
             if provider == "edge":
                 return _build_edge(m.get("voice", "zh-CN-YunjianNeural"), m.get("rate", "+30%"))
+            if provider == "qwen_rt":
+                return _build_qwen_rt(m.get("voice", "Ethan"), m.get("apiKey"))
             if provider in ("cosyvoice", "qwen"):
                 return _build_cloud(
                     provider,
@@ -82,6 +96,8 @@ def build_tts() -> TTSEngine:
             config.get("tts.voice", "zh-CN-YunjianNeural"),
             config.get("tts.rate", "+30%"),
         )
+    if provider == "qwen_rt":
+        return _build_qwen_rt(config.get("tts.voice", "Ethan"), config.get("tts.api_key"))
     if provider in ("cosyvoice", "qwen", "cloud"):
         # 旧配置的 provider=cloud 视作 cosyvoice
         p = "cosyvoice" if provider == "cloud" else provider
