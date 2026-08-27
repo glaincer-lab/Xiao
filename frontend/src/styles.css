@@ -5,11 +5,30 @@
   --panel-border: rgba(150, 164, 185, 0.14);
   --text: #e7edf5;
   --text-dim: #93a0b4;
+  /* 赛博国风：暖金品牌 + 赤陶强色；交互蓝承接旧青色系 */
+  --brand: #d6a85f;
+  --brand-strong: #c96a3d;
+  --accent: #5b7cfa;
+  /* 旧变量保留兼容历史引用；新代码用 --brand / --accent */
   --cyan: #4a7dff;
   --violet: #6ea0ff;
   --glow: rgba(74, 125, 255, 0.18);
+  --glow-warm: rgba(214, 168, 95, 0.3);
+  /* 状态色单一事实源：Nebula.tsx 启动时读取这些令牌（缺失时才用内置兜底表） */
+  --st-idle: #4a7dff;
+  --st-sleeping: #4a7dff;
+  --st-listening: #34d399;
+  --st-processing: #a78bfa;
+  --st-speaking: #f472b6;
+  --st-executing: #fb923c;
+  --st-working: #fb923c;
+  --st-await_approval: #ef4444;
+  --st-confirm_shutdown: #ef4444;
   --radius: 16px;
+  --radius-md: 12px;
+  --radius-sm: 10px;
   --font-ui: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, monospace;
   --fs: 1;
   --left-width: 260px;
 }
@@ -103,8 +122,8 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--cyan), var(--violet));
-  box-shadow: 0 0 14px var(--glow);
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+  box-shadow: 0 0 14px var(--glow-warm);
 }
 
 .brand-name {
@@ -145,34 +164,71 @@ body {
   transition: all 0.4s;
 }
 
+/* 状态胶囊全 9 态：颜色取 --st-* 令牌（与 Nebula 粒子同源），不再硬编码 */
+.status--idle,
+.status--sleeping {
+  color: var(--st-idle);
+  border-color: rgba(74, 125, 255, 0.4);
+  background: rgba(74, 125, 255, 0.07);
+}
+.status--idle .status-dot,
+.status--sleeping .status-dot {
+  background: var(--st-idle);
+  box-shadow: 0 0 8px rgba(74, 125, 255, 0.4);
+}
 .status--listening {
-  color: var(--cyan);
-  border-color: rgba(74, 125, 255, 0.5);
-  background: rgba(74, 125, 255, 0.08);
+  color: var(--st-listening);
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.08);
 }
 .status--listening .status-dot {
-  background: var(--cyan);
-  box-shadow: 0 0 8px var(--glow);
+  background: var(--st-listening);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
   animation: blink 1s infinite;
 }
+.status--processing {
+  color: var(--st-processing);
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(167, 139, 250, 0.08);
+}
+.status--processing .status-dot {
+  background: var(--st-processing);
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.45);
+  animation: blink 1.6s infinite;
+}
 .status--speaking {
-  color: var(--violet);
-  border-color: rgba(110, 160, 255, 0.5);
-  background: rgba(110, 160, 255, 0.08);
+  color: var(--st-speaking);
+  border-color: rgba(244, 114, 182, 0.5);
+  background: rgba(244, 114, 182, 0.08);
 }
 .status--speaking .status-dot {
-  background: var(--violet);
-  box-shadow: 0 0 8px rgba(110, 160, 255, 0.4);
+  background: var(--st-speaking);
+  box-shadow: 0 0 8px rgba(244, 114, 182, 0.45);
   animation: blink 0.7s infinite;
 }
-.status--executing {
-  color: #fbbf24;
-  border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.08);
+.status--executing,
+.status--working {
+  color: var(--st-executing);
+  border-color: rgba(251, 146, 60, 0.5);
+  background: rgba(251, 146, 60, 0.08);
 }
-.status--executing .status-dot {
-  background: #fbbf24;
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+.status--executing .status-dot,
+.status--working .status-dot {
+  background: var(--st-executing);
+  box-shadow: 0 0 8px rgba(251, 146, 60, 0.45);
+  animation: blink 1.2s infinite;
+}
+.status--await_approval,
+.status--confirm_shutdown {
+  color: var(--st-await_approval);
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.1);
+}
+.status--await_approval .status-dot,
+.status--confirm_shutdown .status-dot {
+  background: var(--st-await_approval);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  animation: blink 0.6s infinite;
 }
 
 .conn {
@@ -351,17 +407,16 @@ body {
   opacity: 1;
 }
 
+/* 气泡圆角统一交给下方「微信式角」一节；此处只管配色与质感 */
 .msg--user .bubble {
   background: linear-gradient(135deg, #2b5bd7, #1d4ed8);
   color: #eef3ff;
-  border-bottom-right-radius: 4px;
-  box-shadow: none;
+  box-shadow: 0 2px 10px rgba(29, 78, 216, 0.28);
 }
 .msg--assistant .bubble {
   background: rgba(148, 163, 184, 0.13);
   border: 1px solid var(--panel-border);
   color: var(--text);
-  border-bottom-left-radius: 4px;
 }
 .msg--notice .bubble {
   background: rgba(251, 191, 36, 0.10);
@@ -395,7 +450,7 @@ body {
 .composer-input {
   width: 100%;
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--panel-border);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
@@ -405,10 +460,14 @@ body {
   min-height: 40px;
   resize: none;
   outline: none;
-  transition: border-color 0.3s;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.composer-input:hover {
+  border-color: rgba(150, 164, 185, 0.3);
 }
 .composer-input:focus {
-  border-color: rgba(74, 125, 255, 0.5);
+  border-color: rgba(91, 124, 250, 0.55);
+  box-shadow: 0 0 0 3px rgba(91, 124, 250, 0.14);
 }
 .composer-input::placeholder {
   color: var(--text-dim);
@@ -416,7 +475,7 @@ body {
 
 .btn {
   padding: 10px 18px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--panel-border);
   background: rgba(148, 163, 184, 0.12);
   color: var(--text);
@@ -428,13 +487,29 @@ body {
   background: rgba(148, 163, 184, 0.2);
   border-color: rgba(74, 125, 255, 0.4);
 }
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:focus-visible {
+  outline: none;
+  border-color: rgba(91, 124, 250, 0.55);
+  box-shadow: 0 0 0 3px rgba(91, 124, 250, 0.14);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
 .btn--wake {
-  border-color: rgba(74, 125, 255, 0.35);
-  background: rgba(74, 125, 255, 0.14);
-  color: #cdd9ff;
+  border-color: rgba(214, 168, 95, 0.4);
+  background: rgba(214, 168, 95, 0.14);
+  color: #f0dcb3;
 }
 .btn--wake:hover {
-  background: rgba(74, 125, 255, 0.22);
+  background: rgba(214, 168, 95, 0.24);
+}
+.btn--wake:active {
+  background: rgba(201, 106, 61, 0.3);
 }
 
 /* ---------- 路由切换（自动/聊天/DSH） ---------- */
@@ -521,7 +596,7 @@ body {
 }
 .modal-close:hover {
   color: var(--text);
-  border-color: rgba(74, 125, 255, 0.5);
+  border-color: rgba(91, 124, 250, 0.55);
 }
 .modal-body {
   flex: 1;
@@ -662,7 +737,7 @@ body {
 }
 .settings-field input:focus,
 .settings-field select:focus {
-  border-color: rgba(74, 125, 255, 0.5);
+  border-color: rgba(91, 124, 250, 0.55);
 }
 .settings-field input[type='checkbox'] {
   flex: none;
@@ -870,7 +945,7 @@ body {
   outline: none;
 }
 .settings-textarea:focus {
-  border-color: rgba(74, 125, 255, 0.5);
+  border-color: rgba(91, 124, 250, 0.55);
 }
 .settings-range {
   display: flex;
@@ -1034,7 +1109,7 @@ body {
   z-index: 2;
   flex: none;
   margin: 0 16px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(8, 12, 22, 0.6);
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(14px);
@@ -1094,7 +1169,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: var(--font-mono);
 }
 .logbar-empty {
   font-size: 12px;
@@ -1136,16 +1211,7 @@ body {
 
 /* ==================== UI 优化：淡化 / 滚动条 / 顶栏标签 ==================== */
 
-/* 淡化：气泡更小更透、输入框/日志更隐形 */
-.bubble {
-  font-size: calc(14.5px * var(--fs));
-}
-.msg--user .bubble {
-  background: linear-gradient(135deg, #2b5bd7, #1d4ed8);
-}
-.msg--assistant .bubble {
-  background: rgba(148, 163, 184, 0.13);
-}
+/* 淡化：输入框/日志更隐形（气泡样式统一在上方基础区声明，勿在此重复覆盖） */
 .composer-input {
   background: rgba(255, 255, 255, 0.03);
 }
@@ -1202,8 +1268,8 @@ body {
   text-align: center;
   border-radius: 999px;
   color: #0b1220;
-  background: linear-gradient(135deg, var(--cyan), var(--violet));
-  box-shadow: 0 0 8px var(--glow);
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+  box-shadow: 0 0 8px var(--glow-warm);
 }
 
 /* ==================== 微信风气泡（连续贴边 / 尾巴角 / 对齐，无头像） ==================== */
@@ -1264,7 +1330,7 @@ body {
   position: absolute;
   inset: -8px;
   border-radius: 20px;
-  border: 1px solid rgba(74, 125, 255, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.22);
   animation: breathe 3s ease-in-out infinite;
   pointer-events: none;
 }

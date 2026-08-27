@@ -14,7 +14,7 @@ const STATE_SHAPE: Record<string, Shape> = {
   await_approval: 'cube',
 }
 
-// 状态 → 颜色（同一时刻单色，切换时平滑变）
+// 状态 → 颜色兜底表（同一时刻单色，切换时平滑变；真实色板以 styles.css 的 --st-* 令牌为准）
 const STATE_COLORS: Record<string, [number, number, number]> = {
   idle: [74, 125, 255],
   sleeping: [74, 125, 255],
@@ -25,6 +25,26 @@ const STATE_COLORS: Record<string, [number, number, number]> = {
   working: [251, 146, 60],
   confirm_shutdown: [239, 68, 68],
   await_approval: [239, 68, 68],
+}
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return null
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
+}
+
+// 状态色单一事实源在 styles.css 的 --st-* 令牌；启动时读取，令牌缺失/非法时回退内置表
+function stateColorsFromCss(): Record<string, [number, number, number]> {
+  const out: Record<string, [number, number, number]> = { ...STATE_COLORS }
+  try {
+    const css = getComputedStyle(document.documentElement)
+    for (const key of Object.keys(STATE_COLORS)) {
+      const rgb = hexToRgb(css.getPropertyValue(`--st-${key}`).trim())
+      if (rgb) out[key] = rgb
+    }
+  } catch {
+    // 非 DOM 环境：保持兜底表
+  }
+  return out
 }
 
 const VERT = `
@@ -203,12 +223,19 @@ export function Nebula({ state }: { state: string }) {
     camera.position.set(0, 0, CAM_DIST)
     camera.lookAt(0, 0, 0)
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    // 低性能模式：CPU 核心少 → 减粒子、关抗锯齿、降像素比；系统「减少动态效果」→ 停环绕/呼吸/流动
+    const lowPerf = navigator.hardwareConcurrency <= 4 || !navigator.hardwareConcurrency
+    const reducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const maxRatio = lowPerf ? 1 : 2
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: !lowPerf })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxRatio))
     renderer.setSize(mount.clientWidth, mount.clientHeight)
     mount.appendChild(renderer.domElement)
 
-    const COUNT = 1200
+    const COUNT = lowPerf ? 500 : 1200
     const R = 9
     const seeds = new Float32Array(COUNT * 3)
     const sizes = new Float32Array(COUNT)
@@ -234,8 +261,14 @@ export function Nebula({ state }: { state: string }) {
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
 
+    const stateColors = stateColorsFromCss()
+    const idleColor = new THREE.Color(
+      stateColors.idle[0] / 255,
+      stateColors.idle[1] / 255,
+      stateColors.idle[2] / 255,
+    )
     const uniforms = {
-      uColor: { value: new THREE.Color(0x4a7dff) },
+      uColor: { value: idleColor.clone() },
       uOpacity: { value: 0.92 },
       uBreathe: { value: 1 },
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
@@ -253,7 +286,7 @@ export function Nebula({ state }: { state: string }) {
     const points = new THREE.Points(geo, mat)
     scene.add(points)
 
-    const curColor = new THREE.Color(0x4a7dff)
+    const curColor = idleColor.clone()
     const targetColor = new THREE.Color()
     const clock = new THREE.Clock()
     let raf = 0
@@ -268,7 +301,7 @@ export function Nebula({ state }: { state: string }) {
       const isActive = ['listening', 'speaking', 'processing', 'executing', 'working'].includes(s)
 
       // 颜色平滑变
-      const tc = STATE_COLORS[s] ?? [74, 125, 255]
+      const tc = stateColors[s] ?? stateColors.idle
       targetColor.setRGB(tc[0] / 255, tc[1] / 255, tc[2] / 255)
       curColor.lerp(targetColor, 0.06)
       uniforms.uColor.value.copy(curColor)
@@ -288,10 +321,12 @@ export function Nebula({ state }: { state: string }) {
       // 呼吸：只让「光点大小」一收一缩，位置/距离完全不动，避免产生远近感
       // 频率是「弧度/秒」：sin(time*X) 的周期 = 2π/X 秒
       let breathe = 1
-      if (shape === 'hyperboloid') {
-        breathe = 1 + Math.sin(time * 1.2) * 0.16 // 说话：约 5 秒一收一缩
-      } else if (shape === 'octahedron') {
-        breathe = 1 + Math.sin(time * 1.4) * 0.14 // 聆听：约 4.5 秒，明显一缩一张
+      if (!reducedMotion) {
+        if (shape === 'hyperboloid') {
+          breathe = 1 + Math.sin(time * 1.2) * 0.16 // 说话：约 5 秒一收一缩
+        } else if (shape === 'octahedron') {
+          breathe = 1 + Math.sin(time * 1.4) * 0.14 // 聆听：约 4.5 秒，明显一缩一张
+        }
       }
       uniforms.uBreathe.value = breathe
 
@@ -323,7 +358,7 @@ export function Nebula({ state }: { state: string }) {
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       renderer.setSize(w, h)
-      uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2)
+      uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, maxRatio)
     }
     window.addEventListener('resize', onResize)
     // 监听中间列尺寸变化（调整左列宽度时），让 3D 图案和文字/波形始终对齐
