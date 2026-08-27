@@ -103,6 +103,19 @@ const TIER_OPTIONS = [
   { value: 'flash', label: 'flash（快、省钱）' },
   { value: 'plus', label: 'plus（音质更好）' },
 ]
+// Qwen 实时流式（qwen3-tts-flash-realtime）音色：英文名，边合成边播
+const QWEN_RT_VOICES = [
+  { value: 'Ethan', label: 'Ethan（男·阳光温暖，推荐）' },
+  { value: 'Moon', label: 'Moon（男·磁性月白）' },
+  { value: 'Kai', label: 'Kai（男·舒缓）' },
+  { value: 'Neil', label: 'Neil（男·专业播音）' },
+  { value: 'Ryan', label: 'Ryan（男·戏剧感）' },
+  { value: 'Serena', label: 'Serena（女·温柔）' },
+  { value: 'Chelsie', label: 'Chelsie（女·二次元）' },
+  { value: 'Vivian', label: 'Vivian（女·俏皮）' },
+  { value: 'Bella', label: 'Bella（女·活泼）' },
+  { value: 'Maia', label: 'Maia（女·知性）' },
+]
 
 // 已保存的模型条目（多模型管理列表）
 type SavedModel = {
@@ -128,7 +141,7 @@ type SavedASR = {
 type SavedTTS = {
   id: string
   name: string
-  provider: 'edge' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
+  provider: 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
   voice: string
   rate: string
   tier: 'flash' | 'plus'
@@ -176,8 +189,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [msg, setMsg] = useState('')
   const [inputs, setInputs] = useState<{ index: number; name: string; is_default: boolean }[]>([])
   const [previewText, setPreviewText] = useState('你好，欢迎使用语音助手。')
-  const [voices, setVoices] = useState<FieldOption[]>([])
-  const [voicesLoading, setVoicesLoading] = useState(false)
   const [echoBusy, setEchoBusy] = useState(false)
   const [echoMsg, setEchoMsg] = useState('')
   const [showAddModel, setShowAddModel] = useState(false)
@@ -187,7 +198,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'fun-asr-flash-8k-realtime', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
   const [editASRId, setEditASRId] = useState<string | null>(null)
   const [showAddTTS, setShowAddTTS] = useState(false)
-  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; tier: 'flash' | 'plus'; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-huayan-medium.onnx' })
+  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; tier: 'flash' | 'plus'; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-huayan-medium.onnx' })
   const [editTTSId, setEditTTSId] = useState<string | null>(null)
   const [showAddWake, setShowAddWake] = useState(false)
   const [wakeForm, setWakeForm] = useState<{ engine: 'sherpa' | 'omni'; keyword: string; pinyin: string; threshold: number; modelDir: string; name: string; baseUrl: string; model: string }>({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '', baseUrl: 'http://localhost:8000/v1', model: 'openbmb/MiniCPM-o-4_5' })
@@ -274,25 +285,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     }
   }
 
-  const loadVoices = async () => {
-    setVoicesLoading(true)
-    setMsg('正在拉取音色列表…')
-    try {
-      const r = await fetch('http://127.0.0.1:8123/api/tts/voices')
-      const j = await r.json()
-      if (j.ok && Array.isArray(j.voices) && j.voices.length > 0) {
-        setVoices(j.voices)
-        setMsg(`已加载 ${j.voices.length} 个中文音色。`)
-      } else {
-        setMsg('拉取音色失败：' + (j.msg || '无结果'))
-      }
-    } catch {
-      setMsg('拉取音色失败（网络错误）')
-    } finally {
-      setVoicesLoading(false)
-    }
-  }
-
   const runEcho = async () => {
     setEchoBusy(true)
     setEchoMsg('正在录音，请对麦克风说话…（录完自动回放）')
@@ -337,8 +329,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       )
     }
     if (f.type === 'select') {
-      // tts.voice 优先用动态拉取的完整音色列表（更多/更新），未拉取时回退 schema 硬编码
-      const opts = f.path === 'tts.voice' && voices.length > 0 ? voices : (f.options || [])
+      const opts = f.options || []
       return (
         <label className="settings-field" {...common}>
           <span className="settings-field-label">
@@ -836,7 +827,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     const activeTTS = config ? (getPath(config, 'tts.active') || '') : ''
     const voiceField = fields.find((f) => f.path === 'tts.voice')
     const rateField = fields.find((f) => f.path === 'tts.rate')
-    const voiceOptions: FieldOption[] = voices.length > 0 ? voices : (voiceField?.options || [])
+    const voiceOptions: FieldOption[] = voiceField?.options || []
     const rateOptions: FieldOption[] = rateField?.options || []
     const activeScheme = savedTTS.find((m) => m.id === activeTTS)
 
@@ -856,7 +847,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       if (updated && activeTTS === id) applyTTS(updated)
     }
 
-    const providerName = (p: string) => p === 'edge' ? 'edge-tts' : p === 'cosyvoice' ? 'CosyVoice v3' : p === 'qwen' ? 'Qwen-Audio-TTS' : p === 'piper' ? '本地 Piper' : 'MiniCPM-o'
+    const providerName = (p: string) => p === 'edge' ? 'edge-tts' : p === 'qwen_rt' ? 'Qwen 实时流式' : p === 'cosyvoice' ? 'CosyVoice v3' : p === 'qwen' ? 'Qwen-Audio-TTS' : p === 'piper' ? '本地 Piper' : 'MiniCPM-o'
 
     const startNewTTS = () => {
       setEditTTSId(null)
@@ -925,16 +916,18 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             <label className="settings-field">
               <span className="settings-field-label">播报方式</span>
               <select value={ttsForm.provider} onChange={(e) => {
-                const p = e.target.value as 'edge' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
+                const p = e.target.value as 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
                 // 切换播报方式时同步默认音色/档位，避免把别的引擎参数误带进来
-                const patch: any = { provider: p, tier: p === 'cosyvoice' || p === 'qwen' ? 'flash' : 'flash' }
+                const patch: any = { provider: p, tier: 'flash' }
                 if (p === 'edge') patch.voice = 'zh-CN-YunjianNeural'
+                else if (p === 'qwen_rt') patch.voice = 'Ethan'
                 else if (p === 'cosyvoice') patch.voice = 'longanyang'
                 else if (p === 'qwen') patch.voice = 'longyingsongliu'
                 setTtsForm({ ...ttsForm, ...patch })
               }}>
+                <option value="qwen_rt">✅ Qwen 实时流式（快，语音跟字幕）</option>
                 <option value="edge">✅ edge-tts 免费云</option>
-                <option value="cosyvoice">✅ CosyVoice v3（付费云）</option>
+                <option value="cosyvoice">✅ CosyVoice v3（付费云，高音质）</option>
                 <option value="qwen">✅ Qwen-Audio-TTS（付费云）</option>
                 <option value="piper">✅ 本地 Piper（离线）</option>
                 <option value="omni">✅ MiniCPM-o（本地 vLLM）</option>
@@ -954,6 +947,21 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                   <select value={ttsForm.rate} onChange={(e) => setTtsForm({ ...ttsForm, rate: e.target.value })}>
                     {rateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
+                </label>
+              </>
+            )}
+
+            {ttsForm.provider === 'qwen_rt' && (
+              <>
+                <label className="settings-field">
+                  <span className="settings-field-label">音色</span>
+                  <select value={ttsForm.voice} onChange={(e) => setTtsForm({ ...ttsForm, voice: e.target.value })}>
+                    {QWEN_RT_VOICES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field-label">API Key（可留空，走 .env）</span>
+                  <input type="password" value={ttsForm.apiKey} placeholder="阿里云百炼 Key（留空读 DASHSCOPE_API_KEY）" onChange={(e) => setTtsForm({ ...ttsForm, apiKey: e.target.value })} />
                 </label>
               </>
             )}
@@ -1046,6 +1054,14 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               </select>
             </label>
           </>
+        )}
+        {activeScheme && activeScheme.provider === 'qwen_rt' && (
+          <label className="settings-field">
+            <span className="settings-field-label">音色</span>
+            <select value={activeScheme.voice} onChange={(e) => updateTTS(activeTTS, { voice: e.target.value })}>
+              {QWEN_RT_VOICES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
         )}
         {(activeScheme?.provider === 'cosyvoice' || activeScheme?.provider === 'qwen') && (
           <>
@@ -1347,12 +1363,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           ) : tab === 'tts' ? (
             <div className="settings-fields">
               {renderTTSConfig()}
-              <div className="settings-actions">
-                <button className="btn" onClick={loadVoices} disabled={voicesLoading}>
-                  {voicesLoading ? '拉取中…' : '🔄 刷新 / 更多音色'}
-                </button>
-                {voices.length > 0 && <span className="settings-msg">已加载 {voices.length} 个音色</span>}
-              </div>
               <label className="settings-field settings-field--col">
                 <span className="settings-field-label">试听文本</span>
                 <textarea className="settings-textarea" rows={2} value={previewText} onChange={(e) => setPreviewText(e.target.value)} />

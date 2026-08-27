@@ -136,9 +136,17 @@ llm:
     api_key: ''
     temperature: 0.3
 tts:
-  provider: cosyvoice
-  active: tts_cosyvoice
+  provider: qwen_rt
+  active: tts_qwen_rt
   models:
+  - id: tts_qwen_rt
+    name: Qwen 实时流式（快，语音跟字幕）
+    provider: qwen_rt
+    voice: Ethan
+    rate: +0%
+    tier: flash
+    apiKey: ''
+    piperModel: models/zh_CN-huayan-medium.onnx
   - id: tts_edge
     name: edge-tts 免费云
     provider: edge
@@ -148,7 +156,7 @@ tts:
     apiKey: ''
     piperModel: models/zh_CN-huayan-medium.onnx
   - id: tts_cosyvoice
-    name: CosyVoice v3（付费云）
+    name: CosyVoice v3（付费云，高音质）
     provider: cosyvoice
     voice: longanyang
     tier: flash

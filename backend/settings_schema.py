@@ -137,8 +137,9 @@ SCHEMA: list[dict] = [
     # ---- 播报 ----
     {"path": "tts.provider", "label": "播报方式", "type": "select", "group": "tts", "reload": "restart",
      "options": [
+         {"value": "qwen_rt", "label": "Qwen 实时流式（快，语音跟字幕）", "status": "ok"},
          {"value": "edge", "label": "edge-tts 免费云", "status": "ok"},
-         {"value": "cosyvoice", "label": "CosyVoice v3（付费云）", "status": "ok"},
+         {"value": "cosyvoice", "label": "CosyVoice v3（付费云，高音质）", "status": "ok"},
          {"value": "qwen", "label": "Qwen-Audio-TTS（付费云）", "status": "ok"},
          {"value": "piper", "label": "本地 Piper（离线保底）", "status": "ok"},
          {"value": "omni", "label": "MiniCPM-o（本地 vLLM）", "status": "ok"},

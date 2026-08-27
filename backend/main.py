@@ -243,29 +243,6 @@ async def mic_echo(payload: dict) -> dict:
     return {"ok": True, "duration": dur, "peak": round(peak, 1)}
 
 
-@app.get("/api/tts/voices")
-async def tts_voices() -> dict:
-    """动态获取 edge-tts 中文音色列表（联网拉取，比硬编码更全更新）。"""
-    import edge_tts
-
-    try:
-        voices = await edge_tts.list_voices()
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "msg": f"获取音色列表失败: {e}"}
-    zh = [v for v in voices if (v.get("Locale") or "").lower().startswith("zh")]
-    result = [
-        {
-            "value": v.get("ShortName", ""),
-            "label": f"{v.get('FriendlyName', '')}（{'男' if v.get('Gender') == 'Male' else '女'}）",
-            "locale": v.get("Locale", ""),
-        }
-        for v in zh
-    ]
-    # 中文普通话排前，粤语/台湾/方言靠后
-    result.sort(key=lambda x: ("0" if x["locale"] == "zh-CN" else "1") + x["locale"])
-    return {"ok": True, "voices": result}
-
-
 @app.get("/api/status")
 async def get_status() -> dict:
     return {
