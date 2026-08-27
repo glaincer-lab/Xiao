@@ -6,7 +6,7 @@
 
 **本质**：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，做成「语音控制的 Agent 工作台」——不只是查天气、搜网页，还能读文件、写代码、跑命令、多步迭代完成任务。语音层只负责唤醒、识别、路由，最难的部分（agent 循环、编程工具、subagent、知识库）外包给 DSH。
 
-**核心链路**：Sherpa-ONNX 本地中文唤醒（免费、离线、零训练）→ Silero VAD 断句 → 阿里云 Paraformer 实时流式识别（普通话 + 重庆/四川/粤语方言，本地可切 FunASR）→ 路由（聊天走 DeepSeek/通义/OpenAI/GLM/Kimi 云端，或本地 Ollama/MiniCPM-o；干活走 DSH）→ 危险操作语音审批 → edge-tts 播报。
+**核心链路**：Sherpa-ONNX 本地中文唤醒（免费、离线、零训练）→ Silero VAD 断句 → 阿里云实时流式识别（云端 fun-asr-flash-8k-realtime 默认 + qwen-audio / qwen3-asr，本地可切 FunASR）→ 路由（聊天走 DeepSeek/通义/OpenAI/GLM/Kimi 云端，或本地 Ollama；干活走 DSH）→ 危险操作语音审批 → 播报（edge-tts 默认兜底，可选 CosyVoice v3 / Qwen-Audio-TTS 付费云、Piper 本地离线、MiniCPM-o 本地 vLLM）。
 
 **多方案管理**：唤醒 / 识别 / 播报 / 大模型四环节均支持多方案（卡片列表 + 新建编辑 + 一键切换，模型名手填、以官方为准）；危险操作（联网 / 写工作区外 / 删除 / 安装 / 改系统）语音审批，DSH 无头模式 fail-closed；长任务后台化 + 完成通知。
 
@@ -31,13 +31,14 @@
 
 - **唤醒**：本地 Sherpa-ONNX 关键词识别，中文原生「小二」，零训练、离线
 - **断句**：Silero VAD（ONNX 推理），精准区分语音与环境噪声
-- **识别**：云端阿里云 Paraformer 实时流式（普通话 + 方言模型），本地可切 FunASR；多方案可存可切
-- **大脑**：DeepSeek / 通义千问 / OpenAI / GLM / Kimi（全 OpenAI 兼容）+ 本地 Ollama + MiniCPM-o(vLLM)，支持 function calling；多方案可存可切
+- **识别**：云端阿里云实时流式（fun-asr-flash-8k-realtime 默认 + qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime），本地可切 FunASR；多方案可存可切
+- **大脑**：DeepSeek / 通义千问 / OpenAI / GLM / Kimi（全 OpenAI 兼容）+ 本地 Ollama，支持 function calling；多方案可存可切
 - **DSH 干活**：路由到 DeepSeek Harness 执行真实任务（读写文件、跑命令、多步 Agent 循环），带多轮上下文、语音审批、长任务后台化
-- **播报**：edge-tts 免费云（8 个中文音色 + 语速可调 + 试听）；付费云 / 本地 Piper / 一体化预留，多方案可存可切
+- **播报**：5 方案可切——edge-tts 免费云（默认兜底）/ CosyVoice v3 / Qwen-Audio-TTS（付费云，各带 flash/plus 档位）/ Piper 本地离线（保底）/ MiniCPM-o（本地 vLLM）
+- **声线动画**：麦克风真实 RMS 电平经 WebSocket 推给前端，画实时声线（非假波纹）
 - **两段式回复**：计划回复 → 工具执行 → 结果回复
 - **可插拔工具**：联网搜索、打开应用/网址、查天气、设置提醒；预留华为智能家居设备接入
-- **UI**：React + Vite + Three.js，三栏布局（左对话 / 中星云状态球 + 实时转写 / 右输入）+ 玻璃拟态
+- **UI**：React + Vite + Three.js，三栏布局（左对话 / 中星云状态球 + 实时转写 + 声线动画 / 右输入）+ 玻璃拟态
 
 ## 架构
 
@@ -48,7 +49,7 @@
      → 流式 ASR(云端Paraformer/本地FunASR) ──WS──►  文字实时上屏
      → 路由(router) → chat(DeepSeek 直连) 或 dsh(DSH 干活)
      → 工具执行(可插拔) / DSH 桥(bridge)
-     → TTS(edge-tts) ──► 语音播报
+     → TTS(edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o) ──► 语音播报
 ```
 
 技术栈：**Python 3.11/3.12 + FastAPI + WebSocket**（后端）｜**React + Vite + TypeScript + Three.js**（前端）。
@@ -67,13 +68,13 @@ backend/
   tasks.py          长任务后台化（队列 + 并发 + 持久化）
   bridge/           ★ 唯一知道 DSH 的地方（headless CLI + 多轮上下文）
   audio/            mic.py 采集 / vad.py 断句 / wake.py 唤醒词
-  asr/              云端 Paraformer(普通话/方言) / 本地 FunASR
-  llm/              云端 DeepSeek/通义/OpenAI/GLM/Kimi / 本地 Ollama/MiniCPM-o
-  tts/              edge-tts（付费云 / Piper 预留）
+  asr/              云端 fun-asr-flash-8k-realtime(默认)/qwen-audio/qwen3-asr / 本地 FunASR
+  llm/              云端 DeepSeek/通义/OpenAI/GLM/Kimi / 本地 Ollama
+  tts/              edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o
   tools/            搜索 / 打开应用 / 天气 / 提醒（注册表）
   devices/          设备接入抽象（华为智能家居预留）
   session/state.py  状态机 + 线程安全事件总线
-frontend/           React 前端（App + Nebula/波形/打字机/设置/权限/任务/工作面板）
+frontend/           React 前端（App + Nebula/声线动画/打字机/设置/权限/任务/工作面板）
 desktop/            Electron 壳（托盘常驻 + 自动拉起后端）
 plugins/           DSH 薄插件（审批桥 xiao-approval-bridge，注入 DSH 审批瀑布）
 config.yaml         非敏感配置
@@ -150,10 +151,10 @@ npm run dev
 
 | 环节 | 已接入（✅） | 预留（⬜） |
 |---|---|---|
-| 唤醒 | 本地 Sherpa-ONNX「小二」 | 云端方言、一体化 MiniCPM-o |
-| 识别 | 云端 Paraformer（普通话 `paraformer-realtime-v2` / 方言 `fun-asr-flash-8k-realtime`）、本地 FunASR | 一体化 MiniCPM-o |
-| 播报 | edge-tts 免费云 | 付费云（阿里/火山/Azure）、本地 Piper、一体化 |
-| 大模型 | 云端 DeepSeek/通义/OpenAI/GLM/Kimi、本地 Ollama、MiniCPM-o(vLLM) | — |
+| 唤醒 | 本地 Sherpa-ONNX「小二」 | 一体化 MiniCPM-o（本地 vLLM） |
+| 识别 | 云端 fun-asr-flash-8k-realtime（默认）/ qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime、本地 FunASR | 一体化 MiniCPM-o（本地 vLLM） |
+| 播报 | edge-tts 免费云（默认）/ CosyVoice v3 / Qwen-Audio-TTS（付费云，flash/plus）/ Piper 本地离线 / MiniCPM-o（本地 vLLM） | — |
+| 大模型 | 云端 DeepSeek/通义/OpenAI/GLM/Kimi、本地 Ollama | — |
 
 **实时生效分档**：软配置（可打断、审批词表、DSH 关键词、系统提示词、记忆轮数）保存即生效；引擎类（换方案/模型/音色/阈值/麦克风）保存后提示需重启后端。模型名手填，以各厂商官方文档为准。
 
@@ -202,12 +203,15 @@ npm start
 ## 已知限制
 
 - **唤醒词**：Sherpa-ONNX 本地模型，改唤醒词需同步改拼音并重启后端
-- **首次联网**：唤醒词模型首次需下载；edge-tts 依赖微软在线接口；阿里云 ASR 依赖网络
+- **首次联网**：唤醒词模型首次需下载；edge-tts 依赖微软在线接口；阿里云 ASR/付费云 TTS 依赖网络
 - **麦克风**：需在 Windows「隐私与安全 → 麦克风」允许桌面应用访问
 - **DSH 版本**：本机 `0.1.1-rc.2`，桥接层锁版本 + 单一适配（`bridge/`），DSH 升级只改这一处
 - **本地 FunASR 体积大**：torch + 模型约数 GB
+- **Piper 离线播报**：可选依赖（GPL-3.0 许可证），`pip install -r requirements-local-tts.txt`；中文声库 `zh_CN-huayan-medium.onnx` 已随项目提供于 `models/`
+- **MiniCPM-o 播报/识别/唤醒**：需本机启动 vLLM-omni 服务（`llm.omni` 默认 `localhost:8000`），否则无声音
 
 ## 文档
 
 - `DESIGN.md`：设计方案（架构 / 状态机 / 路由 / 桥 / 审批 / 风险）
 - `ROADMAP.md`：开发路线图（分阶段）
+- `AGENTS.md`：项目规则（第三使用者视角 + 引擎分层）

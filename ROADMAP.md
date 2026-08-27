@@ -10,16 +10,16 @@
 |---|---|---|---|
 | 唤醒词 | Sherpa-ONNX「小二」（3.3MB） | **本地** | 唯一本地组件，零训练、中文原生 |
 | VAD 断句 | Silero VAD | 本地（轻量工具） | 语音断句必要组件，非「模型部署」 |
-| ASR 主用 | Paraformer（DashScope API） | **云端 API** | 已有 key，高精度；普通话 `paraformer-realtime-v2` + 方言 `fun-asr-flash-8k-realtime`（8k） |
+| ASR 主用 | 阿里云实时流式（DashScope API） | **云端 API** | 已有 key，高精度；`fun-asr-flash-8k-realtime`（方言，默认）+ `qwen-audio-3.0-asr-flash-streaming` / `qwen3-asr-flash-realtime`（普通话 16k） |
 | ASR 备选 | FunASR 本地 | 本地 | 需 `requirements-local-asr.txt`，torch 数 GB |
-| TTS | edge-tts | 云端（免费、无需 key） | 8 个中文音色；付费云 / 本地 Piper 预留 |
+| TTS | edge-tts（默认）+ CosyVoice v3 / Qwen-Audio-TTS（付费云）+ Piper（本地）+ MiniCPM-o（本地 vLLM） | 云 + 本地 | 5 方案可切；付费云各带 flash/plus 档位 |
 | LLM 主用 | DeepSeek / 千问 / OpenAI / GLM / Kimi | **云端 API** | 全 OpenAI 兼容，UI 可切换 |
 | LLM 备选 | Ollama 本地 / MiniCPM-o(vLLM) | 本地 | OpenAI 兼容端点接入 |
 | 后端 | FastAPI + WebSocket（Python） | 本地进程 | 异步高性能 |
 | 前端 | React + TypeScript + Three.js | Electron 壳 | 星云背景 + 对话界面 |
 | DSH 集成 | 薄插件（JS/TS，只做桥接） | 随 DSH | 不改 DSH 核心 |
 
-> **核心原则**：唤醒词本地（常驻、低延迟、离线必须）；其余一律 API 优先（用户已有 DeepSeek/千问/DashScope key，省去本地部署麻烦）。本地 FunASR / Ollama / MiniCPM-o 作为备选已接（OpenAI 兼容端点），在 config 结构里通过 `models[] + active` 多方案切换。
+> **核心原则**：唤醒词本地（常驻、低延迟、离线必须）；其余一律 API 优先（用户已有 DeepSeek/千问/DashScope key，省去本地部署麻烦）。本地 FunASR / Ollama 作为备选已接（OpenAI 兼容端点）；播报另加 Piper 本地离线作断网保底、MiniCPM-o 走本地 vLLM。多方案通过 `models[] + active` 切换。
 
 ---
 
@@ -70,8 +70,8 @@
 
 | 项 | 状态 | 何时做 |
 |---|---|---|
-| MiniCPM-o 一体化语音（唤醒/识别/播报） | 不实现，仅大脑接入（vLLM） | 需要端到端一体语音时 |
-| 付费云 TTS / 本地 Piper | 不实现，仅接口留口 | 需要更高音质/完全离线时 |
+| MiniCPM-o 一体化语音（唤醒/识别/播报） | 🟡 播报/识别/唤醒三角色已接入（走本地 vLLM，端口预设 localhost:8000），未做端到端一体对话 | 需要端到端一体语音时 |
+| 付费云 TTS / 本地 Piper | ✅ 已接入（CosyVoice v3 / Qwen-Audio-TTS 付费云 + Piper 本地离线保底） | — |
 | 华为智能家居 | 不实现 | 后期 |
 | 多语言唤醒 | 不实现 | 后期 |
 

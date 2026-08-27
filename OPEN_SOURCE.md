@@ -16,10 +16,11 @@
 
 ## 二、开源前必须清的三件雷（阻塞项）
 
-### 1. 轮换密钥（暂缓，正式开源前必做）
+### 1. 轮换密钥（✅ 已处理，2026-08）
 
-- `.env` 里有一把真实 DeepSeek API Key（已在 `.gitignore`）。**正式开源前必须去后台重置**（阿里云 `DASHSCOPE_API_KEY` 同理）。
-- 开源前跑 `gitleaks detect --source .` 全历史扫描，零告警才 push。
+- **事故**：`config.yaml` 曾明文写入阿里云百炼 Key（`sk-ws-H.EDHHXLP...`），并随公开仓库历史提交（`3a3e9d7` 起），任何 clone 者可读。
+- **处置**：① `config.yaml` 明文 key 全部清空，改走 `.env`（已 gitignore）；② 该泄露 key 已在阿里云后台**作废**；③ 新 key 已写入本机 `.env` 并验证可用。
+- **遗留**：git 历史中仍含旧 key 的提交记录（旧 key 已作废，无资金风险，但若追求彻底需重写历史）。DeepSeek key 仅在本机 `.env`，未进仓。
 - 铁律：真实 key 只在本机 `.env`，仓库只留 `.env.example`（全占位符）。
 
 ### 2. 清理 Picovoice 残留 ✅ 已完成
@@ -45,9 +46,12 @@
 | 依赖 | 许可证 |
 |---|---|
 | edge-tts / pygame | **LGPLv3**（动态链接、不改源码即可，**不传染**） |
+| piper-tts | **GPL-3.0-or-later**（⚠️ 强传染，见下方说明） |
 | sherpa-onnx / openai / dashscope | Apache-2.0 |
 | onnxruntime / webrtcvad-wheels / fastapi | MIT |
 | numpy / requests / beautifulsoup4 / websockets 等 | BSD / Apache / MIT |
+
+> ⚠️ **piper-tts（GPL-3.0）风险**：piper-tts 是 GPL-3.0-or-later 强传染许可证。本项目 MIT 主仓库**不应把 piper-tts 作为硬依赖分发**——它应是用户「按需可选安装」的本地 TTS 引擎（当前 `requirements.txt` 已列为可选，代码里 import 是惰性/兜底）。若随仓库强制分发，MIT 与 GPL 的传染性会起冲突。保守做法：把 piper-tts 移到「可选依赖」单独文件，README 注明「仅离线保底场景按需安装」。
 
 ### 模型权重：单独声明，不随仓库分发
 
@@ -97,9 +101,10 @@ xiao/
 - [x] `logs/`、模型权重（`models/`）、`.gh-config/` 加入 `.gitignore`
 - [x] `config.yaml` 工作目录改为相对路径（不写死本机绝对路径）
 - [x] 全历史密钥扫描（git 历史 + 正则），零泄露
-- [ ] 轮换 DeepSeek + 阿里云 key（密钥无资金风险，可暂缓）
+- [x] 轮换阿里云 key（泄露 key 已作废，新 key 已写入 .env）
 - [x] LICENSE（MIT）
 - [x] NOTICE（模型/依赖许可声明）
+- [ ] piper-tts 移到可选依赖（GPL-3.0 传染风险，见 §三）
 
 ---
 

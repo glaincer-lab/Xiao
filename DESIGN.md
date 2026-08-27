@@ -50,9 +50,9 @@ xiao\
 ├── 02_Assistant\      ← ★ 语音系统（一套系统一个文件夹，独立可运行）
 │   ├── backend\
 │   │   ├── audio\  mic/vad/wake
-│   │   ├── asr\    Paraformer(云端·普通话/方言) / FunASR(本地)
-│   │   ├── llm\    OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama/MiniCPM-o)
-│   │   ├── tts\    edge-tts(免费云) + Piper/付费云(预留)
+│   │   ├── asr\    阿里云实时流式(fun-asr默认/qwen-audio/qwen3) / FunASR(本地)
+│   │   ├── llm\    OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama)
+│   │   ├── tts\    edge-tts(免费云) + CosyVoice v3/Qwen-Audio-TTS(付费云) + Piper(离线) + MiniCPM-o(vLLM)
 │   │   ├── tools\  搜索/打开/天气/提醒
 │   │   ├── bridge\ ★ 唯一知道 DSH 的地方
 │   │   ├── session\ 状态机 + 事件总线

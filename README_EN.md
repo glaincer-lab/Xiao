@@ -6,7 +6,7 @@ An always-on Chinese voice assistant for Windows: wake it with「小二」(Xiao 
 
 **What it is**: a voice frontend for a general-purpose agent (DeepSeek Harness, DSH). It turns DSH into a "voice-controlled agent workbench" — not just weather and web search, but reading/writing files, running commands, and multi-step agent loops. The voice layer only does three things: wake, transcribe, and route; the hard part (agent loop, coding tools, subagents, knowledge base) is delegated to DSH.
 
-**Pipeline**: Sherpa-ONNX local Chinese wake word (free, offline, zero training) → Silero VAD → Aliyun Paraformer streaming ASR (Mandarin + Chongqing/Sichuan/Cantonese dialects; local FunASR as fallback) → routing (chat via DeepSeek/Qwen/OpenAI/GLM/Kimi cloud, or Ollama/MiniCPM-o locally; work via DSH) → voice approval for dangerous actions → edge-tts speech.
+**Pipeline**: Sherpa-ONNX local Chinese wake word (free, offline, zero training) → Silero VAD → Aliyun streaming ASR (cloud `fun-asr-flash-8k-realtime` default + qwen-audio / qwen3-asr; local FunASR as fallback) → routing (chat via DeepSeek/Qwen/OpenAI/GLM/Kimi cloud, or local Ollama; work via DSH) → voice approval for dangerous actions → speech (edge-tts default, or CosyVoice v3 / Qwen-Audio-TTS paid cloud, Piper offline, MiniCPM-o local vLLM).
 
 **Multi-provider**: wake / ASR / TTS / LLM each support multiple providers (card list + create/edit modal + one-click switch; model names are free-form, follow official docs). Dangerous actions (network / writing outside workspace / delete / install / system changes) require voice approval; DSH headless mode is fail-closed. Long tasks can run in the background with completion notification.
 
@@ -31,10 +31,11 @@ Xiao is not a voice brain built from scratch — it is a **voice frontend for De
 
 - **Wake**: local Sherpa-ONNX keyword spotting, native Chinese「小二」, zero training, offline
 - **VAD**: Silero VAD (ONNX), robust speech/noise separation
-- **ASR**: Aliyun Paraformer real-time streaming (Mandarin + dialects), local FunASR fallback; multiple providers
-- **Brain**: DeepSeek / Qwen / OpenAI / GLM / Kimi (all OpenAI-compatible) + local Ollama + MiniCPM-o (vLLM), function calling
+- **ASR**: Aliyun streaming (fun-asr-flash-8k-realtime default + qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime), local FunASR fallback; multiple providers
+- **Brain**: DeepSeek / Qwen / OpenAI / GLM / Kimi (all OpenAI-compatible) + local Ollama, function calling
 - **DSH execution**: routes to DeepSeek Harness for real tasks (read/write files, run commands, multi-step agent loops), with multi-turn context, voice approval, background long tasks
-- **TTS**: edge-tts free cloud (8 Chinese voices + adjustable rate + preview); paid cloud / local Piper reserved
+- **TTS**: 5 providers — edge-tts free cloud (default) / CosyVoice v3 / Qwen-Audio-TTS (paid cloud, flash/plus tiers) / Piper offline / MiniCPM-o (local vLLM)
+- **Live voice line**: real microphone RMS level pushed over WebSocket, rendered as a live waveform (not a fake animation)
 - **Two-stage reply**: plan → execute → result
 - **Pluggable tools**: web search, open app/URL, weather, reminders; Huawei smart-home reserved
 - **UI**: React + Vite + Three.js, three-column layout (conversation / nebula status orb + live transcript / input) + glassmorphism
@@ -48,7 +49,7 @@ Xiao is not a voice brain built from scratch — it is a **voice frontend for De
      → streaming ASR (cloud Paraformer / local FunASR) ──WS──► realtime text
      → router → chat (DeepSeek direct) or dsh (DSH)
      → tools / DSH bridge
-     → TTS (edge-tts) ──► speech
+     → TTS (edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o) ──► speech
 ```
 
 Stack: **Python 3.11/3.12 + FastAPI + WebSocket** (backend) | **React + Vite + TypeScript + Three.js** (frontend).
@@ -67,9 +68,9 @@ backend/
   tasks.py          background long tasks (queue + concurrency + persistence)
   bridge/           ★ the only place that knows DSH (headless CLI + multi-turn context)
   audio/            mic / vad / wake
-  asr/              cloud Paraformer (Mandarin/dialects) / local FunASR
-  llm/              cloud DeepSeek/Qwen/OpenAI/GLM/Kimi / local Ollama/MiniCPM-o
-  tts/              edge-tts (paid cloud / Piper reserved)
+  asr/              cloud fun-asr-flash-8k-realtime(default)/qwen-audio/qwen3-asr / local FunASR
+  llm/              cloud DeepSeek/Qwen/OpenAI/GLM/Kimi / local Ollama
+  tts/              edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o
   tools/            search / open / weather / reminders (registry)
   devices/          device adapter abstraction (Huawei smart-home reserved)
   session/state.py  state machine + thread-safe event bus
@@ -144,10 +145,10 @@ Click "Settings" (top-right): left nav + right scroll, schema-driven (`backend/s
 
 | Stage | Ready (✅) | Reserved (⬜) |
 |---|---|---|
-| Wake | local Sherpa-ONNX「小二」 | cloud dialects, unified MiniCPM-o |
-| ASR | cloud Paraformer (Mandarin `paraformer-realtime-v2` / dialect `fun-asr-flash-8k-realtime`), local FunASR | unified MiniCPM-o |
-| TTS | edge-tts free cloud | paid cloud (Aliyun/Volcano/Azure), local Piper, unified |
-| LLM | cloud DeepSeek/Qwen/OpenAI/GLM/Kimi, local Ollama, MiniCPM-o (vLLM) | — |
+| Wake | local Sherpa-ONNX「小二」 | unified MiniCPM-o (local vLLM) |
+| ASR | cloud fun-asr-flash-8k-realtime (default) / qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime, local FunASR | unified MiniCPM-o (local vLLM) |
+| TTS | edge-tts (default) / CosyVoice v3 / Qwen-Audio-TTS (paid cloud, flash/plus) / Piper offline / MiniCPM-o (local vLLM) | — |
+| LLM | cloud DeepSeek/Qwen/OpenAI/GLM/Kimi, local Ollama | — |
 
 ## Cloud / Local Switch
 
@@ -198,11 +199,14 @@ npm start
 - **Microphone**: allow desktop app mic access in Windows privacy settings
 - **DSH version**: tested with `0.1.1-rc.2`; the bridge layer is version-locked in one place (`bridge/`)
 - **Local FunASR is large**: torch + model ~several GB
+- **Piper offline TTS**: optional dependency (GPL-3.0), `pip install -r requirements-local-tts.txt`; Chinese voice `zh_CN-huayan-medium.onnx` shipped in `models/`
+- **MiniCPM-o TTS/ASR/wake**: requires a running local vLLM-omni service (`llm.omni` defaults to `localhost:8000`), otherwise no audio
 
 ## Docs
 
 - `DESIGN.md`: design (architecture / state machine / routing / bridge / approval / risks) — Chinese
 - `ROADMAP.md`: roadmap (phased) — Chinese
+- `AGENTS.md`: project rules (third-party-user perspective + engine layering) — Chinese
 
 ## License
 
