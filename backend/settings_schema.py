@@ -214,7 +214,8 @@ SCHEMA: list[dict] = [
     {"path": "bridge.dsh_command", "label": "DSH 命令", "type": "text", "group": "exec", "reload": "restart"},
     {"path": "bridge.timeout_sec", "label": "超时(秒)", "type": "number", "group": "exec", "reload": "restart"},
     {"path": "agent.workspace", "label": "工作目录", "type": "text", "group": "exec", "reload": "restart"},
-    {"path": "tasks.max_concurrent", "label": "任务并发数", "type": "number", "group": "exec", "reload": "restart", "min": 1, "max": 5},
+    {"path": "tasks.max_concurrent", "label": "任务并发数", "type": "number", "group": "exec", "reload": "restart", "min": 1, "max": 1,
+     "hint": "固定 1：DSH 桥为单进程槽，并发任务会互相取消"},
     # ---- 权限 ----
     {"path": "approval.enabled", "label": "审批开关", "type": "checkbox", "group": "perms", "reload": "soft"},
     {"path": "approval.timeout_ms", "label": "审批超时(毫秒)", "type": "number", "group": "perms", "reload": "soft"},

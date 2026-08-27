@@ -24,7 +24,8 @@ class TaskManager:
         self._bridge = bridge
         self._tasks: dict[str, dict] = {}
         self._order: list[str] = []
-        self._limit = max(1, int(config.get("tasks.max_concurrent", 1)))
+        # 固定并发 1：DSHBridge 为单进程槽（_proc/_cancelled），并发任务会互相取消
+        self._limit = 1
         self._sem = asyncio.Semaphore(self._limit)
         self._log_path = os.path.join(ROOT, str(config.get("tasks.log_path", "logs/tasks.json")))
         self._load()
