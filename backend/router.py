@@ -57,5 +57,5 @@ class Router:
                      "text": text},
                     ensure_ascii=False,
                 ) + "\n")
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            print(f"[router] 写路由日志失败: {e}")

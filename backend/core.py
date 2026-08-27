@@ -148,7 +148,18 @@ class Pipeline:
         self._thread.start()
 
     def stop(self) -> None:
+        """优雅关停：结束音频线程并取消挂起的审批（进程退出时调用）。
+
+        MicStream.read 为阻塞读，线程通常在一个音频块（几十毫秒）内退出，
+        join 给 2s 余量兜底。
+        """
         self._running = False
+        fut = self._approval_future
+        if fut is not None and not fut.done() and self._loop is not None:
+            self._loop.call_soon_threadsafe(fut.set_result, "rejected")
+        t = getattr(self, "_thread", None)
+        if t is not None and t.is_alive():
+            t.join(timeout=2.0)
 
     # ---- 外部控制（前端按钮 / 手动输入）----
     def wake_manually(self) -> None:
@@ -491,6 +502,10 @@ class Pipeline:
         on_timeout 控制超时返回值：运行时审批默认 rejected，预判审批传 deferred。
         """
         if not self._approval_enabled:
+            return "unavailable"
+        fut_existing = self._approval_future
+        if fut_existing is not None and not fut_existing.done():
+            # 单审批槽：已有询问在等语音回答，新请求直接拒绝，避免 future 被覆盖后旧询问悬死
             return "unavailable"
         loop = asyncio.get_running_loop()
         fut = loop.create_future()

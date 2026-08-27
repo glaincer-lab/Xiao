@@ -107,8 +107,8 @@ class Perms:
                 with open(self._deferred_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     return data if isinstance(data, list) else []
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            print(f"[perms] 读取待授权任务失败（按空处理）: {e}")
         return []
 
     def _save_deferred(self) -> None:
@@ -116,5 +116,5 @@ class Perms:
             os.makedirs(os.path.dirname(self._deferred_path), exist_ok=True)
             with open(self._deferred_path, "w", encoding="utf-8") as f:
                 json.dump(self._deferred, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            print(f"[perms] 保存待授权任务失败: {e}")

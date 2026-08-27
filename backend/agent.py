@@ -64,7 +64,24 @@ class Agent:
         self._set_state(State.PROCESSING)
         self._history.append(ChatMessage(role="user", content=text))
         self._trim()
+        try:
+            await self._run()
+        except Exception as e:  # noqa: BLE001
+            # 兜底：LLM/工具异常也要把状态机放回 IDLE，并给用户一句可感知的反馈
+            print(f"[agent] 处理失败: {e}")
+            try:
+                fallback = "抱歉，我出了点问题，请再说一次。"
+                emit("assistant_result", text=fallback)
+                await self._speak(fallback)
+                self._history.append(ChatMessage(role="assistant", content=fallback))
+            except Exception:  # noqa: BLE001
+                pass
+        finally:
+            self._trim()
+            if self._on_done:
+                self._on_done()
 
+    async def _run(self) -> None:
         completion = await self._llm.complete(self._messages(), tools=self._registry.schemas())
 
         if completion.tool_calls:
@@ -111,10 +128,6 @@ class Agent:
             emit("assistant_result", text=reply)
             await self._speak(reply)
             self._history.append(ChatMessage(role="assistant", content=reply))
-
-        self._trim()
-        if self._on_done:
-            self._on_done()
 
     async def _speak(self, text: str) -> None:
         self._set_state(State.SPEAKING)
