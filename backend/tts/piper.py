@@ -75,7 +75,7 @@ class PiperEngine(TTSEngine):
         voice = self._get_voice()
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wav_file:
-            voice.synthesize(text, wav_file)
+            voice.synthesize_wav(text, wav_file)
         return buf.getvalue()
 
     def _play_blocking(self, data: bytes) -> None:

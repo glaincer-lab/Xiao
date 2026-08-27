@@ -5,9 +5,6 @@ audio:
   sample_rate: 16000
   chunk_ms: 30
   input_device: null
-dialogue:
-  mode: pipeline
-  e2e_provider: cloud
 wake_word:
   enabled: true
   engine: sherpa
@@ -87,42 +84,31 @@ asr:
     name: Fun-ASR（方言，默认）
     provider: cloud
     model: fun-asr-flash-8k-realtime
-    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    apiKey: ''
     localEngine: funasr
     localModelDir: ''
   - id: asr_qwen_audio
     name: Qwen-Audio（普通话+方言）
     provider: cloud
     model: qwen-audio-3.0-asr-flash-streaming
-    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    apiKey: ''
     localEngine: funasr
     localModelDir: ''
   - id: asr_qwen3
     name: Qwen3-ASR（普通话）
     provider: cloud
     model: qwen3-asr-flash-realtime
-    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    apiKey: ''
     localEngine: funasr
     localModelDir: ''
   cloud:
     provider: aliyun
     model: fun-asr-flash-8k-realtime
-    api_key: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
+    api_key: ''
   local:
     engine: funasr
     model: paraformer-zh
     model_dir: ''
-minicpm_cloud:
-  host: minicpmo45.modelbest.cn
-  api_key: ''
-  model: MiniCPM-o-4.5
-  system_prompt: ''
-minicpm_local:
-  host: localhost:8099
-  api_key: ''
-  model: openbmb/MiniCPM-o-4_5
-  instructions: ''
-  ref_audio: ''
 llm:
   provider: cloud
   active: llm_deepseek
@@ -150,27 +136,49 @@ llm:
     api_key: ''
     temperature: 0.3
 tts:
-  provider: cloud
-  active: t_1787768795460
+  provider: edge
+  active: tts_edge
   models:
   - id: tts_edge
     name: edge-tts 免费云
     provider: edge
     voice: zh-CN-YunjianNeural
     rate: +30%
+    tier: flash
     apiKey: ''
-    cloudProvider: aliyun
-    piperModel: ''
-    piperVoice: ''
-  - id: t_1787768795460
-    name: 云
-    provider: cloud
-    voice: zh-CN-XiaoxiaoNeural
+    piperModel: models/zh_CN-huayan-medium.onnx
+  - id: tts_cosyvoice
+    name: CosyVoice v3（付费云）
+    provider: cosyvoice
+    voice: longanyang
+    tier: flash
     rate: +0%
-    apiKey: sk-ws-H.EDHHXLP.B4gF.MEUCIQDc5FlspMi3KuzVOruNDxes11AWMQ3yX9mPNULSD7konAIgOWVkceYhoKgSM7NuzwxWj65jtjw9QZFrv5cdfm_HjKM
-    cloudProvider: aliyun
-    piperModel: ''
-    piperVoice: ''
+    apiKey: ''
+    piperModel: models/zh_CN-huayan-medium.onnx
+  - id: tts_qwen
+    name: Qwen-Audio-TTS（付费云）
+    provider: qwen
+    voice: longyingsongliu
+    tier: flash
+    rate: +0%
+    apiKey: ''
+    piperModel: models/zh_CN-huayan-medium.onnx
+  - id: tts_piper
+    name: Piper（本地离线保底）
+    provider: piper
+    voice: ''
+    tier: flash
+    rate: +0%
+    apiKey: ''
+    piperModel: models/zh_CN-huayan-medium.onnx
+  - id: tts_omni
+    name: MiniCPM-o（本地 vLLM）
+    provider: omni
+    voice: ''
+    tier: flash
+    rate: +0%
+    apiKey: ''
+    piperModel: models/zh_CN-huayan-medium.onnx
   voice: zh-CN-YunjianNeural
   rate: +30%
 agent:

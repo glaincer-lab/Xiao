@@ -64,20 +64,44 @@ const LLM_PROVIDERS: LLMProviderDef[] = [
     exampleModel: 'qwen3', needsKey: false, status: 'ok', keyHint: '装好 Ollama 后执行 ollama pull <模型>，模型名填下方' },
 ]
 
-// 阿里云 CosyVoice 常用音色（完整列表以阿里云官方为准，可手填其它音色名）
+// CosyVoice v3 音色（短名，flash/plus 通用；中文名展示，value 存短名）
 const COSYVOICE_VOICES = [
-  { value: 'longxiaochun', label: '龙小春（女）' },
-  { value: 'longxiaoxia', label: '龙小夏（女）' },
-  { value: 'longchen', label: '龙辰（男）' },
-  { value: 'longhua', label: '龙华（男）' },
-  { value: 'longshu', label: '龙书（男）' },
-  { value: 'longjing', label: '龙靖（男）' },
-  { value: 'longjie', label: '龙杰（男）' },
-  { value: 'longmiao', label: '龙淼（女）' },
-  { value: 'longwan', label: '龙婉（女）' },
-  { value: 'longyin', label: '龙音（女）' },
-  { value: 'longtong', label: '龙彤（女）' },
-  { value: 'longfei', label: '龙飞（男）' },
+  { value: 'longanyang', label: '龙安洋（男·阳光大男孩）' },
+  { value: 'longanlang_v3', label: '龙安朗（男·清爽利落）' },
+  { value: 'longanyun_v3', label: '龙安昀（男·居家暖男）' },
+  { value: 'longze_v3', label: '龙泽（男·温暖元气）' },
+  { value: 'longsanshu_v3', label: '龙三叔（男·沉稳质感）' },
+  { value: 'longfei_v3', label: '龙飞（男·热血磁性）' },
+  { value: 'longanhuan_v3', label: '龙安欢（女·四川话）' },
+  { value: 'longxiaochun_v3', label: '龙小淳（女·知性积极）' },
+  { value: 'longxiaoxia_v3', label: '龙小夏（女·沉稳权威）' },
+  { value: 'longanwen_v3', label: '龙安温（女·优雅知性）' },
+  { value: 'longanli_v3', label: '龙安莉（女·利落从容）' },
+  { value: 'longwan_v3', label: '龙婉（女·细腻柔声）' },
+  { value: 'longlaotie_v3', label: '龙老铁（东北话）' },
+  { value: 'longanyue_v3', label: '龙安粤（粤语）' },
+]
+// Qwen-Audio-TTS 音色（存短名，运行时由后端拼 qwen-audio-3.0-tts-{flash|plus}- 前缀）
+const QWEN_VOICES = [
+  { value: 'longyingsongliu', label: '龙莹松柳（男·爽朗利落）' },
+  { value: 'longlanyufu', label: '龙岚煜芙（男·温柔亲和）' },
+  { value: 'longxinruixuan', label: '龙昕蕊璇（男·自然亲和）' },
+  { value: 'longxiamuyan', label: '龙霞暮燕（男·专业解说）' },
+  { value: 'longluliuche', label: '龙露柳澈（男·标准播音）' },
+  { value: 'longbaixiuyun', label: '龙柏岫云（男·标准播音）' },
+  { value: 'longyuzhihe', label: '龙羽芷荷（男·客观冷静）' },
+  { value: 'longcanzhuyue', label: '龙璨竹月（女·平实质朴）' },
+  { value: 'longrongzhihe', label: '龙蓉芷荷（女·电台质感）' },
+  { value: 'longlanghongmo', label: '龙朗虹沫（女·温柔亲和）' },
+  { value: 'longfengyueyao', label: '龙风月瑶（女·直爽利落）' },
+  { value: 'longtongxuxian', label: '龙彤旭弦（女·活泼灵动）' },
+  { value: 'longliuxulan', label: '龙柳旭澜（女·标准播音）' },
+  { value: 'longyujunxuan', label: '龙羽珺萱（女·温柔坚韧）' },
+]
+// 档位下拉
+const TIER_OPTIONS = [
+  { value: 'flash', label: 'flash（快、省钱）' },
+  { value: 'plus', label: 'plus（音质更好）' },
 ]
 
 // 已保存的模型条目（多模型管理列表）
@@ -104,13 +128,12 @@ type SavedASR = {
 type SavedTTS = {
   id: string
   name: string
-  provider: 'edge' | 'cloud' | 'piper' | 'omni'
+  provider: 'edge' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
   voice: string
   rate: string
+  tier: 'flash' | 'plus'
   apiKey?: string
-  cloudProvider?: string
   piperModel?: string
-  piperVoice?: string
 }
 // 已保存的唤醒方案（唤醒多方案管理）
 type SavedWake = {
@@ -164,7 +187,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'fun-asr-flash-8k-realtime', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
   const [editASRId, setEditASRId] = useState<string | null>(null)
   const [showAddTTS, setShowAddTTS] = useState(false)
-  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'cloud' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; cloudProvider: string; piperModel: string; piperVoice: string }>({ provider: 'edge', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', name: '', apiKey: '', cloudProvider: 'aliyun', piperModel: '', piperVoice: '' })
+  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; tier: 'flash' | 'plus'; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-huayan-medium.onnx' })
   const [editTTSId, setEditTTSId] = useState<string | null>(null)
   const [showAddWake, setShowAddWake] = useState(false)
   const [wakeForm, setWakeForm] = useState<{ engine: 'sherpa' | 'omni'; keyword: string; pinyin: string; threshold: number; modelDir: string; name: string; baseUrl: string; model: string }>({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '', baseUrl: 'http://localhost:8000/v1', model: 'openbmb/MiniCPM-o-4_5' })
@@ -833,15 +856,17 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       if (updated && activeTTS === id) applyTTS(updated)
     }
 
+    const providerName = (p: string) => p === 'edge' ? 'edge-tts' : p === 'cosyvoice' ? 'CosyVoice v3' : p === 'qwen' ? 'Qwen-Audio-TTS' : p === 'piper' ? '本地 Piper' : 'MiniCPM-o'
+
     const startNewTTS = () => {
       setEditTTSId(null)
-      setTtsForm({ provider: 'edge', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', name: '', apiKey: '', cloudProvider: 'aliyun', piperModel: '', piperVoice: '' })
+      setTtsForm({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-huayan-medium.onnx' })
       setShowAddTTS(true)
     }
 
     const startEditTTS = (m: SavedTTS) => {
       setEditTTSId(m.id)
-      setTtsForm({ provider: m.provider, voice: m.voice, rate: m.rate, name: m.name, apiKey: m.apiKey || '', cloudProvider: m.cloudProvider || 'aliyun', piperModel: m.piperModel || '', piperVoice: m.piperVoice || '' })
+      setTtsForm({ provider: m.provider, voice: m.voice, rate: m.rate, name: m.name, apiKey: m.apiKey || '', tier: m.tier || 'flash', piperModel: m.piperModel || 'models/zh_CN-huayan-medium.onnx' })
       setShowAddTTS(true)
     }
 
@@ -852,22 +877,20 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           provider: ttsForm.provider,
           voice: ttsForm.voice,
           rate: ttsForm.rate,
+          tier: ttsForm.tier,
           apiKey: ttsForm.apiKey,
-          cloudProvider: ttsForm.cloudProvider,
           piperModel: ttsForm.piperModel,
-          piperVoice: ttsForm.piperVoice,
         })
       } else {
         const m: SavedTTS = {
           id: 't_' + Date.now(),
-          name: ttsForm.name || (ttsForm.provider === 'edge' ? 'edge-tts 免费云' : ttsForm.provider === 'cloud' ? '付费云' : ttsForm.provider === 'piper' ? '本地 Piper' : '一体化语音'),
+          name: ttsForm.name || providerName(ttsForm.provider),
           provider: ttsForm.provider,
           voice: ttsForm.voice,
           rate: ttsForm.rate,
+          tier: ttsForm.tier,
           apiKey: ttsForm.apiKey,
-          cloudProvider: ttsForm.cloudProvider,
           piperModel: ttsForm.piperModel,
-          piperVoice: ttsForm.piperVoice,
         }
         setField('tts.models', [...savedTTS, m])
         applyTTS(m)
@@ -902,13 +925,19 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             <label className="settings-field">
               <span className="settings-field-label">播报方式</span>
               <select value={ttsForm.provider} onChange={(e) => {
-                const p = e.target.value as 'edge' | 'cloud' | 'piper' | 'omni'
-                setTtsForm({ ...ttsForm, provider: p })
+                const p = e.target.value as 'edge' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
+                // 切换播报方式时同步默认音色/档位，避免把别的引擎参数误带进来
+                const patch: any = { provider: p, tier: p === 'cosyvoice' || p === 'qwen' ? 'flash' : 'flash' }
+                if (p === 'edge') patch.voice = 'zh-CN-YunjianNeural'
+                else if (p === 'cosyvoice') patch.voice = 'longanyang'
+                else if (p === 'qwen') patch.voice = 'longyingsongliu'
+                setTtsForm({ ...ttsForm, ...patch })
               }}>
                 <option value="edge">✅ edge-tts 免费云</option>
-                <option value="cloud">⬜ 付费云 TTS</option>
-                <option value="piper">⬜ 本地 Piper</option>
-                <option value="omni">⬜ 一体化 MiniCPM-o</option>
+                <option value="cosyvoice">✅ CosyVoice v3（付费云）</option>
+                <option value="qwen">✅ Qwen-Audio-TTS（付费云）</option>
+                <option value="piper">✅ 本地 Piper（离线）</option>
+                <option value="omni">✅ MiniCPM-o（本地 vLLM）</option>
               </select>
             </label>
 
@@ -929,45 +958,36 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               </>
             )}
 
-            {ttsForm.provider === 'cloud' && (
+            {(ttsForm.provider === 'cosyvoice' || ttsForm.provider === 'qwen') && (
               <>
                 <label className="settings-field">
-                  <span className="settings-field-label">付费云服务商</span>
-                  <select value={ttsForm.cloudProvider} onChange={(e) => setTtsForm({ ...ttsForm, cloudProvider: e.target.value })}>
-                    <option value="aliyun">阿里云</option>
-                    <option value="volcengine">火山引擎</option>
-                    <option value="azure">Azure</option>
+                  <span className="settings-field-label">档位</span>
+                  <select value={ttsForm.tier} onChange={(e) => setTtsForm({ ...ttsForm, tier: e.target.value as 'flash' | 'plus' })}>
+                    {TIER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </label>
                 <label className="settings-field">
-                  <span className="settings-field-label">API Key</span>
-                  <input type="password" value={ttsForm.apiKey} placeholder="语音合成 Key" onChange={(e) => setTtsForm({ ...ttsForm, apiKey: e.target.value })} />
+                  <span className="settings-field-label">音色</span>
+                  <select value={ttsForm.voice} onChange={(e) => setTtsForm({ ...ttsForm, voice: e.target.value })}>
+                    {(ttsForm.provider === 'cosyvoice' ? COSYVOICE_VOICES : QWEN_VOICES).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                 </label>
                 <label className="settings-field">
-                  <span className="settings-field-label">音色（下拉选 / 可手填）</span>
-                  <input type="text" list="cosyvoice-voices" value={ttsForm.voice} placeholder="如 longxiaochun（以官方为准）" onChange={(e) => setTtsForm({ ...ttsForm, voice: e.target.value })} />
-                  <datalist id="cosyvoice-voices">
-                    {COSYVOICE_VOICES.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
-                  </datalist>
+                  <span className="settings-field-label">API Key（可留空，走 .env）</span>
+                  <input type="password" value={ttsForm.apiKey} placeholder="阿里云百炼 Key（留空读 DASHSCOPE_API_KEY）" onChange={(e) => setTtsForm({ ...ttsForm, apiKey: e.target.value })} />
                 </label>
               </>
             )}
 
             {ttsForm.provider === 'piper' && (
-              <>
-                <label className="settings-field">
-                  <span className="settings-field-label">Piper 模型路径</span>
-                  <input type="text" value={ttsForm.piperModel} placeholder="piper 引擎与中文声库（.onnx）路径" onChange={(e) => setTtsForm({ ...ttsForm, piperModel: e.target.value })} />
-                </label>
-                <label className="settings-field">
-                  <span className="settings-field-label">声库语音</span>
-                  <input type="text" value={ttsForm.piperVoice} placeholder="如 zh_CN-huayan-medium" onChange={(e) => setTtsForm({ ...ttsForm, piperVoice: e.target.value })} />
-                </label>
-              </>
+              <label className="settings-field">
+                <span className="settings-field-label">Piper 声库路径</span>
+                <input type="text" value={ttsForm.piperModel} placeholder="models/zh_CN-huayan-medium.onnx" onChange={(e) => setTtsForm({ ...ttsForm, piperModel: e.target.value })} />
+              </label>
             )}
 
             {ttsForm.provider === 'omni' && (
-              <div className="settings-guide">一体化 MiniCPM-o 会直接语音输出，可省 TTS。请在【大模型】板块添加并设为主用。</div>
+              <div className="settings-guide">MiniCPM-o 通过本地 vLLM-omni 服务播报（llm.omni 的 base_url，默认 localhost:8000）。需本机已启动 vLLM-omni，否则无声音。</div>
             )}
 
             <label className="settings-field">
@@ -994,10 +1014,10 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               return (
                 <div key={m.id} className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
                   <div className="scheme-item-main" onClick={() => applyTTS(m)}>
-                    <span className="scheme-item-icon">{m.provider === 'edge' ? '✅' : '⬜'}</span>
+                    <span className="scheme-item-icon">✅</span>
                     <div className="scheme-item-info">
                       <div className="scheme-item-name">{m.name}{isActive && <span className="scheme-item-tag">当前</span>}</div>
-                      <div className="scheme-item-sub">{m.provider === 'edge' ? 'edge-tts' : m.provider === 'cloud' ? '付费云' : m.provider === 'piper' ? '本地 Piper' : '一体化'} · {m.voice}</div>
+                      <div className="scheme-item-sub">{providerName(m.provider)}{(m.provider === 'cosyvoice' || m.provider === 'qwen') ? ` · ${m.tier || 'flash'}` : ''} · {m.voice || '默认'}</div>
                     </div>
                   </div>
                   <div className="scheme-item-actions">
@@ -1027,16 +1047,26 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             </label>
           </>
         )}
-        {activeScheme && activeScheme.provider === 'cloud' && (
-          <label className="settings-field">
-            <span className="settings-field-label">音色</span>
-            <input type="text" value={activeScheme.voice} placeholder="音色名（以官方为准）" onChange={(e) => updateTTS(activeTTS, { voice: e.target.value })} />
-          </label>
+        {(activeScheme?.provider === 'cosyvoice' || activeScheme?.provider === 'qwen') && (
+          <>
+            <label className="settings-field">
+              <span className="settings-field-label">档位</span>
+              <select value={activeScheme.tier || 'flash'} onChange={(e) => updateTTS(activeTTS, { tier: e.target.value as 'flash' | 'plus' })}>
+                {TIER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+            <label className="settings-field">
+              <span className="settings-field-label">音色</span>
+              <select value={activeScheme.voice} onChange={(e) => updateTTS(activeTTS, { voice: e.target.value })}>
+                {(activeScheme.provider === 'cosyvoice' ? COSYVOICE_VOICES : QWEN_VOICES).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+          </>
         )}
         {activeScheme && activeScheme.provider === 'piper' && (
           <label className="settings-field">
-            <span className="settings-field-label">声库语音</span>
-            <input type="text" value={activeScheme.piperVoice || ''} placeholder="如 zh_CN-huayan-medium" onChange={(e) => updateTTS(activeTTS, { piperVoice: e.target.value })} />
+            <span className="settings-field-label">Piper 声库路径</span>
+            <input type="text" value={activeScheme.piperModel || 'models/zh_CN-huayan-medium.onnx'} onChange={(e) => updateTTS(activeTTS, { piperModel: e.target.value })} />
           </label>
         )}
       </>
@@ -1224,17 +1254,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   }
 
   const allTabs = [...groups, ...EXTRA_TABS]
-  const mode = config ? (getPath(config, 'dialogue.mode') || 'pipeline') : 'pipeline'
-  const HIDDEN_IN_E2E = ['asr', 'tts', 'llm']
-  const visibleTabs = mode === 'e2e' ? allTabs.filter((t) => !HIDDEN_IN_E2E.includes(t.key)) : allTabs
-  const activeTab = visibleTabs.find((t) => t.key === tab) ?? visibleTabs[0]
-
-  const switchMode = (m: 'pipeline' | 'e2e') => {
-    setField('dialogue.mode', m)
-    if (m === 'e2e' && HIDDEN_IN_E2E.includes(tab)) {
-      setTab('wake')
-    }
-  }
+  const activeTab = allTabs.find((t) => t.key === tab) ?? allTabs[0]
   const currentInput = config ? getPath(config, 'audio.input_device') : undefined
 
   return (
@@ -1247,7 +1267,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
 
         <div className="settings-layout">
           <div className="settings-nav">
-            {visibleTabs.map((t) => (
+            {allTabs.map((t) => (
               <button key={t.key} className={`settings-nav-item ${tab === t.key ? 'settings-nav-item--on' : ''}`} onClick={() => setTab(t.key)}>
                 {t.label}
               </button>
@@ -1255,12 +1275,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           </div>
 
           <div className="settings-body">
-          <div className="dialogue-mode-bar">
-            <span className="dialogue-mode-label">对话模式</span>
-            <button className={`dialogue-mode-btn ${mode === 'pipeline' ? 'dialogue-mode-btn--on' : ''}`} onClick={() => switchMode('pipeline')}>打工牛马</button>
-            <button className={`dialogue-mode-btn ${mode === 'e2e' ? 'dialogue-mode-btn--on' : ''}`} onClick={() => switchMode('e2e')}>陪聊小二</button>
-            <span className="settings-hint">切换后保存并重启后端生效</span>
-          </div>
           {!config ? (
             <p className="settings-msg">{msg || '读取中…'}</p>
           ) : tab === 'ui' ? (
