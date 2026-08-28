@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from backend.agent import Agent
 from backend.bridge.dsh_bridge import DSHBridge
@@ -199,15 +201,42 @@ async def audio_devices() -> dict:
         return {"ok": False, "msg": f"枚举音频设备失败: {e}"}
 
 
+PREVIEW_TEXT = (
+    "2026年8月27日，欢迎来到小二的频道！重庆的重量级嘉宾已到达，"
+    "Wi-Fi 信号满格，电量还剩百分之八十六。请问，需要我现在播放音乐吗？"
+)
+PREVIEW_DIR = ROOT / ".tmp" / "previews"
+PREVIEW_RE = re.compile(r"^[0-9a-f]{16}\.(mp3|wav)$")
+
+
+def _preview_cache_path(fingerprint: str, ext: str) -> Path:
+    """缓存文件名：sha1(引擎指纹|文本) 前 16 位 + 音频后缀（文件名不含用户输入，防路径穿越）。"""
+    key = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()[:16]
+    return PREVIEW_DIR / f"{key}{ext}"
+
+
+def _prune_previews(keep: int = 200) -> None:
+    """缓存超限清理：按修改时间只保留最近 keep 个试听音频，防止无限膨胀。"""
+    try:
+        files = sorted(PREVIEW_DIR.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in files[keep:]:
+            old.unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @app.post("/api/tts/preview")
 async def tts_preview(payload: dict) -> dict:
-    """试听：优先按指定方案（model）构建一次性实例，用其音色/语速合成一句话并播放；
-    未指定方案时回退当前激活引擎。用完即释放（close/stop），避免云引擎的连接池被试听反复占用。
+    """试听：固定测试句按方案/音色合成一次并落盘缓存，返回音频 URL 由前端 <audio> 播放。
+
+    优先按指定方案（model）构建一次性实例；未指定时回退当前激活引擎。
+    同一「引擎指纹 + 文本」只合成一次，之后直接命中本地缓存（没有 Key 也能重听）。
+    用完即释放（close/stop），避免云引擎的连接池被试听反复占用。
     """
     voice = payload.get("voice")
     rate = payload.get("rate")
     model = payload.get("model")
-    text = str(payload.get("text") or "你好，欢迎使用语音助手。").strip()
+    text = str(payload.get("text") or PREVIEW_TEXT).strip()
     engine = None
     try:
         engine = build_preview_tts(
@@ -215,7 +244,25 @@ async def tts_preview(payload: dict) -> dict:
             voice=str(voice) if voice else None,
             rate=str(rate) if rate else None,
         )
-        await engine.speak(text)
+        # 缓存命中先行：合成过的音色重听不建连、不耗 Key（放在 preflight 之前）
+        cache_file = _preview_cache_path(f"{engine.cache_fingerprint()}|{text}", engine.audio_ext)
+        if cache_file.is_file():
+            return {"ok": True, "url": f"/api/tts/preview-audio/{cache_file.name}", "cached": True}
+        problem = engine.preflight()
+        if problem:
+            return {"ok": False, "msg": problem}
+        data = await asyncio.wait_for(engine.synthesize(text), timeout=30)
+        if not data:
+            return {"ok": False, "msg": "试听失败: 引擎未返回音频"}
+        PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        cache_file.write_bytes(data)
+        _prune_previews()
+        return {"ok": True, "url": f"/api/tts/preview-audio/{cache_file.name}", "cached": False}
+    except NotImplementedError:
+        return {"ok": False, "msg": "该引擎暂不支持纯合成试听"}
+    except asyncio.TimeoutError:
+        engine.stop()  # to_thread 无法取消，靠 stop/close 让合成线程退出
+        return {"ok": False, "msg": "试听超时/连接失败：请检查该方案的 API Key 与网络后重试"}
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "msg": f"试听失败: {e}"}
     finally:
@@ -226,7 +273,18 @@ async def tts_preview(payload: dict) -> dict:
                     release()
                 except Exception:
                     pass
-    return {"ok": True}
+
+
+@app.get("/api/tts/preview-audio/{fname}")
+async def tts_preview_audio(fname: str):
+    """返回试听缓存音频（文件名限定 16 位十六进制 + mp3/wav，防路径穿越）。"""
+    if not PREVIEW_RE.match(fname):
+        raise HTTPException(status_code=404, detail="not found")
+    path = PREVIEW_DIR / fname
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    media = "audio/mpeg" if path.suffix == ".mp3" else "audio/wav"
+    return FileResponse(path, media_type=media)
 
 
 @app.post("/api/memory/clear")

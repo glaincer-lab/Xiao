@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import logging
 import os
 import queue
 import threading
+import wave
 
 from backend.tts.base import TTSEngine
 
@@ -37,7 +39,10 @@ class _Callback:
         pass
 
     def on_close(self, close_status_code, close_msg) -> None:
-        pass
+        # 连接被服务端断开（Key 无效/网络中断）也必须置位结束事件，否则播报循环会空转卡死
+        d = self._e._done
+        if d is not None:
+            d.set()
 
     def on_event(self, message) -> None:
         e = self._e
@@ -64,6 +69,7 @@ class QwenRealtimeTTS(TTSEngine):
         self._voice = voice
         self._api_key = api_key
         self._stop_requested = False
+        self._closed = False
         self._q: "queue.Queue[bytes] | None" = None
         self._done: threading.Event | None = None
         self._stream = None
@@ -89,8 +95,16 @@ class QwenRealtimeTTS(TTSEngine):
         )
         return rt
 
+    def preflight(self) -> str | None:
+        key = self._api_key or os.environ.get("DASHSCOPE_API_KEY")
+        if not key:
+            return "缺少阿里云百炼 API Key（DASHSCOPE_API_KEY）：请编辑该方案填入"
+        return None
+
     def warm(self) -> None:
         """后台预热一条连接（建连约 0.9s，放到启动线程避免首句卡顿）。"""
+        if self._closed:
+            return
         with self._lock:
             if self._ready_rt is not None or self._rewarming:
                 return
@@ -101,7 +115,17 @@ class QwenRealtimeTTS(TTSEngine):
         try:
             rt = self._new_rt()
             with self._lock:
-                self._ready_rt = rt
+                if self._closed:  # close() 抢在预热前：丢掉这条连接，别泄漏
+                    self._ready_rt = None
+                    orphan = rt
+                else:
+                    self._ready_rt = rt
+                    orphan = None
+            if orphan is not None:
+                try:
+                    orphan.close()
+                except Exception:
+                    pass
         except Exception as e:  # noqa: BLE001
             logger.warning("Qwen 实时流式连接预热失败：%s", e)
         finally:
@@ -142,6 +166,7 @@ class QwenRealtimeTTS(TTSEngine):
     def close(self) -> None:
         """释放连接（换方案/退出时调用）。"""
         self._stop_requested = True
+        self._closed = True
         with self._lock:
             rt = self._ready_rt
             self._ready_rt = None
@@ -158,6 +183,67 @@ class QwenRealtimeTTS(TTSEngine):
             return
         self._stop_requested = False
         await asyncio.to_thread(self._speak_blocking, text)
+
+    audio_ext = ".wav"
+
+    def cache_fingerprint(self) -> str:
+        return f"qwen_rt|{self._voice}"
+
+    async def synthesize(self, text: str) -> bytes:
+        """只合成不播放（试听缓存用）：收集实时流 PCM 帧封装为 WAV 字节。"""
+        text = (text or "").strip()
+        if not text:
+            return b""
+        return await asyncio.to_thread(self._synthesize_blocking, text)
+
+    def _synthesize_blocking(self, text: str) -> bytes:
+        """一次性会话收集实时流音频：不经过扬声器，PCM → WAV 字节，失败抛异常。"""
+        rt = self._take_ready()
+        if rt is None:
+            rt = self._new_rt()
+        q: "queue.Queue[bytes]" = queue.Queue()
+        done = threading.Event()
+        self._q = q
+        self._done = done
+        self._active_rt = rt
+        self._last_error = None
+        pcm_buf = bytearray()
+        try:
+            rt.append_text(text)
+            rt.commit()
+            idle_ticks = 0
+            while True:
+                if self._stop_requested:
+                    raise RuntimeError("合成已被中止")
+                try:
+                    pcm = q.get(timeout=0.05)
+                except queue.Empty:
+                    if done.is_set():
+                        break
+                    idle_ticks += 1
+                    if idle_ticks > 300:  # 15s 无任何音频：连接假死（Key 无效/网络断），中断兜底
+                        raise RuntimeError("15 秒未收到音频（连接可能已断开或 Key 无效）")
+                    continue
+                idle_ticks = 0
+                pcm_buf.extend(pcm)
+        finally:
+            try:
+                rt.close()  # 本轮会话结束，服务端资源一并释放
+            except Exception:
+                pass
+            self._active_rt = None
+            self._q = None
+            self._done = None
+            self.warm()  # 预热下一条连接，下次播报首音更快
+        if not pcm_buf:
+            raise RuntimeError("Qwen 实时流式未返回音频")
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # int16
+            wf.setframerate(SAMPLE_RATE)
+            wf.writeframes(bytes(pcm_buf))
+        return buf.getvalue()
 
     def _speak_blocking(self, text: str) -> None:
         import numpy as np
@@ -179,6 +265,7 @@ class QwenRealtimeTTS(TTSEngine):
         try:
             rt.append_text(text)
             rt.commit()
+            idle_ticks = 0
             while True:
                 if self._stop_requested:
                     break
@@ -187,7 +274,13 @@ class QwenRealtimeTTS(TTSEngine):
                 except queue.Empty:
                     if done.is_set():
                         break
+                    idle_ticks += 1
+                    if idle_ticks > 300:  # 15s 无任何音频：连接假死（Key 无效/网络断），中断兜底
+                        self._last_error = "15 秒未收到音频（连接可能已断开或 Key 无效）"
+                        logger.warning("Qwen 实时流式超过 15s 未收到音频，中断本次播报")
+                        break
                     continue
+                idle_ticks = 0
                 stream.write(np.frombuffer(pcm, dtype=np.int16))  # 阻塞写（背压），按播放节奏消费
             if self._stop_requested:
                 try:
@@ -196,6 +289,7 @@ class QwenRealtimeTTS(TTSEngine):
                     pass
             stream.stop()
         except Exception as e:  # noqa: BLE001
+            self._last_error = str(e)  # 播报吞异常保持主流程稳健，试听端点据实回报
             logger.warning("Qwen 实时流式播报失败：%s", e)
         finally:
             try:

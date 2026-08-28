@@ -68,8 +68,21 @@ class EdgeTTS(TTSEngine):
                     break
                 await asyncio.to_thread(self._play_blocking, data)
         except Exception as e:  # noqa: BLE001
-            # 合成/播放失败不应中断主流程（文字回复仍显示在界面）
+            # 合成/播放失败不应中断主流程（文字回复仍显示在界面），但要记录供试听如实回报
+            self._last_error = str(e)
             logger.warning("TTS speak failed: %s", e)
+
+    async def synthesize(self, text: str) -> bytes:
+        """只合成不播放（试听缓存用）：按句切分合成后拼接为整段 MP3 字节。"""
+        text = (text or "").strip()
+        if not text:
+            return b""
+        chunks = self._split(text)
+        datas = await self._synthesize_all(chunks)
+        return b"".join(datas)
+
+    def cache_fingerprint(self) -> str:
+        return f"edge|{self._voice}|{self._rate}"
 
     async def _synthesize(self, text: str) -> bytes:
         import edge_tts

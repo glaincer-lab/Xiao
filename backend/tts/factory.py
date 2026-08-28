@@ -22,12 +22,13 @@ def _build_edge(voice: str, rate: str) -> TTSEngine:
     return EdgeTTS(voice=voice, rate=rate)
 
 
-def _build_cloud(provider: str, tier: str, voice: str, api_key: str | None) -> TTSEngine:
+def _build_cloud(
+    provider: str, tier: str, voice: str, api_key: str | None, warm: bool = True
+) -> TTSEngine:
     from backend.tts.cosyvoice import CloudTTSEngine
 
-    engine = CloudTTSEngine(provider=provider, tier=tier, voice=voice, api_key=api_key)
-    engine._warm_pool()  # 后台预热 WebSocket 连接池，降低首句播报延迟
-    return engine
+    # warm 仅为保持 _dispatch 签名兼容；连接池已弃用（见 cosyvoice.py），无需预热
+    return CloudTTSEngine(provider=provider, tier=tier, voice=voice, api_key=api_key)
 
 
 def _build_piper(model_path: str) -> TTSEngine:
@@ -36,11 +37,12 @@ def _build_piper(model_path: str) -> TTSEngine:
     return PiperEngine(model_path=model_path)
 
 
-def _build_qwen_rt(voice: str, api_key: str | None) -> TTSEngine:
+def _build_qwen_rt(voice: str, api_key: str | None, warm: bool = True) -> TTSEngine:
     from backend.tts.qwen_realtime import QwenRealtimeTTS
 
     engine = QwenRealtimeTTS(voice=voice, api_key=api_key)
-    engine.warm()  # 启动即预热连接，首句播报首音约 0.4s
+    if warm:
+        engine.warm()  # 启动即预热连接，首句播报首音约 0.4s
     return engine
 
 
@@ -95,18 +97,19 @@ def _active_model() -> dict:
     return m
 
 
-def _dispatch(m: dict) -> TTSEngine:
+def _dispatch(m: dict, warm: bool = True) -> TTSEngine:
     provider = m.get("provider", "edge")
     if provider == "edge":
         return _build_edge(m.get("voice", "zh-CN-YunjianNeural"), m.get("rate", "+30%"))
     if provider == "qwen_rt":
-        return _build_qwen_rt(m.get("voice", "Ethan"), m.get("apiKey"))
+        return _build_qwen_rt(m.get("voice", "Ethan"), m.get("apiKey"), warm=warm)
     if provider in ("cosyvoice", "qwen"):
         return _build_cloud(
             provider,
             m.get("tier", "flash"),
             m.get("voice", _PROVIDER_DEFAULTS[provider]["voice"]),
             m.get("apiKey"),
+            warm=warm,
         )
     if provider == "piper":
         return _build_piper(m.get("piperModel", "models/zh_CN-huayan-medium.onnx"))
@@ -143,4 +146,4 @@ def build_preview_tts(
         m["voice"] = voice
     if rate and provider == "edge":
         m["rate"] = rate
-    return _dispatch(m)
+    return _dispatch(m, warm=False)  # 一次性试听实例：不预热，播完即释放

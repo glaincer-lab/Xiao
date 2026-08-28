@@ -59,6 +59,18 @@ class OmniTTSEngine(TTSEngine):
         except Exception as e:  # noqa: BLE001
             logger.warning("Omni TTS speak failed: %s", e)
 
+    audio_ext = ".wav"
+
+    async def synthesize(self, text: str) -> bytes:
+        """只合成不播放（试听缓存用）：返回整段 WAV 字节。"""
+        text = (text or "").strip()
+        if not text:
+            return b""
+        return await asyncio.to_thread(self._synthesize, text)
+
+    def cache_fingerprint(self) -> str:
+        return f"omni|{self._base_url}|{self._model}"
+
     def _synthesize(self, text: str) -> bytes:
         from openai import OpenAI
 

@@ -36,6 +36,13 @@ class PiperEngine(TTSEngine):
             self._voice = PiperVoice.load(self._model_path)
         return self._voice
 
+    def preflight(self) -> str | None:
+        if not self._model_path:
+            return "未配置 Piper 声库：请编辑该方案填入中文 .onnx 模型文件路径（本地引擎按需安装，见 requirements-local-tts.txt）"
+        if not os.path.exists(self._model_path):
+            return f"未找到 Piper 声库文件：{self._model_path}"
+        return None
+
     def _ensure_mixer(self) -> None:
         if self._mixer_ready:
             return
@@ -69,7 +76,20 @@ class PiperEngine(TTSEngine):
                 return
             await asyncio.to_thread(self._play_blocking, data)
         except Exception as e:  # noqa: BLE001
+            self._last_error = str(e)  # 播报吞异常保持主流程稳健，试听端点据实回报
             logger.warning("Piper speak failed: %s", e)
+
+    audio_ext = ".wav"
+
+    async def synthesize(self, text: str) -> bytes:
+        """只合成不播放（试听缓存用）：返回整段 WAV 字节。"""
+        text = (text or "").strip()
+        if not text:
+            return b""
+        return await asyncio.to_thread(self._synthesize, text)
+
+    def cache_fingerprint(self) -> str:
+        return f"piper|{self._model_path}"
 
     def _synthesize(self, text: str) -> bytes:
         voice = self._get_voice()

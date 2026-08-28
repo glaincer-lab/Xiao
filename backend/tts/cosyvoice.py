@@ -4,9 +4,12 @@
 API Key 复用阿里云百炼的 DASHSCOPE_API_KEY。
 
 延迟优化：
-- 用 SpeechSynthesizerObjectPool 复用 WebSocket 连接（每次 call 从约 3s 降到约 1s，
-  建连是最耗时环节）。
 - 按句切分，第一句合成完立即开播，后续句子边播边预合成（与 edge-tts 一致）。
+
+注意：dashscope 的 SpeechSynthesizerObjectPool 是进程级单例，但构造函数可重入——
+每建一个引擎实例都会清空并重建连接池（预连默认音色 longxiaochun）、再起一条重连
+线程，换音色/多实例时极易互相污染并卡死在「合成中」；且 call() 不传超时会无限
+等待。因此弃用连接池，每次合成直连一个 SpeechSynthesizer（显式 20s 超时，用完即关）。
 
 两套模型 × 两个档位（flash / plus），音色命名规则不同：
 - cosyvoice-v3-flash / cosyvoice-v3-plus：音色是短名（如 longanyang、longanhuan_v3），
@@ -23,7 +26,6 @@ import logging
 import os
 import re
 import tempfile
-import threading
 
 from backend.tts.base import TTSEngine
 
@@ -64,9 +66,6 @@ class CloudTTSEngine(TTSEngine):
         self._api_key = api_key
         self._mixer_ready = False
         self._stop_requested = False
-        self._pool = None
-        self._pool_lock = threading.Lock()
-        self._pool_creating = False
 
     @property
     def model(self) -> str:
@@ -83,6 +82,11 @@ class CloudTTSEngine(TTSEngine):
             pass  # 无音频设备时容错
         self._mixer_ready = True
 
+    def preflight(self) -> str | None:
+        if not (self._api_key or os.environ.get("DASHSCOPE_API_KEY")):
+            return "缺少阿里云百炼 API Key（DASHSCOPE_API_KEY）：请编辑该方案填入"
+        return None
+
     def stop(self) -> None:
         """立刻停止当前播报（打断用）。"""
         self._stop_requested = True
@@ -95,13 +99,10 @@ class CloudTTSEngine(TTSEngine):
             pass
 
     def close(self) -> None:
-        """释放 WebSocket 连接池（程序退出/换方案时调用）。"""
-        if self._pool is not None:
-            try:
-                self._pool.shutdown()
-            except Exception:
-                pass
-            self._pool = None
+        """释放资源（程序退出/换方案时调用）。
+
+        连接池已弃用，每次合成的连接随用随关，这里无池可释放。
+        """
 
     async def speak(self, text: str) -> None:
         text = (text or "").strip()
@@ -123,55 +124,43 @@ class CloudTTSEngine(TTSEngine):
                     break
                 await asyncio.to_thread(self._play_blocking, data)
         except Exception as e:  # noqa: BLE001
-            # 合成/播放失败不应中断主流程（文字回复仍显示在界面）
+            # 合成/播放失败不应中断主流程（文字回复仍显示在界面），但要记录供试听如实回报
+            self._last_error = str(e)
             logger.warning("Cloud TTS speak failed: %s", e)
 
-    def _warm_pool(self) -> None:
-        """后台预热连接池（建连约 2~3s，放到启动线程，避免首句播报卡顿）。"""
-        if self._pool is not None or self._pool_creating:
-            return
-        self._pool_creating = True
-        threading.Thread(target=self._create_pool, daemon=True).start()
+    async def synthesize(self, text: str) -> bytes:
+        """只合成不播放（试听缓存用）：按句切分合成后拼接为整段 MP3 字节。"""
+        text = (text or "").strip()
+        if not text:
+            return b""
+        chunks = self._split(text)
+        return await asyncio.to_thread(lambda: b"".join(self._synthesize_all(chunks)))
 
-    def _create_pool(self) -> None:
-        try:
-            import dashscope
-            from dashscope.audio.tts_v2 import SpeechSynthesizerObjectPool
-
-            key = self._api_key or os.environ.get("DASHSCOPE_API_KEY")
-            if key:
-                dashscope.api_key = key
-            pool = SpeechSynthesizerObjectPool(max_size=3)
-            with self._pool_lock:
-                self._pool = pool
-        except Exception as e:  # noqa: BLE001
-            logger.warning("Cloud TTS 连接池预热失败：%s", e)
-        finally:
-            self._pool_creating = False
-
-    def _get_pool(self):
-        """取连接池；未就绪时同步建（兜底，正常已被 _warm_pool 预热）。"""
-        if self._pool is not None:
-            return self._pool
-        with self._pool_lock:
-            if self._pool is None:
-                self._create_pool()
-        return self._pool
+    def cache_fingerprint(self) -> str:
+        return f"{self._provider}|{self._tier}|{self._voice}"
 
     def _synthesize(self, text: str) -> bytes:
-        from dashscope.audio.tts_v2 import AudioFormat
+        import dashscope
+        from dashscope.audio.tts_v2 import AudioFormat, SpeechSynthesizer
 
         voice = _resolve_voice(self._provider, self._tier, self._voice)
-        pool = self._get_pool()
-        synthesizer = pool.borrow_synthesizer(
+        key = self._api_key or os.environ.get("DASHSCOPE_API_KEY")
+        if key:
+            dashscope.api_key = key
+        # 直连（弃用连接池）：每次合成独立建连、换音色互不污染，用完即关；
+        # 显式超时防 SDK 内部无限等待（卡死在「合成中」的根源之一）
+        synth = SpeechSynthesizer(
             model=self.model,
             voice=voice,
             format=AudioFormat.MP3_24000HZ_MONO_256KBPS,
         )
         try:
-            data = synthesizer.call(text)
+            data = synth.call(text, timeout_millis=20000)
         finally:
-            pool.return_synthesizer(synthesizer)
+            try:
+                synth.close()
+            except Exception:
+                pass
         if not data:
             raise RuntimeError(f"付费云 TTS 合成失败：{self.model} / {voice} 未返回音频")
         return data
