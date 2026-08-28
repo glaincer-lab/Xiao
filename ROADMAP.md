@@ -56,6 +56,16 @@
 | 项目规则 AGENTS.md | 第三使用者视角 + 引擎分层 | ✅ |
 | 密钥卫生 | config 明文 key 清空改走 .env；历史泄露的阿里云 key 已作废轮换 | ✅ |
 
+### 下步规划（近期待办）
+
+| 项 | 说明 | 优先级 |
+|---|---|---|
+| **云 TTS 语速** | ① CosyVoice v3 / Qwen-Audio-TTS：给 `backend/tts/cosyvoice.py` 的 `SpeechSynthesizer` 透传 `speech_rate`（0.5~2.0），并在设置注册表加对应控件（当前 `tts.rate` 仅对 edge 生效）；② Qwen 实时流式（qwen_rt）官方不支持 `speech_rate`，原生调速走不通，仅可换 `qwen3-tts-instruct-flash-realtime` 以指令近似 | 中 |
+| 端到端集成测试 + 打包分发 | Electron 安装包，README 安装步骤核对「第三使用者视角」 | 高 |
+| MiniCPM-o 本地 vLLM 三角色实测 | 唤醒/识别/播报三角色一体化，端口预设 `localhost:8000` | 中 |
+| `docs/screenshot.png` 界面截图更新 | 声线动画 + 星云重做后的界面快照 | 低 |
+| 中文音色名官方化核对 | 当前部分为拼音音译（如长音色名） | 低 |
+
 ---
 
 ## 三、依赖与前置条件
