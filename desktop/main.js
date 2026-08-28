@@ -80,6 +80,11 @@ function startBackend() {
   backendProc = spawn(py, ['run.py'], { cwd: ROOT, stdio: 'ignore' })
   backendProc.on('exit', () => {
     backendProc = null
+    // 后端播完结束语后主动退出：稍等声卡收尾，再让整个桌面壳退出
+    if (!quitting) {
+      quitting = true
+      setTimeout(() => app.quit(), 900)
+    }
   })
 }
 

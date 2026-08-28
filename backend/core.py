@@ -424,7 +424,7 @@ class Pipeline:
             self._agent.reset()
         if self._tts is not None:
             await self._speak(self._shutdown_done)
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.8)  # 等声卡把结束语缓冲放完再退出，避免「关机后声音被掐断」
         emit("app_shutdown")
         import os
         os._exit(0)
