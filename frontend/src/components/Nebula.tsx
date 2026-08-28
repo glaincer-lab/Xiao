@@ -1,100 +1,168 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-// 状态 → 3D 形态：同一组粒子在不同状态下流成不同立体
-type Shape = 'sphere' | 'shell' | 'hyperboloid' | 'spiral' | 'infinity' | 'tetrahedron' | 'octahedron' | 'cube'
+/** 精灵形态：'auto' 跟随状态自动切换，或手动锁定 0~4 */
+export type SpriteMode = 'auto' | 0 | 1 | 2 | 3 | 4
 
-const STATE_SHAPE: Record<string, Shape> = {
-  listening: 'octahedron', // 八面体（聆听，轻微呼吸）
-  processing: 'infinity', // ∞ 无限符号（思考时间长）
-  executing: 'spiral', // 3D 螺旋锥
+/** 精灵名称（供设置页下拉框展示） */
+export const SPRITE_NAMES: Record<number, string> = {
+  0: '圆形光点',
+  1: '六边晶体',
+  2: '蜂巢描边',
+  3: '菱晶切片',
+  4: '铁环',
+}
+
+/** 状态 → 粒子团轮廓形态 */
+const STATE_SHAPE: Record<string, string> = {
+  listening: 'octahedron',
+  processing: 'infinity',
+  executing: 'spiral',
   working: 'spiral',
-  speaking: 'hyperboloid', // 收腰圆柱（播报，明显呼吸）
+  speaking: 'hyperboloid',
   confirm_shutdown: 'cube',
   await_approval: 'cube',
 }
 
-// 状态 → 颜色兜底表（同一时刻单色，切换时平滑变；真实色板以 styles.css 的 --st-* 令牌为准）
-const STATE_COLORS: Record<string, [number, number, number]> = {
-  idle: [74, 125, 255],
-  sleeping: [74, 125, 255],
-  listening: [52, 211, 153],
-  processing: [167, 139, 250],
-  speaking: [244, 114, 182],
-  executing: [251, 146, 60],
-  working: [251, 146, 60],
-  confirm_shutdown: [239, 68, 68],
-  await_approval: [239, 68, 68],
+/** 状态 → 精灵序号（sprite='auto' 时生效） */
+export const SPRITE_OF: Record<string, number> = {
+  sleeping: 0,
+  idle: 2,
+  listening: 3,
+  processing: 1,
+  speaking: 1,
+  executing: 4,
+  working: 4,
+  await_approval: 3,
+  confirm_shutdown: 4,
 }
 
-function hexToRgb(hex: string): [number, number, number] | null {
-  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return null
-  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
+/** 状态 → 主题色兜底表（CSS 变量读取失败时使用） */
+const STATE_COLORS: Record<string, string> = {
+  sleeping: '#5a6f97',
+  idle: '#7aa2f7',
+  listening: '#22d3ee',
+  processing: '#a78bfa',
+  speaking: '#f59e0b',
+  executing: '#34d399',
+  working: '#34d399',
+  await_approval: '#f472b6',
+  confirm_shutdown: '#ef4444',
 }
 
-// 状态色单一事实源在 styles.css 的 --st-* 令牌；启动时读取，令牌缺失/非法时回退内置表
-function stateColorsFromCss(): Record<string, [number, number, number]> {
-  const out: Record<string, [number, number, number]> = { ...STATE_COLORS }
-  try {
-    const css = getComputedStyle(document.documentElement)
-    for (const key of Object.keys(STATE_COLORS)) {
-      const rgb = hexToRgb(css.getPropertyValue(`--st-${key}`).trim())
-      if (rgb) out[key] = rgb
-    }
-  } catch {
-    // 非 DOM 环境：保持兜底表
+function hexToRgb(hex: string): [number, number, number] {
+  const m = hex.replace('#', '')
+  const full = m.length === 3 ? m.split('').map((c) => c + c).join('') : m
+  const n = parseInt(full, 16)
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
+}
+
+/** 从 CSS 变量读取各状态主题色，读取失败时退回兜底表 */
+export function stateColorsFromCss(): Record<string, THREE.Color> {
+  const st = getComputedStyle(document.documentElement)
+  const out: Record<string, THREE.Color> = {}
+  for (const [k, v] of Object.entries(STATE_COLORS)) {
+    const css = st.getPropertyValue(`--st-${k}`).trim()
+    const rgb = hexToRgb(css || v)
+    out[k] = new THREE.Color(rgb[0], rgb[1], rgb[2])
   }
   return out
 }
 
+const fract = (x: number): number => x - Math.floor(x)
+
+/* ── 着色器（自 demo 移植）：双色径向渐变 + 微闪/余烬 + 语音增亮 + 景深雾化 ── */
 const VERT = `
-attribute float aSize;
-uniform float uPixelRatio;
-uniform float uBreathe;
-varying float vDepth;
-void main() {
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vDepth = -mv.z;
-  gl_PointSize = aSize * uPixelRatio * uBreathe * (18.0 / -mv.z);
-  gl_Position = projectionMatrix * mv;
-}
-`
+uniform float uTime,uVoice,uBreathe,uEmber,uSprite;
+uniform vec3 uColor0,uColor1;
+attribute float aSeed;
+varying vec3 vC; varying float vA,vGlow,vTw,vRot;
+void main(){
+  vec3 p = position*uBreathe;
+  float tw = sin(uTime*(1.5+fract(aSeed*7.0)*2.0)+aSeed*6.2832)*0.5+0.5;
+  float ember = pow(max(0.0,sin(uTime*0.35+aSeed*91.0)),48.0);
+  vTw = mix(0.72+0.28*tw, 0.30+ember*2.2, uEmber);
+  vC = mix(uColor0,uColor1,smoothstep(2.5,11.5,length(position)));
+  vGlow = 1.0+0.35*uVoice;
+  vRot = aSeed*6.2832 + uTime*(0.08+fract(aSeed*5.1)*0.22);
+  vec4 mv = modelViewMatrix*vec4(p,1.0);
+  float sz = (2.5+fract(aSeed*3.3)*3.5)*(1.0+0.28*uVoice)*(0.85+0.35*vTw);
+  sz *= mix(1.0,1.75,step(0.5,uSprite));
+  sz *= mix(1.0, 1.15, step(3.5, uSprite));
+  gl_PointSize = max(sz*(22.0/-mv.z), 4.6*step(0.5,uSprite));
+  gl_Position = projectionMatrix*mv;
+  float fog = clamp((-mv.z-15.6)/28.8,0.0,1.0);
+  vA = mix(1.0,0.15,fog)*0.92;
+}`
 
 const FRAG = `
-uniform vec3 uColor;
-uniform float uOpacity;
-uniform float uNear;
-uniform float uFar;
-varying float vDepth;
-void main() {
-  vec2 c = gl_PointCoord - vec2(0.5);
-  float d = length(c);
-  float a = smoothstep(0.5, 0.08, d);
-  if (a < 0.01) discard;
-  float t = clamp((vDepth - uNear) / (uFar - uNear), 0.0, 1.0);
-  float bright = mix(1.0, 0.15, t); // 景深雾化：远处暗
-  gl_FragColor = vec4(uColor * bright, a * uOpacity);
+precision highp float;
+uniform float uSprite;
+varying vec3 vC; varying float vA,vGlow,vTw,vRot;
+/* 正六边形符号距离（尖朝 ±x，外接圆半径 = 参数 d 的等值线） */
+float hexD(vec2 p){
+  p = abs(p);
+  return max(dot(p, vec2(0.5,0.8660254)), p.x);
 }
-`
+void main(){
+  vec2 uv = gl_PointCoord - 0.5;
+  float cs = cos(vRot), sn = sin(vRot);
+  uv = mat2(cs,sn,-sn,cs) * uv;
+  float a = 0.0;
+  float rim = 0.0;
+  if (uSprite < 0.5) {
+    /* 0 圆形：星尘光点 */
+    a = smoothstep(0.5, 0.12, length(uv));
+  } else if (uSprite < 1.5) {
+    /* 1 六边晶体：实心晶体 + 晶面亮边 + 中心亮核 */
+    float d = hexD(uv);
+    a = smoothstep(0.5, 0.40, d);
+    rim = smoothstep(0.20, 0.42, d) * smoothstep(0.55, 0.46, d);
+    a += smoothstep(0.16, 0.0, length(uv)) * 0.45;
+    rim += smoothstep(0.14, 0.0, length(uv)) * 0.35;
+  } else if (uSprite < 2.5) {
+    /* 2 蜂巢描边：空心六边形描线 + 中心点（全息图纸感） */
+    float d = hexD(uv);
+    a = smoothstep(0.085, 0.0, abs(d - 0.38)) * 0.9 + smoothstep(0.13, 0.0, length(uv)) * 0.75;
+    rim = 0.30;
+  } else if (uSprite < 3.5) {
+    /* 3 菱晶：菱形切片 + 亮边 */
+    float d = abs(uv.x) + abs(uv.y);
+    a = smoothstep(0.5, 0.40, d);
+    rim = smoothstep(0.18, 0.42, d) * smoothstep(0.55, 0.46, d);
+  } else {
+    /* 4 铁环：涡轮仪表环，双弧微光沿环旋转（含中心轮毂光点） */
+    float d = abs(length(uv) - 0.34);
+    float arc = 0.55 + 0.60 * sin(atan(uv.y, uv.x) * 2.0 + vRot * 2.2);
+    a = smoothstep(0.105, 0.0, d) * arc * 1.4;
+    a += smoothstep(0.08, 0.0, length(uv)) * 0.55;
+    rim = 0.22 + 0.38 * arc;
+  }
+  vec3 col = vC*vGlow*(0.75+0.45*vTw) + vec3(rim*0.8);
+  gl_FragColor = vec4(col, a*vA);
+}`
 
-// 同一组归一化种子 (u,v,w) 映射到不同立体，morph 时粒子平滑流动；t 为流动时间
-function shapePos(
-  shape: Shape,
-  u: number,
-  v: number,
-  w: number,
-  R: number,
-  t: number,
-): [number, number, number] {
+type Shape =
+  | 'sphere'
+  | 'shell'
+  | 'hyperboloid'
+  | 'spiral'
+  | 'infinity'
+  | 'tetrahedron'
+  | 'octahedron'
+  | 'cube'
+
+/* 同一组归一化种子 (u,v,w) → 不同立体（demo 版 + 旧版四面体），t 为流动时间 */
+function shapePos(shape: Shape, u: number, v: number, w: number, R: number, t: number): [number, number, number] {
   if (shape === 'shell') {
-    // 空心球壳：睡眠
+    /* 空心薄壳 */
     const th = Math.acos(2 * v - 1)
     const ph = Math.PI * 2 * w
-    const r = R * Math.cbrt(0.3 + 0.7 * u)
+    const r = R * 1.06
     return [r * Math.sin(th) * Math.cos(ph), r * Math.cos(th), r * Math.sin(th) * Math.sin(ph)]
   }
   if (shape === 'hyperboloid') {
-    // 收腰圆柱（单叶双曲面）：播报，绕 y 轴；体积已放大
+    /* 收腰圆柱（单叶双曲面）：播报 */
     const y = (w * 2 - 1) * R * 0.85
     const a = R * 0.62
     const cc = R * 0.78
@@ -104,7 +172,7 @@ function shapePos(
     return [rr * Math.cos(th), y, rr * Math.sin(th)]
   }
   if (shape === 'spiral') {
-    // 3D 螺旋锥：干活，粒子沿螺旋上升
+    /* 螺旋锥：干活 */
     const h = u
     const rad = R * (1 - h * 0.85)
     const rr = rad * Math.sqrt(v)
@@ -112,75 +180,30 @@ function shapePos(
     return [rr * Math.cos(th), (h * 2 - 1) * R, rr * Math.sin(th)]
   }
   if (shape === 'infinity') {
-    // ∞ 无限符号（torus knot 2,3）：思考，结平躺在 xz 面
+    /* ∞ 无限符号（环面结 2,3）：思考 */
     const tt = Math.PI * 2 * u + t * 0.05
-    const p = 2
-    const q = 3
-    const cq = Math.cos(q * tt)
-    const sq = Math.sin(q * tt)
-    const cp = Math.cos(p * tt)
-    const sp = Math.sin(p * tt)
-    const f = 2 + cq
-    const x = f * cp
-    const y = f * sp
-    const z = sq
-    const fq = -q * sq
-    const dx = fq * cp - p * f * sp
-    const dy = fq * sp + p * f * cp
-    const dz = q * cq
-    let tx = dx
-    let ty = dy
-    let tz = dz
-    const tl = Math.hypot(tx, ty, tz)
-    tx /= tl
-    ty /= tl
-    tz /= tl
-    let rx = 0
-    let ry = 1
-    let rz = 0
-    let nx = ry * tz - rz * ty
-    let ny = rz * tx - rx * tz
-    let nz = rx * ty - ry * tx
-    let nl = Math.hypot(nx, ny, nz)
-    if (nl < 1e-4) {
-      rx = 1
-      ry = 0
-      rz = 0
-      nx = ry * tz - rz * ty
-      ny = rz * tx - rx * tz
-      nz = rx * ty - ry * tx
-      nl = Math.hypot(nx, ny, nz)
-    }
-    nx /= nl
-    ny /= nl
-    nz /= nl
-    const bx = ty * nz - tz * ny
-    const by = tz * nx - tx * nz
-    const bz = tx * ny - ty * nx
-    const rr = R * 0.18 * Math.sqrt(v)
+    const f = 2 + Math.cos(3 * tt)
+    const x = f * Math.cos(2 * tt)
+    const y = f * Math.sin(2 * tt)
+    const z = Math.sin(3 * tt)
     const th = Math.PI * 2 * w
-    const cth = Math.cos(th)
-    const sth = Math.sin(th)
+    const rr = R * 0.18 * Math.sqrt(v)
     const s = R * 0.5
-    return [
-      s * x + rr * (cth * nx + sth * bx),
-      R * 0.85 * z + rr * (cth * nz + sth * bz),
-      s * y + rr * (cth * ny + sth * by),
-    ]
+    return [s * x + rr * Math.cos(th), R * 0.85 * z + rr * Math.sin(th), s * y]
   }
   if (shape === 'octahedron') {
-    // 八面体：播报（边自转边扩张收缩）
+    /* 八面体：聆听，边自转边扩张收缩 */
     const th = Math.acos(2 * v - 1)
-    const ph = Math.PI * 2 * w + t * 0.05 // 绕 y 轴自转（接近静止）
+    const ph = Math.PI * 2 * w + t * 0.05
     const dx = Math.sin(th) * Math.cos(ph)
     const dy = Math.cos(th)
     const dz = Math.sin(th) * Math.sin(ph)
     const L1 = Math.abs(dx) + Math.abs(dy) + Math.abs(dz)
-    const r = R * 1.15 * Math.cbrt(u) / L1
+    const r = (R * 1.15 * Math.cbrt(u)) / L1
     return [r * dx, r * dy, r * dz]
   }
   if (shape === 'tetrahedron') {
-    // 四面体：播报
+    /* 四面体（旧版保留）：按 min/mid/max 重排做重心坐标组合 */
     const a = Math.min(u, v, w)
     const c = Math.max(u, v, w)
     const b = u + v + w - a - c
@@ -188,7 +211,12 @@ function shapePos(
     const w1 = b - a
     const w2 = c - b
     const w3 = 1 - c
-    const V = [[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]]
+    const V = [
+      [1, 1, 1],
+      [1, -1, -1],
+      [-1, 1, -1],
+      [-1, -1, 1],
+    ]
     const s = R * 0.85
     return [
       s * (w0 * V[0][0] + w1 * V[1][0] + w2 * V[2][0] + w3 * V[3][0]),
@@ -197,21 +225,172 @@ function shapePos(
     ]
   }
   if (shape === 'cube') {
-    // 立方体：确认 / 审批（已缩小）
+    /* 立方体：确认 / 审批 */
     const L = R * 0.55
     return [(u - 0.5) * 2 * L, (v - 0.5) * 2 * L, (w - 0.5) * 2 * L]
   }
-  // sphere：球体内均匀，实心（待机）
+  /* sphere：球体内均匀（待机 / 睡眠兜底） */
   const r = R * Math.cbrt(u)
   const th = Math.acos(2 * v - 1)
   const ph = Math.PI * 2 * w
   return [r * Math.sin(th) * Math.cos(ph), r * Math.cos(th), r * Math.sin(th) * Math.sin(ph)]
 }
 
-export function Nebula({ state }: { state: string }) {
+/* 立方体 / 八面体棱线表（流光沿棱走；TS 布尔不能相加，用三元取 0/1） */
+const CUBE_V: number[][] = []
+const CUBE_E: number[][] = []
+for (let i = 0; i < 8; i++) CUBE_V.push([i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1])
+for (let i = 0; i < 8; i++)
+  for (let j = i + 1; j < 8; j++) {
+    const d =
+      (CUBE_V[i][0] !== CUBE_V[j][0] ? 1 : 0) +
+      (CUBE_V[i][1] !== CUBE_V[j][1] ? 1 : 0) +
+      (CUBE_V[i][2] !== CUBE_V[j][2] ? 1 : 0)
+    if (d === 1) CUBE_E.push([i, j])
+  }
+const OCT_V = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+]
+const OCT_E: number[][] = []
+for (let i = 0; i < 6; i++)
+  for (let j = i + 1; j < 6; j++) {
+    const dot = OCT_V[i][0] * OCT_V[j][0] + OCT_V[i][1] * OCT_V[j][1] + OCT_V[i][2] * OCT_V[j][2]
+    if (dot === 0) OCT_E.push([i, j])
+  }
+
+/* 流光透明度：各态基础值（睡眠几乎无流光） */
+const TRAV_OP: Record<string, number> = {
+  sleeping: 0.16,
+  idle: 0.5,
+  listening: 0.8,
+  processing: 0.9,
+  speaking: 0.95,
+  executing: 0.95,
+  working: 0.95,
+  await_approval: 1,
+  confirm_shutdown: 1,
+}
+
+/* 生命值曲线（demo lifeVal 移植）：波形与光球同源的「生命力」节拍 */
+function lifeOf(s: string, t: number, env: number): number {
+  switch (s) {
+    case 'sleeping':
+      return 0.5 + Math.sin((t * Math.PI * 2) / 14) * 0.1
+    case 'idle':
+      return 0.5 + Math.sin((t * Math.PI * 2) / 14) * 0.25
+    case 'listening':
+      return 0.5 + Math.sin((t * Math.PI * 2) / 8) * 0.25
+    case 'processing':
+      return 0.3 + Math.pow(Math.abs(Math.sin((t * Math.PI * 2) / 5)), 1.5) * 0.55
+    case 'speaking':
+      return 0.25 + env * 0.9
+    case 'executing':
+    case 'working':
+      return 0.5 + Math.sin((t * Math.PI * 2) / 8) * 0.225
+    case 'await_approval': {
+      const ph = (t % 2.5) / 2.5 /* 急促双跳 */
+      return 0.15 + 0.75 * (Math.exp(-ph * 7) * 0.9 + Math.exp(-Math.max(0, ph - 0.32) * 9) * 0.6)
+    }
+    case 'confirm_shutdown': {
+      const ph = (t % 4) / 4 /* 沉重搏动 */
+      return 0.2 + Math.pow(Math.sin(ph * Math.PI), 2) * 0.6
+    }
+  }
+  return 0.5
+}
+
+/* 流光条目：prog 为 0~1 相位（主循环按 dt 增量推进，永不错拍） */
+type Trav = {
+  s0: number
+  s1: number
+  s2: number
+  b1: boolean
+  prog: number
+  speed: number
+  head: THREE.Vector3
+  prev: THREE.Vector3
+  col: THREE.Color
+}
+
+/* 流光路径：每态一种「能量走法」；time 只负责整体缓慢旋转 */
+function travTarget(tv: Trav, shape: Shape, R: number, t: number, out: THREE.Vector3) {
+  const s0 = tv.s0
+  const s1 = tv.s1
+  const s2 = tv.s2
+  const dir = tv.b1 ? 1 : -1
+  const p = tv.prog % 1
+  if (shape === 'cube' || shape === 'octahedron') {
+    const V = shape === 'cube' ? CUBE_V : OCT_V
+    const E = shape === 'cube' ? CUBE_E : OCT_E
+    const L = shape === 'cube' ? R * 0.55 : R * 1.15
+    const e = E[Math.floor(s0 * E.length) % E.length]
+    const ph = fract(s1 + p * dir) /* 沿棱往返：回卷两端重合，无跳变 */
+    const pp = ph < 0.5 ? ph * 2 : 2 - ph * 2
+    const a = V[e[0]]
+    const b = V[e[1]]
+    out.set((a[0] + (b[0] - a[0]) * pp) * L, (a[1] + (b[1] - a[1]) * pp) * L, (a[2] + (b[2] - a[2]) * pp) * L)
+    return
+  }
+  if (shape === 'hyperboloid') {
+    /* 垂直上升流（整体缓慢旋转） */
+    const th = s0 * Math.PI * 2 + t * 0.15
+    const y = fract(s1 + p * dir)
+    const yy = (y * 2 - 1) * R * 0.85
+    const a = R * 0.62
+    const cc = R * 0.78
+    const rho = a * Math.sqrt(1 + (yy * yy) / (cc * cc))
+    out.set(rho * Math.cos(th), yy, rho * Math.sin(th))
+    return
+  }
+  if (shape === 'spiral') {
+    /* 螺旋攀升 */
+    const h = fract(s1 + p * dir)
+    const rad = R * (1 - h * 0.85)
+    const rr = rad * Math.sqrt(s2)
+    const th = Math.PI * 2 * s0 + 2.6 * Math.PI * 2 * h + t * 0.1
+    out.set(rr * Math.cos(th), (h * 2 - 1) * R, rr * Math.sin(th))
+    return
+  }
+  if (shape === 'infinity') {
+    /* 沿无穷符号闭合曲线（回卷连续） */
+    const tt = Math.PI * 2 * (s0 + p * dir) + t * 0.05
+    const f = 2 + Math.cos(3 * tt)
+    const x = f * Math.cos(2 * tt)
+    const y = f * Math.sin(2 * tt)
+    const z = Math.sin(3 * tt)
+    out.set(R * 0.5 * x, R * 0.85 * z, R * 0.5 * y)
+    return
+  }
+  /* sphere / shell / 其余：倾斜大圆轨道（闭合，回卷连续） */
+  const r = shape === 'shell' ? R * 1.06 : R * (0.45 + 0.45 * s2)
+  const tilt = s2 * Math.PI + 1.7 * s1
+  const th = s0 * Math.PI * 2 + Math.PI * 2 * p * dir + t * 0.05
+  out.set(r * Math.cos(th), r * Math.sin(th) * Math.cos(tilt), r * Math.sin(th) * Math.sin(tilt))
+}
+
+/** 三维星云：粒子精灵 + 流光流星 + 切态收拢绽放
+ *  sprite：'auto' 跟随状态自动切换，或手动锁定 0~4；level：聆听态麦克风电平（0~1） */
+export function Nebula({
+  state,
+  sprite = 'auto',
+  level = 0,
+}: {
+  state: string
+  sprite?: SpriteMode
+  level?: number
+}) {
   const mountRef = useRef<HTMLDivElement>(null)
   const stateRef = useRef(state)
+  const spriteRef = useRef<SpriteMode>(sprite)
+  const levelRef = useRef(level)
   stateRef.current = state
+  spriteRef.current = sprite
+  levelRef.current = level
 
   useEffect(() => {
     const mount = mountRef.current
@@ -219,11 +398,12 @@ export function Nebula({ state }: { state: string }) {
 
     const scene = new THREE.Scene()
     const CAM_DIST = 30
+    const R = 9
     const camera = new THREE.PerspectiveCamera(60, mount.clientWidth / mount.clientHeight, 0.1, 1000)
     camera.position.set(0, 0, CAM_DIST)
     camera.lookAt(0, 0, 0)
 
-    // 低性能模式：CPU 核心少 → 减粒子、关抗锯齿、降像素比；系统「减少动态效果」→ 停环绕/呼吸/流动
+    // 低性能模式：CPU 核心少 → 减粒子、关抗锯齿、降像素比；系统「减少动态效果」→ 停环绕/呼吸/流光
     const lowPerf = navigator.hardwareConcurrency <= 4 || !navigator.hardwareConcurrency
     const reducedMotion =
       typeof window.matchMedia === 'function' &&
@@ -235,45 +415,28 @@ export function Nebula({ state }: { state: string }) {
     renderer.setSize(mount.clientWidth, mount.clientHeight)
     mount.appendChild(renderer.domElement)
 
+    /* 粒子团：种子决定形态归属与尺寸/相位 */
     const COUNT = lowPerf ? 500 : 1200
-    const R = 9
     const seeds = new Float32Array(COUNT * 3)
-    const sizes = new Float32Array(COUNT)
+    const seedAttr = new Float32Array(COUNT)
     const positions = new Float32Array(COUNT * 3)
-    const phases = new Float32Array(COUNT)
-
     for (let i = 0; i < COUNT; i++) {
-      const u = Math.random()
-      const v = Math.random()
-      const w = Math.random()
-      seeds[i * 3] = u
-      seeds[i * 3 + 1] = v
-      seeds[i * 3 + 2] = w
-      sizes[i] = 2.5 + Math.random() * 3.5 // 2.5~6.0，匹配项目尺度（相机更远）
-      phases[i] = Math.random() * Math.PI * 2
-      const [x, y, z] = shapePos('sphere', u, v, w, R, 0)
-      positions[i * 3] = x
-      positions[i * 3 + 1] = y
-      positions[i * 3 + 2] = z
+      seeds[i * 3] = Math.random()
+      seeds[i * 3 + 1] = Math.random()
+      seeds[i * 3 + 2] = Math.random()
+      seedAttr[i] = Math.random()
     }
-
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
-
-    const stateColors = stateColorsFromCss()
-    const idleColor = new THREE.Color(
-      stateColors.idle[0] / 255,
-      stateColors.idle[1] / 255,
-      stateColors.idle[2] / 255,
-    )
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seedAttr, 1))
     const uniforms = {
-      uColor: { value: idleColor.clone() },
-      uOpacity: { value: 0.92 },
+      uTime: { value: 0 },
+      uVoice: { value: 0 },
       uBreathe: { value: 1 },
-      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
-      uNear: { value: CAM_DIST - R * 1.6 },
-      uFar: { value: CAM_DIST + R * 1.6 },
+      uEmber: { value: 0 },
+      uSprite: { value: 2 },
+      uColor0: { value: new THREE.Color() },
+      uColor1: { value: new THREE.Color() },
     }
     const mat = new THREE.ShaderMaterial({
       uniforms,
@@ -283,65 +446,165 @@ export function Nebula({ state }: { state: string }) {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     })
-    const points = new THREE.Points(geo, mat)
-    scene.add(points)
+    scene.add(new THREE.Points(geo, mat))
 
-    const curColor = idleColor.clone()
-    const targetColor = new THREE.Color()
+    /* 流光：短促流星群 */
+    const TRAV_N = lowPerf ? 28 : 56
+    const trav: Trav[] = []
+    for (let i = 0; i < TRAV_N; i++)
+      trav.push({
+        s0: Math.random(),
+        s1: Math.random(),
+        s2: Math.random(),
+        b1: Math.random() < 0.5,
+        prog: Math.random(),
+        speed: 0.55 + Math.random() * 0.85,
+        head: new THREE.Vector3(),
+        prev: new THREE.Vector3(),
+        col: new THREE.Color(),
+      })
+    const travPos = new Float32Array(TRAV_N * 6)
+    const travCol = new Float32Array(TRAV_N * 6)
+    const travGeo = new THREE.BufferGeometry()
+    travGeo.setAttribute('position', new THREE.BufferAttribute(travPos, 3))
+    travGeo.setAttribute('color', new THREE.BufferAttribute(travCol, 3))
+    const travMat = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    scene.add(new THREE.LineSegments(travGeo, travMat))
+
+    const tmpT = new THREE.Vector3()
+    const tmpV = new THREE.Vector3()
+    const tmpV2 = new THREE.Vector3()
+    const tmpC = new THREE.Color()
+    const WHITE = new THREE.Color(1, 1, 1)
+    const stateColors = stateColorsFromCss()
+    const cur0 = new THREE.Color()
+    const cur1 = new THREE.Color()
+    const tgt0 = new THREE.Color()
+    const tgt1 = new THREE.Color()
+
+    let camAngle = 0
+    let dipT = 1 /* 切态收拢绽放进度（状态变化时归零激活） */
+    let lastStateKey: string | null = null
+    let voice = 0
+    let synthNext = 0 /* 播报态合成音节包络：下一音节起始时刻 */
+    let synthTgt = 0 /* 当前音节目标幅度 */
+
     const clock = new THREE.Clock()
     let raf = 0
     let time = 0
-    let camAngle = 0
 
     const animate = () => {
       // 用真实流逝秒数（而非每帧固定步长），呼吸/环绕速度与屏幕刷新率无关
       const dt = Math.min(clock.getDelta(), 0.1)
       const s = stateRef.current
-      const shape = STATE_SHAPE[s] ?? 'sphere'
-      const isActive = ['listening', 'speaking', 'processing', 'executing', 'working'].includes(s)
+      const shape = (STATE_SHAPE[s] ?? 'sphere') as Shape
 
-      // 颜色平滑变
-      const tc = stateColors[s] ?? stateColors.idle
-      targetColor.setRGB(tc[0] / 255, tc[1] / 255, tc[2] / 255)
-      curColor.lerp(targetColor, 0.06)
-      uniforms.uColor.value.copy(curColor)
+      /* 切态：激活 dip 收拢绽放 + 流光立即落位到新形态（首帧即入场绽放） */
+      if (s !== lastStateKey) {
+        lastStateKey = s
+        dipT = 0
+        for (const tv of trav) {
+          travTarget(tv, shape, R, time, tmpT)
+          tv.head.copy(tmpT)
+          tv.prev.copy(tmpT)
+        }
+      }
 
-      // 位置流向目标形态（带流动时间 time）
+      /* 精灵形态：'auto' 跟随状态，或手动锁定（每帧接线，选择即时生效） */
+      const sm = spriteRef.current
+      uniforms.uSprite.value = sm === 'auto' ? SPRITE_OF[s] ?? 0 : sm
+      uniforms.uTime.value = time
+
+      /* 语音包络 uVoice：聆听用真实麦克风电平（留底噪），播报用合成音节包络（TTS 不回采麦克风） */
+      let vTgt = 0
+      if (s === 'listening') {
+        vTgt = Math.min(1, Math.max(levelRef.current, 0.06))
+      } else if (s === 'speaking') {
+        if (time >= synthNext) {
+          const dur = 0.1 + Math.random() * 0.16
+          synthNext =
+            time + dur + (Math.random() < 0.22 ? 0.15 + Math.random() * 0.15 : 0.03 + Math.random() * 0.05)
+          synthTgt = (0.55 + Math.random() * 0.45) * (Math.random() < 0.1 ? 0.25 : 1)
+        }
+        vTgt = synthTgt
+      }
+      const vk = 1 - Math.exp(-dt / (vTgt > voice ? 0.05 : 0.14))
+      voice += (vTgt - voice) * vk
+      uniforms.uVoice.value = voice
+
+      /* 生命值 → 整团呼吸缩放；睡眠态开余烬闪烁 */
+      const life = reducedMotion ? 0.55 : lifeOf(s, time, voice)
+      uniforms.uBreathe.value = reducedMotion ? 1 : 0.86 + life * 0.32
+      uniforms.uEmber.value = s === 'sleeping' ? 1 : 0
+
+      /* 颜色：外缘主色 + 内芯提亮色，0.22s 平滑过渡 */
+      const base = stateColors[s] ?? stateColors.idle
+      tgt1.copy(base)
+      tgt0.copy(base).lerp(WHITE, 0.45)
+      const ck = 1 - Math.exp(-dt / 0.22)
+      cur0.lerp(tgt0, ck)
+      cur1.lerp(tgt1, ck)
+      uniforms.uColor0.value.copy(cur0)
+      uniforms.uColor1.value.copy(cur1)
+
+      /* 切态收拢绽放：0.45s 内整体先收后放（重要态收得更重）；位置直接落位，形态随 time 流动 */
+      dipT += dt
+      const dipProg = Math.min(dipT / 0.45, 1)
+      const heavy = s === 'await_approval' || s === 'confirm_shutdown' ? 0.42 : 0.28
+      const sc = 1 - heavy * Math.sin(dipProg * Math.PI)
       for (let i = 0; i < COUNT; i++) {
-        const u = seeds[i * 3]
-        const v = seeds[i * 3 + 1]
-        const w = seeds[i * 3 + 2]
-        const [tx, ty, tz] = shapePos(shape, u, v, w, R, time)
-        positions[i * 3] += (tx - positions[i * 3]) * 0.03
-        positions[i * 3 + 1] += (ty - positions[i * 3 + 1]) * 0.03
-        positions[i * 3 + 2] += (tz - positions[i * 3 + 2]) * 0.03
+        const p = shapePos(shape, seeds[i * 3], seeds[i * 3 + 1], seeds[i * 3 + 2], R, time)
+        positions[i * 3] = p[0] * sc
+        positions[i * 3 + 1] = p[1] * sc
+        positions[i * 3 + 2] = p[2] * sc
       }
       geo.attributes.position.needsUpdate = true
 
-      // 呼吸：只让「光点大小」一收一缩，位置/距离完全不动，避免产生远近感
-      // 频率是「弧度/秒」：sin(time*X) 的周期 = 2π/X 秒
-      let breathe = 1
-      if (!reducedMotion) {
-        if (shape === 'hyperboloid') {
-          breathe = 1 + Math.sin(time * 1.2) * 0.16 // 说话：约 5 秒一收一缩
-        } else if (shape === 'octahedron') {
-          breathe = 1 + Math.sin(time * 1.4) * 0.14 // 聆听：约 4.5 秒，明显一缩一张
-        }
+      /* 流光推进：亮度耦合生命值节拍，速度耦合语音包络 */
+      const opTgt = reducedMotion ? 0 : (TRAV_OP[s] ?? 0.9) * 0.75 * (0.55 + 0.9 * life)
+      travMat.opacity += (opTgt - travMat.opacity) * (1 - Math.exp(-dt / 0.4))
+      const spd = 0.22 * (1 + voice * 1.8)
+      for (let i = 0; i < trav.length; i++) {
+        const tv = trav[i]
+        tv.prog = (tv.prog + dt * tv.speed * spd) % 1 /* 增量相位：只影响流速，不产生跳位 */
+        travTarget(tv, shape, R, time, tmpT)
+        tmpT.multiplyScalar(sc)
+        tv.prev.copy(tv.head)
+        tv.head.lerp(tmpT, 0.55)
+        tmpV.subVectors(tv.head, tv.prev)
+        if (tmpV.length() > R * 0.5) tmpV2.copy(tv.head)
+        else tmpV2.copy(tv.head).addScaledVector(tmpV, -1.5)
+        travPos[i * 6] = tv.head.x
+        travPos[i * 6 + 1] = tv.head.y
+        travPos[i * 6 + 2] = tv.head.z
+        travPos[i * 6 + 3] = tmpV2.x
+        travPos[i * 6 + 4] = tmpV2.y
+        travPos[i * 6 + 5] = tmpV2.z
+        tmpC.copy(cur1).lerp(WHITE, 0.28)
+        tv.col.lerp(tmpC, 0.15)
+        travCol[i * 6] = tv.col.r
+        travCol[i * 6 + 1] = tv.col.g
+        travCol[i * 6 + 2] = tv.col.b
+        travCol[i * 6 + 3] = tv.col.r * 0.3
+        travCol[i * 6 + 4] = tv.col.g * 0.3
+        travCol[i * 6 + 5] = tv.col.b * 0.3
       }
-      uniforms.uBreathe.value = breathe
+      travGeo.attributes.position.needsUpdate = true
+      travGeo.attributes.color.needsUpdate = true
 
-      // 景深范围随相机到原点距离
-      uniforms.uNear.value = CAM_DIST - R * 1.6
-      uniforms.uFar.value = CAM_DIST + R * 1.6
-
-      // 相机视差环绕：球面飞行（到雕塑距离恒定），俯仰角上下摆动 + 绕 Y 轴旋转
-      camAngle += 0.1 * dt
-      const t = camAngle
-      const elev = 0.5 * Math.sin(2 * t)
+      /* 相机球面环绕：到雕塑距离恒定，俯仰角上下摆动 */
+      if (!reducedMotion) camAngle += 0.1 * dt
+      const elev = 0.5 * Math.sin(2 * camAngle)
       camera.position.set(
-        CAM_DIST * Math.cos(elev) * Math.sin(t),
+        CAM_DIST * Math.cos(elev) * Math.sin(camAngle),
         CAM_DIST * Math.sin(elev),
-        CAM_DIST * Math.cos(elev) * Math.cos(t),
+        CAM_DIST * Math.cos(elev) * Math.cos(camAngle),
       )
       camera.lookAt(0, 0, 0)
 
@@ -358,7 +621,6 @@ export function Nebula({ state }: { state: string }) {
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       renderer.setSize(w, h)
-      uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, maxRatio)
     }
     window.addEventListener('resize', onResize)
     // 监听中间列尺寸变化（调整左列宽度时），让 3D 图案和文字/波形始终对齐
@@ -374,6 +636,8 @@ export function Nebula({ state }: { state: string }) {
       if (ro) ro.disconnect()
       geo.dispose()
       mat.dispose()
+      travGeo.dispose()
+      travMat.dispose()
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }

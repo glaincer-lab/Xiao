@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { API_BASE } from '../api'
+import { SPRITE_NAMES, type SpriteMode } from './Nebula'
+
+// 粒子精灵可选项：'auto' + 数字 0~4（选项值须与 Nebula 的 SPRITE_NAMES 键一致）
+const SPRITE_OPTIONS: SpriteMode[] = ['auto', ...Object.keys(SPRITE_NAMES).map(Number) as SpriteMode[]]
 
 type FieldOption = { value: string; label: string; status?: 'ok' | 'planned' }
 type Field = {
@@ -24,6 +28,7 @@ type UISettings = {
   tabularNums: boolean
   scale: number
   leftWidth: number
+  sprite: SpriteMode // 粒子精灵：'auto' 按状态自动挑，0~4 固定锁定（须与 App.tsx 保持一致）
 }
 const FONT_OPTIONS = [
   { value: "'Microsoft YaHei', 'PingFang SC', sans-serif", label: '微软雅黑' },
@@ -190,7 +195,8 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [inputs, setInputs] = useState<{ index: number; name: string; is_default: boolean }[]>([])
-  const [previewText, setPreviewText] = useState('你好，欢迎使用语音助手。')
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [batchVoiceFor, setBatchVoiceFor] = useState<string | null>(null)
   const [echoBusy, setEchoBusy] = useState(false)
   const [echoMsg, setEchoMsg] = useState('')
   const [showAddModel, setShowAddModel] = useState(false)
@@ -274,31 +280,52 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     }
   }
 
-  const [previewBusy, setPreviewBusy] = useState(false)
-  const preview = async (m?: SavedTTS | null) => {
+  const [previewBusy, setPreviewBusy] = useState<string | null>(null)
+  const playPreview = (url: string) => {
+    // 统一经 <audio> 元素播放：后端已把音频落盘，这里只负责播 URL
+    if (!audioRef.current) audioRef.current = new Audio()
+    const audio = audioRef.current
+    audio.src = url
+    audio.play().catch(() => setMsg('播放失败：浏览器拦截了音频，请再点一次'))
+  }
+  const preview = async (m?: SavedTTS | null, voiceOverride?: string) => {
     // 试听哪个方案就按哪个方案构建引擎：优先用调用方传入的方案，
     // 否则取前端当前激活方案（未点「保存」也能试听，不再依赖后端激活态）
     const models: any[] | undefined = getPath(config || {}, 'tts.models')
     const activeId = getPath(config || {}, 'tts.active')
     const passed = m && typeof m === 'object' && 'provider' in m ? m : null
     const scheme = passed || (Array.isArray(models) && models.length ? models.find((x) => x && x.id === activeId) || models[0] : null)
-    const voice = (scheme && scheme.voice) || getPath(config || {}, 'tts.voice')
+    const voice = voiceOverride || (scheme && scheme.voice) || getPath(config || {}, 'tts.voice')
     const rate = (scheme && scheme.rate) || getPath(config || {}, 'tts.rate')
+    const busyKey = `${scheme?.id || 'active'}|${voice || ''}`
     if (previewBusy) return
     setMsg('正在合成试听…')
-    setPreviewBusy(true)
+    setPreviewBusy(busyKey)
+    const ctrl = new AbortController()
+    const timer = window.setTimeout(() => ctrl.abort(), 35000) // 后端 30s 硬超时，前端留余量兜底
     try {
       const r = await fetch(`${API_BASE}/api/tts/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: scheme || undefined, voice, rate, text: previewText }),
+        body: JSON.stringify({ model: scheme || undefined, voice, rate }),
+        signal: ctrl.signal,
       })
       const j = await r.json()
-      setMsg(j.ok ? '试听播放完毕。' : '试听失败：' + (j.msg || ''))
-    } catch {
-      setMsg('试听失败（网络错误）')
+      if (j.ok && j.url) {
+        playPreview(j.url.startsWith('http') ? j.url : `${API_BASE}${j.url}`)
+        setMsg(j.cached ? '缓存命中，直接播放。' : '合成完毕，音频已缓存到本地并播放。')
+      } else {
+        setMsg('试听失败：' + (j.msg || ''))
+      }
+    } catch (e) {
+      setMsg(
+        e instanceof DOMException && e.name === 'AbortError'
+          ? '试听超时：请检查该方案的 API Key / 网络'
+          : '试听失败（网络错误）'
+      )
     } finally {
-      setPreviewBusy(false)
+      window.clearTimeout(timer)
+      setPreviewBusy(null)
     }
   }
 
@@ -857,6 +884,14 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     const voiceOptions: FieldOption[] = voiceField?.options || []
     const rateOptions: FieldOption[] = rateField?.options || []
     const activeScheme = savedTTS.find((m) => m.id === activeTTS)
+    // 候选音色批量试听列表：按供应商返回可枚举的音色集（edge 用 schema 列表；piper/omni 单音色不提供）
+    const voicesForProvider = (p: string): FieldOption[] => {
+      if (p === 'cosyvoice') return COSYVOICE_VOICES
+      if (p === 'qwen') return QWEN_VOICES
+      if (p === 'qwen_rt') return QWEN_RT_VOICES
+      if (p === 'edge') return voiceOptions
+      return []
+    }
 
     const applyTTS = (m: SavedTTS) => {
       setField('tts.active', m.id)
@@ -1046,21 +1081,46 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             {savedTTS.length === 0 && <p className="settings-msg">还没有方案，点上方「新建方案」。</p>}
             {savedTTS.map((m) => {
               const isActive = m.id === activeTTS
+              const batchVoices = voicesForProvider(m.provider)
+              const batchOpen = batchVoiceFor === m.id
               return (
-                <div key={m.id} className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
-                  <div className="scheme-item-main" onClick={() => applyTTS(m)}>
-                    <span className="scheme-item-icon">✅</span>
-                    <div className="scheme-item-info">
-                      <div className="scheme-item-name">{m.name}{isActive && <span className="scheme-item-tag">当前</span>}</div>
-                      <div className="scheme-item-sub">{providerName(m.provider)}{(m.provider === 'cosyvoice' || m.provider === 'qwen') ? ` · ${m.tier || 'flash'}` : ''} · {m.voice || '默认'}</div>
+                <div key={m.id}>
+                  <div className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
+                    <div className="scheme-item-main" onClick={() => applyTTS(m)}>
+                      <span className="scheme-item-icon">✅</span>
+                      <div className="scheme-item-info">
+                        <div className="scheme-item-name">{m.name}{isActive && <span className="scheme-item-tag">当前</span>}</div>
+                        <div className="scheme-item-sub">{providerName(m.provider)}{(m.provider === 'cosyvoice' || m.provider === 'qwen') ? ` · ${m.tier || 'flash'}` : ''} · {m.voice || '默认'}</div>
+                      </div>
+                    </div>
+                    <div className="scheme-item-actions">
+                      <button type="button" className="btn btn--sm" disabled={!!previewBusy} onClick={() => preview(m)}>▶ 试听</button>
+                      {batchVoices.length > 0 && (
+                        <button type="button" className="btn btn--sm" disabled={!!previewBusy} onClick={() => setBatchVoiceFor(batchOpen ? null : m.id)}>{batchOpen ? '收起' : '批量'}</button>
+                      )}
+                      {!isActive && <button type="button" className="btn btn--sm" onClick={() => applyTTS(m)}>设为当前</button>}
+                      <button type="button" className="btn btn--sm" onClick={() => startEditTTS(m)}>编辑</button>
+                      <button type="button" className="btn btn--sm" onClick={() => removeTTS(m.id)}>删除</button>
                     </div>
                   </div>
-                  <div className="scheme-item-actions">
-                    <button type="button" className="btn btn--sm" disabled={previewBusy} onClick={() => preview(m)}>▶ 试听</button>
-                    {!isActive && <button type="button" className="btn btn--sm" onClick={() => applyTTS(m)}>设为当前</button>}
-                    <button type="button" className="btn btn--sm" onClick={() => startEditTTS(m)}>编辑</button>
-                    <button type="button" className="btn btn--sm" onClick={() => removeTTS(m.id)}>删除</button>
-                  </div>
+                  {batchOpen && (
+                    <div className="voice-batch">
+                      <p className="voice-batch-hint">逐个音色试听（固定测试句，合成一次后走本地缓存，重听不耗 Key）：</p>
+                      <div className="voice-batch-grid">
+                        {batchVoices.map((o) => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            className={`voice-batch-btn ${m.voice === o.value ? 'voice-batch__on' : ''}`}
+                            disabled={!!previewBusy}
+                            onClick={() => preview(m, o.value)}
+                          >
+                            {previewBusy === `${m.id}|${o.value}` ? '合成中…' : `▶ ${o.label}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -1343,6 +1403,20 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                 <span className="settings-field-label">聊天框宽度：{ui.leftWidth}px</span>
                 <input type="range" min={200} max={400} step={10} value={ui.leftWidth} onChange={(e) => setUi({ ...ui, leftWidth: Number(e.target.value) })} />
               </label>
+              <label className="settings-field">
+                <span className="settings-field-label">
+                  粒子精灵
+                  <span className="settings-hint">自动 = 按当前状态切换形态</span>
+                </span>
+                <select
+                  value={String(ui.sprite)}
+                  onChange={(e) => setUi({ ...ui, sprite: (e.target.value === 'auto' ? 'auto' : Number(e.target.value)) as SpriteMode })}
+                >
+                  {SPRITE_OPTIONS.map((s) => (
+                    <option key={String(s)} value={String(s)}>{s === 'auto' ? '自动（按状态切换）' : SPRITE_NAMES[s as number]}</option>
+                  ))}
+                </select>
+              </label>
               <p className="settings-msg">界面外观设置即时生效，并自动保存到本机。</p>
             </div>
           ) : tab === 'audio' ? (
@@ -1391,12 +1465,12 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           ) : tab === 'tts' ? (
             <div className="settings-fields">
               {renderTTSConfig()}
-              <label className="settings-field settings-field--col">
-                <span className="settings-field-label">试听文本</span>
-                <textarea className="settings-textarea" rows={2} value={previewText} onChange={(e) => setPreviewText(e.target.value)} />
-              </label>
+              <p className="settings-msg">
+                试听使用固定测试句（含数字 / 多音字 / 中英混读 / 疑问语气）；同一音色只合成一次，
+                音频缓存在后端 .tmp/previews/，重听直接命中缓存、不消耗 API Key。
+              </p>
               <div className="settings-actions">
-                <button className="btn" disabled={previewBusy} onClick={() => preview()}>{previewBusy ? '合成中…' : '▶ 试听当前方案'}</button>
+                <button className="btn" disabled={!!previewBusy} onClick={() => preview()}>{previewBusy ? '合成中…' : '▶ 试听当前方案'}</button>
               </div>
             </div>
           ) : tab === 'wake' ? (

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE, WS_URL } from './api'
 import { connectWS, type ServerEvent, type WSHandle } from './ws'
-import { Nebula } from './components/Nebula'
+import { Nebula, SPRITE_NAMES, type SpriteMode } from './components/Nebula'
 import { VoiceLine } from './components/VoiceLine'
 import { Typewriter } from './components/Typewriter'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -21,12 +21,14 @@ type UISettings = {
   tabularNums: boolean
   scale: number
   leftWidth: number
+  sprite: SpriteMode // 粒子精灵：'auto' 按状态自动挑，0~4 固定锁定
 }
 const UI_DEFAULTS: UISettings = {
   font: "'Microsoft YaHei', 'PingFang SC', sans-serif",
   tabularNums: false,
   scale: 1,
   leftWidth: 260,
+  sprite: 'auto',
 }
 const FONT_OPTIONS = [
   { value: "'Microsoft YaHei', 'PingFang SC', sans-serif", label: '微软雅黑' },
@@ -50,6 +52,9 @@ const STATE_LABELS: Record<string, string> = {
   working: '工作中',
   await_approval: '等待语音确认',
 }
+
+// 精灵轮换顺序
+const CYCLE: SpriteMode[] = ['auto', 0, 1, 2, 3, 4]
 
 let idCounter = 1
 let stepIdCounter = 1
@@ -118,6 +123,7 @@ function truncate(s: string, n = 60): string {
 function describeEvent(e: ServerEvent): { label: string; kind: string } | null {
   switch (e.type) {
     case 'asr_partial':
+    case 'mic_level': // 高频画声线事件，不进日志面板（否则约 10 条/秒刷屏）
       return null
     case 'state':
       return { label: `状态 → ${STATE_LABELS[String(e.state)] ?? String(e.state)}`, kind: 'info' }
@@ -162,10 +168,12 @@ export default function App() {
   const [showTasks, setShowTasks] = useState(false)
   const [tasks, setTasks] = useState<Task[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [showLog, setShowLog] = useState(false)
+  const [logOpen, setLogOpen] = useState(false) // 日志栏默认收起：点击「日志」才展开
   const [dshAvailable, setDshAvailable] = useState<boolean | null>(null)
   const [workSteps, setWorkSteps] = useState<WorkStep[]>([])
   const [approvalText, setApprovalText] = useState('')
+  const [clock, setClock] = useState('')
+  const [shuttingDown, setShuttingDown] = useState(false) // 收到 app_shutdown 后置真：显示关机谢幕遮罩
   const [ui, setUi] = useState<UISettings>(() => {
     try {
       const raw = localStorage.getItem('xiao_ui')
@@ -189,6 +197,20 @@ export default function App() {
       /* ignore */
     }
   }, [ui])
+
+  // 顶栏时钟：等宽字体秒级跳动
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date()
+      setClock(
+        [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':'),
+      )
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
   const wsRef = useRef<WSHandle | null>(null)
   const interruptTimer = useRef<number | null>(null)
   const logBodyRef = useRef<HTMLDivElement | null>(null)
@@ -254,13 +276,11 @@ export default function App() {
         const text = String(e.text ?? '')
         setApprovalText(text)
         const msg = addMessage({ role: 'assistant', text, kind: 'plan' })
-        if (text.length > AUTO_POPUP_LEN) setExpanded(msg)
         break
       }
       case 'assistant_result': {
         const text = String(e.text ?? '')
         const msg = addMessage({ role: 'assistant', text, kind: 'result' })
-        if (text.length > AUTO_POPUP_LEN) setExpanded(msg)
         break
       }
       case 'tool_call': {
@@ -309,6 +329,10 @@ export default function App() {
         })
         break
       }
+      case 'app_shutdown':
+        // 后端播报完结束语后退出：前端盖谢幕遮罩，等 Electron 主进程收尾
+        setShuttingDown(true)
+        break
       default:
         break
     }
@@ -352,10 +376,10 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (showLog && logBodyRef.current) {
+    if (logBodyRef.current) {
       logBodyRef.current.scrollTop = logBodyRef.current.scrollHeight
     }
-  }, [logs, showLog])
+  }, [logs])
 
   // 对话自动滚动：新消息滚到底；打字机逐字展开时若贴近底部则跟随
   useEffect(() => {
@@ -400,6 +424,17 @@ export default function App() {
 
   const interrupt = () => wsRef.current?.send({ type: 'interrupt' })
 
+  // 底栏精灵轮换：自动 → 圆形 → 六边晶体 → 蜂巢描边 → 菱晶切片 → 铁环 → 自动
+  const cycleSprite = () => {
+    setUi((prev) => ({ ...prev, sprite: CYCLE[(CYCLE.indexOf(prev.sprite) + 1) % CYCLE.length] }))
+  }
+
+  // 关机确认对话框按钮：把「确认关闭 / 取消」当一句话发给对话管线（与语音说法一致）
+  const sendShutdownText = (text: string) => {
+    wsRef.current?.send({ type: 'text', text })
+    addMessage({ role: 'user', text })
+  }
+
   const setMode = (m: string) => {
     setRouterMode(m)
     wsRef.current?.send({ type: 'router_mode', mode: m })
@@ -429,11 +464,11 @@ export default function App() {
             <span className="conn-dot" />
             {connected ? '已连接' : '连接中…'}
           </div>
+          <div className="clock" aria-hidden>{clock || '--:--:--'}</div>
         </div>
         <div className="brand">
-          <span className="brand-dot" />
+          <span className="hex" aria-hidden>⬡</span>
           <span className="brand-name">小二</span>
-          <span className="brand-sub">语音工作助手</span>
         </div>
         <div className="topbar-right">
           <div className="router-toggle">
@@ -483,7 +518,7 @@ export default function App() {
         </aside>
 
         <section className="col col--center">
-          <Nebula state={sessionState} />
+          <Nebula state={sessionState} sprite={ui.sprite} level={micLevel} />
           {sessionState === 'await_approval' ? (
             <div className="approval-card">
               <div className="approval-ring" aria-hidden />
@@ -509,7 +544,7 @@ export default function App() {
                         : toolActivity || '我在听…'}
                 </p>
               )}
-              <VoiceLine level={micLevel} />
+              <VoiceLine level={micLevel} state={sessionState} />
             </div>
           )}
         </section>
@@ -549,24 +584,28 @@ export default function App() {
         </aside>
       </main>
 
-      <footer className="logbar">
+      <footer className={`logbar ${logOpen ? 'logbar--open' : ''}`}>
         <div className="logbar-head">
-          <button className="logbar-toggle" onClick={() => setShowLog((v) => !v)}>
-            {showLog ? '▾' : '▸'} 日志
-            <span className="logbar-count">{logs.length}</span>
+          <button className="logbar-toggle" title={logOpen ? '收起日志' : '展开日志'} onClick={() => setLogOpen((v) => !v)}>
+            <span className="logbar-title">日志</span>
+            <span className="logbar-caret">{logOpen ? '▾' : '▸'}</span>
           </button>
-          {!showLog && logs.length > 0 && (
-            <span className={`logbar-last logline--${logs[logs.length - 1].kind}`}>
-              {logs[logs.length - 1].time} {logs[logs.length - 1].label}
-            </span>
-          )}
-          {showLog && (
+          <span className="logbar-count">{logs.length}</span>
+          <span className="logbar-spacer" />
+          {logOpen && (
             <button className="logbar-clear" onClick={() => setLogs([])}>
               清空
             </button>
           )}
+          <button
+            className="btn sprite-cycle"
+            title="轮换粒子精灵形态（也可在 设置 → 界面 中选择）"
+            onClick={cycleSprite}
+          >
+            ⬡ {ui.sprite === 'auto' ? '自动' : SPRITE_NAMES[ui.sprite]}
+          </button>
         </div>
-        {showLog && (
+        {logOpen && (
           <div className="logbar-body" ref={logBodyRef}>
             {logs.length === 0 ? (
               <span className="logbar-empty">暂无日志</span>
@@ -583,6 +622,39 @@ export default function App() {
       </footer>
 
       {interruptFlash && <div className="interrupt-flash" aria-hidden />}
+
+      {/* 关机谢幕：后端播完结束语发出 app_shutdown 后盖全屏遮罩，声音放完 Electron 再退出 */}
+      {shuttingDown && (
+        <div className="shutdown-veil" aria-hidden>
+          <div className="shutdown-veil-inner">
+            <span className="shutdown-glyph">⬡</span>
+            <p className="shutdown-title">小二已休眠</p>
+            <p className="shutdown-sub">播报结束后程序自动退出 · 期待下次唤醒</p>
+          </div>
+        </div>
+      )}
+
+      {/* 关机确认：进入 confirm_shutdown 状态时弹出玻璃拟态对话框 */}
+      {sessionState === 'confirm_shutdown' && (
+        <div className="mask show" onClick={() => sendShutdownText('取消')}>
+          <div className="dialog dialog--shutdown" onClick={(ev) => ev.stopPropagation()}>
+            <div className="dlg-head">
+              <h2>关机确认</h2>
+            </div>
+            <div className="dlg-body">
+              <p className="dlg-text">
+                确认要让小二进入睡眠吗？
+                <br />
+                播报与监听将停止，本地引擎保持待命。
+              </p>
+            </div>
+            <div className="dlg-foot">
+              <button className="pri" onClick={() => sendShutdownText('取消')}>取消</button>
+              <button className="pri danger" onClick={() => sendShutdownText('确认关闭')}>确认关机</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {expanded && (
         <div className="modal-overlay" onClick={() => setExpanded(null)}>

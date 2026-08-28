@@ -104,6 +104,7 @@ body {
   -webkit-app-region: drag;
 }
 .topbar-left {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -113,6 +114,9 @@ body {
 }
 
 .brand {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -126,21 +130,37 @@ body {
   box-shadow: 0 0 14px var(--glow-warm);
 }
 
+.hex {
+  font-size: 19px;
+  line-height: 1;
+  color: var(--brand);
+}
+
 .brand-name {
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 1px;
-}
-
-.brand-sub {
-  font-size: 12px;
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 .topbar-right {
+  flex: 1;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 14px;
+}
+
+.clock {
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--panel-border);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .status {
@@ -320,8 +340,8 @@ body {
 
 .voiceline {
   width: 100%;
-  max-width: 520px;
-  height: 48px;
+  max-width: 560px;
+  height: 60px;
   display: block;
 }
 
@@ -1122,6 +1142,109 @@ body {
   padding: 6px 12px;
   min-height: 30px;
 }
+.logbar-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--text);
+  flex: none;
+}
+.logbar-spacer {
+  flex: 1;
+}
+
+/* 当前状态灯：圆点 + 中文 + 英文小标，颜色随状态令牌切换（与粒子 / 状态胶囊同源） */
+.now {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+}
+.now-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--st-idle);
+  box-shadow: 0 0 12px rgba(74, 125, 255, 0.6);
+  transition: background 0.4s, box-shadow 0.4s;
+}
+.now b {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--text);
+}
+.now small {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  opacity: 0.75;
+}
+.now--idle .now-dot,
+.now--sleeping .now-dot {
+  background: var(--st-idle);
+  box-shadow: 0 0 12px rgba(74, 125, 255, 0.6);
+}
+.now--listening .now-dot {
+  background: var(--st-listening);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.65);
+}
+.now--processing .now-dot {
+  background: var(--st-processing);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.65);
+}
+.now--speaking .now-dot {
+  background: var(--st-speaking);
+  box-shadow: 0 0 12px rgba(244, 114, 182, 0.65);
+}
+.now--executing .now-dot,
+.now--working .now-dot {
+  background: var(--st-executing);
+  box-shadow: 0 0 12px rgba(251, 146, 60, 0.65);
+}
+.now--await_approval .now-dot,
+.now--confirm_shutdown .now-dot {
+  background: var(--st-await_approval);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+}
+
+/* 状态轨 chips：一行八个状态位，仅当前态点亮 */
+.status-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  overflow: hidden;
+  min-width: 0;
+}
+.track-chip {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--text-dim);
+  opacity: 0.55;
+  border: 1px solid transparent;
+  transition: all 0.35s;
+  white-space: nowrap;
+}
+.track-chip.on {
+  opacity: 1;
+  color: var(--text);
+  border-color: rgba(185, 208, 248, 0.3);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 10px rgba(91, 124, 250, 0.18);
+}
+
+/* 精灵轮换按钮：复用 .btn 基类，仅收紧尺寸便于嵌入日志条 */
+.btn.sprite-cycle {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+}
 .logbar-toggle {
   display: flex;
   align-items: center;
@@ -1459,4 +1582,139 @@ body {
   font-size: 10px;
   color: var(--cyan);
   opacity: 0.8;
+}
+
+/* ==================== 关机确认：玻璃拟态对话框（曜钢） ==================== */
+/* 遮罩：点击空白处等同「取消」，把一句话发回对话管线 */
+.mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(1, 4, 10, 0.55);
+  backdrop-filter: blur(7px);
+}
+/* 玻璃面板：曜钢深底 + 顶部高光内描边，进场带回弹 */
+.dialog {
+  width: min(420px, 90vw);
+  border-radius: 18px;
+  border: 1px solid rgba(140, 180, 240, 0.16);
+  background: linear-gradient(168deg, rgba(15, 23, 42, 0.94), rgba(5, 9, 18, 0.96));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: dlg-in 0.3s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+}
+@keyframes dlg-in {
+  from {
+    transform: translateY(14px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.dlg-head {
+  display: flex;
+  align-items: center;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid rgba(140, 180, 240, 0.12);
+}
+.dlg-head h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: var(--text);
+}
+.dlg-body {
+  padding: 18px 22px 8px;
+}
+.dlg-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 2;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+.dlg-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 22px 18px;
+}
+/* 主按钮：蓝晶描边（取消）；危险按钮：赤红渐变（确认关机） */
+.pri {
+  padding: 8px 22px;
+  border-radius: 10px;
+  border: 1px solid rgba(91, 124, 250, 0.55);
+  background: linear-gradient(180deg, rgba(91, 124, 250, 0.3), rgba(91, 124, 250, 0.16));
+  color: #dcecff;
+  font-size: 12.5px;
+  font-family: inherit;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.pri:hover {
+  background: rgba(91, 124, 250, 0.38);
+  box-shadow: 0 0 18px rgba(91, 124, 250, 0.25);
+}
+.pri.danger {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.26), rgba(239, 68, 68, 0.12));
+  color: #fecaca;
+}
+.pri.danger:hover {
+  background: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.22);
+}
+
+/* 关机谢幕遮罩：后端播完结束语发出 app_shutdown 后盖全屏，声音放完 Electron 再退出 */
+.shutdown-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 45%, rgba(5, 7, 13, 0.72), rgba(5, 7, 13, 0.94));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: veilIn 0.5s ease both;
+}
+.shutdown-veil-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.shutdown-glyph {
+  font-size: 44px;
+  line-height: 1;
+  color: var(--st-confirm_shutdown, #ef4444);
+  animation: veilPulse 1.6s ease-in-out infinite;
+}
+.shutdown-title {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+.shutdown-sub {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+@keyframes veilIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes veilPulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
