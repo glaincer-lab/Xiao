@@ -1,9 +1,43 @@
-"""打开网址 / 文件 / 应用工具（Windows）。"""
+"""打开网址 / 文件 / 应用工具（Windows）。
+
+安全设计（从严，fail-closed）：
+- 网址：仅放行 http(s)（webbrowser.open），其余协议一律拒绝；
+- 文件：仅当路径确实存在才允许打开，且须先过语音/按钮审批；
+- 应用：仅白名单应用可启动（argv-list 不走 shell），且须先过审批；
+- 审批钩子由 core 注入（main.py 里 set_confirm_hook），钩子缺失或审批异常一律拒绝。
+"""
 from __future__ import annotations
 
 import asyncio
+import os
+import re
+import subprocess
+import webbrowser
+
+from typing import Awaitable, Callable
 
 from backend.tools.base import Tool
+
+# 应用名白名单：仅允许这些应用启动，拒绝裸 Popen 任意可执行。
+_APP_WHITELIST: dict[str, tuple[str, ...]] = {
+    "notepad": ("notepad.exe",),
+    "calc": ("calc.exe",),
+    "browser": ("msedge.exe", "chrome.exe", "firefox.exe"),
+    "explorer": ("explorer.exe",),
+    "mspaint": ("mspaint.exe",),
+}
+
+# 仅放行 http(s)，其余协议（file:// 等）一律拒绝
+_URL_RE = re.compile(r"^https?://[\w.-]+(:\d+)?(/[\w./?%&=-]*)?$")
+
+# 审批钩子：core.request_tool_approval(action, *, prompt) -> bool（allowed-once 为 True）
+_confirm_hook: Callable[[str, str], Awaitable[bool]] | None = None
+
+
+def set_confirm_hook(hook: Callable[..., Awaitable[bool]] | None) -> None:
+    """注入语音审批钩子（core.request_tool_approval），仅 main.py 启动时调用。"""
+    global _confirm_hook
+    _confirm_hook = hook
 
 
 class OpenAppTool(Tool):
@@ -17,34 +51,61 @@ class OpenAppTool(Tool):
         "required": ["target"],
     }
 
+    @staticmethod
+    def _is_url(target: str) -> bool:
+        t = (target or "").strip().strip('"')
+        if _URL_RE.match(t):
+            return True
+        if t.lower().startswith("www.") and _URL_RE.match("https://" + t):
+            return True
+        return False
+
+    def _needs_approval(self, target: str) -> bool:
+        """纯 http(s) 网址低风险放行；文件/应用一律先审批（宁严勿松）。"""
+        return not self._is_url(target)
+
     async def run(self, target: str) -> str:
-        return await asyncio.to_thread(self._open, target)
-
-    def _open(self, target: str) -> str:
-        import os
-        import subprocess
-        import webbrowser
-
-        t = (target or "").strip()
+        t = (target or "").strip().strip('"')
         if not t:
             return "没有指定要打开的内容。"
 
-        if t.lower().startswith(("http://", "https://", "www.")):
-            if t.lower().startswith("www."):
-                t = "https://" + t
+        # 先决审批：在事件循环侧 await，不放进 _open()（同步线程）
+        if self._needs_approval(t):
+            hook = _confirm_hook
+            if hook is None:
+                return "现在语音审批通道不可用，为安全起见我先不打开。"
+            try:
+                allowed = await hook("打开文件/应用", prompt=f"是否允许打开 {t}？")
+            except Exception:  # noqa: BLE001
+                allowed = False
+            if not allowed:
+                return "用户拒绝该操作，已取消打开。"
+
+        return await asyncio.to_thread(self._open, t)
+
+    def _open(self, target: str) -> str:
+        t = (target or "").strip().strip('"')
+        if not t:
+            return "没有指定要打开的内容。"
+
+        # 网址：仅 http(s)
+        if _URL_RE.match(t):
             webbrowser.open(t)
             return f"已打开网址 {t}"
+        if t.lower().startswith("www."):
+            if _URL_RE.match("https://" + t):
+                webbrowser.open("https://" + t)
+                return f"已打开网址 {t}"
 
+        # 文件：路径确实存在才打开（经审批后）
         if os.path.exists(t):
             os.startfile(t)  # Windows
             return f"已打开 {t}"
 
-        try:
-            subprocess.Popen([t])
-            return f"已启动应用 {t}"
-        except Exception:
-            try:
-                os.startfile(t)
-                return f"已打开 {t}"
-            except Exception as e:  # noqa: BLE001
-                return f"无法打开 {t}：{e}"
+        # 应用：仅白名单映射，argv-list 不走 shell
+        name = t.lower().split()[0]
+        exe = _APP_WHITELIST.get(name)
+        if not exe:
+            return f"未授权应用，仅允许：{', '.join(_APP_WHITELIST)}"
+        subprocess.Popen(exe, shell=False)
+        return f"已启动 {exe[0]}"

@@ -87,13 +87,20 @@ export function apply(ctx) {
     const reason = req && typeof req.reason === 'string' ? req.reason : ''
     const bucket = BUCKET_OF_TOOL[toolName] || null
 
-    // 预授权命中 → 自动放行（不打扰语音）
-    if (bucket === 'command' && (grant.has('delete') || grant.has('install') || grant.has('system'))) {
-      return 'allowed-once'
+    // C6：删除「任一分类授权 → 放行所有命令」的宽匹配（否则装包授权=任意命令免审）。
+    // 仅对能明确识别且已预授权 install 的安装命令自动放行；其余命令一律走语音确认（宁严勿松）。
+    if (bucket === 'command' && grant.has('install')) {
+      const args = (req && req.arguments) || {}
+      const cmd = String(args.command || args.script || args.path || '').trim().toLowerCase()
+      if (cmd && /^(pip|pip3|npm|yarn|pnpm|uv|poetry)\b/.test(cmd) && /\b(install|add|i)\b/.test(cmd)) {
+        return 'allowed-once'
+      }
     }
     if (bucket === 'write_outside' && grant.has('write_outside')) {
       return 'allowed-once'
     }
+
+    // 未知动词/工具一律走人审：bucket 为 null 或未命中预授权都落到下方语音确认
 
     // 否则走语音确认。把 reason 的 "escalate sandbox to X: " 前缀剥掉，只留模型的一句话理由
     const label = bucket === 'command'

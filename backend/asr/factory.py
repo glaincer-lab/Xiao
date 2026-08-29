@@ -73,3 +73,24 @@ def build_asr(on_result: ResultCallback) -> ASREngine:
 
     local_cfg = config.section("asr.local")
     return _build_local(on_result, local_cfg.get("model", "paraformer-zh"), local_cfg.get("model_dir", ""))
+
+
+def build_asr_chain(on_result: ResultCallback) -> ASREngine:
+    """构建 ASR 真回退链：主引擎（云/omni）超时/异常时回退本地 FunASR。
+
+    start/feed 在主引擎上跑；stop() 失败/超时用缓存音频交本地兜底重识别，
+    保证「能识别出来」（而非这次直接失败）。
+    """
+    primary = build_asr(on_result)
+    if type(primary).__name__ == "FunASRLocal":
+        return primary  # 已本地，无网络阻塞，无需回退
+    try:
+        local_cfg = config.section("asr.local")
+        local = _build_local(on_result, local_cfg.get("model", "paraformer-zh"), local_cfg.get("model_dir", ""))
+    except Exception:  # noqa: BLE001
+        local = None
+    if local is None:
+        return primary
+    from backend.asr.chain import ASRChain
+
+    return ASRChain(primary, local)

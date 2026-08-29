@@ -22,9 +22,10 @@ from backend.provider_test import test_provider
 from backend.router import Router
 from backend.session.state import State, bus, emit
 from backend.tasks import TaskManager
-from backend.tools import computer, register_builtin_tools
+from backend.tools import computer, open_app, register_builtin_tools
 from backend.tools.base import registry
 from backend.tts.factory import build_preview_tts, build_tts
+from backend.config_guard import validate_config_updates
 
 app = FastAPI(title="Xiao Voice Assistant")
 
@@ -48,6 +49,17 @@ async def loopback_guard(request: Request, call_next):
         host = request.client.host if request.client is not None else None
         if host not in ("127.0.0.1", "::1"):
             return JSONResponse(status_code=403, content={"ok": False, "msg": "仅限本机访问"})
+        # DNS Rebinding 防护：仅凭 client.host 可被恶意域名绕过（域名解析到 127.0.0.1），
+        # 需额外校验 Host 头只允许本机主机名。所有 /api/* 均经此处（含 dsh_approval/dsh_step 双保险）。
+        req_host = (request.headers.get("host") or "").strip()
+        if req_host:
+            if req_host.startswith("["):
+                req_host = req_host[1:req_host.find("]")]
+            else:
+                req_host = req_host.split(":")[0]
+            req_host = req_host.lower()
+            if req_host not in ("127.0.0.1", "localhost", "::1"):
+                return JSONResponse(status_code=403, content={"ok": False, "msg": "非法 Host 头"})
     return await call_next(request)
 
 pipeline: Pipeline | None = None
@@ -87,6 +99,7 @@ async def startup() -> None:
 
     register_builtin_tools(on_reminder_fire=notify)
     computer.set_confirm_hook(pipeline.request_tool_approval)
+    open_app.set_confirm_hook(pipeline.request_tool_approval)
     pipeline.start(loop)
 
 
@@ -120,6 +133,17 @@ async def ws_endpoint(ws: WebSocket) -> None:
     if ws.client is not None and ws.client.host not in ("127.0.0.1", "::1"):
         await ws.close(code=1008)
         return
+    # DNS Rebinding 防护：同 /api 中间件，校验 Host 头只允许本机主机名
+    _req_host = (ws.headers.get("host") or "").strip()
+    if _req_host:
+        if _req_host.startswith("["):
+            _req_host = _req_host[1:_req_host.find("]")]
+        else:
+            _req_host = _req_host.split(":")[0]
+        _req_host = _req_host.lower()
+        if _req_host not in ("127.0.0.1", "localhost", "::1"):
+            await ws.close(code=1008)
+            return
     await ws.accept()
     out_q: asyncio.Queue = asyncio.Queue()
 
@@ -182,6 +206,9 @@ async def update_config(payload: dict) -> dict:
     updates = payload.get("updates") if isinstance(payload.get("updates"), dict) else payload
     if not isinstance(updates, dict) or not updates:
         return {"ok": False, "msg": "无效的配置数据"}
+    err = validate_config_updates(updates)
+    if err:
+        return {"ok": False, "msg": err}
     config.update(updates)
     config.save()
     if pipeline is not None:

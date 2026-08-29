@@ -74,7 +74,8 @@ class OmniTTSEngine(TTSEngine):
     def _synthesize(self, text: str) -> bytes:
         from openai import OpenAI
 
-        client = OpenAI(base_url=self._base_url, api_key=self._api_key or "EMPTY")
+        # C5：客户端级超时，omni 合成挂起时在 timeout 内抛错，由回退链降级
+        client = OpenAI(base_url=self._base_url, api_key=self._api_key or "EMPTY", timeout=10.0, max_retries=1)
         resp = client.chat.completions.create(
             model=self._model,
             messages=[{"role": "user", "content": f"请用语音朗读：{text}"}],

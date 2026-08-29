@@ -119,7 +119,29 @@ def _dispatch(m: dict, warm: bool = True) -> TTSEngine:
 
 
 def build_tts() -> TTSEngine:
-    return _dispatch(_active_model())
+    """构建 TTS 真回退链：当前选定引擎 → 免费云兜底 edge-tts → 本地保底 Piper。
+
+    任一云引擎超时/失败自动逐层降级，保证「能出声」；全链失败则记录并返回，
+    主对话流水线不阻塞（speak 不堵死）。
+    """
+    active = _dispatch(_active_model())
+    engines: list[TTSEngine] = [active]
+    # 免费云兜底 edge-tts（当前若不是 edge）
+    if not isinstance(active, EdgeTTS):
+        try:
+            engines.append(_build_edge("zh-CN-YunjianNeural", "+30%"))
+        except Exception:  # noqa: BLE001
+            pass
+    # 本地保底 Piper（已配置且前置检查通过才纳入）
+    try:
+        piper = _build_piper(config.section("tts.piper").get("model", "models/zh_CN-huayan-medium.onnx"))
+        if piper.preflight() is None:
+            engines.append(piper)
+    except Exception:  # noqa: BLE001
+        pass
+    from backend.tts.chain import TTSChain
+    # 即使单一引擎也包一层：用 wait_for 保证任何云引擎挂起都在超时内让出，杜绝 speak 永久阻塞
+    return TTSChain(engines)
 
 
 # 试听方案白名单：只接受这些键，前端多传的字段（id/name 等）一律忽略

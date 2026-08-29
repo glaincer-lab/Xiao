@@ -10,7 +10,7 @@ import threading
 import time
 from collections import deque
 
-from backend.asr.factory import build_asr
+from backend.asr.factory import build_asr, build_asr_chain
 from backend.audio.mic import MicStream
 from backend.audio.vad import VADSegmenter
 from backend.audio.wake import build_wake_word
@@ -151,7 +151,7 @@ class Pipeline:
     # ---- 生命周期 ----
     def start(self, loop) -> None:
         self._loop = loop
-        self._asr = build_asr(self._asr_result)
+        self._asr = build_asr_chain(self._asr_result)
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()

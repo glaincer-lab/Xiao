@@ -59,10 +59,14 @@ class Config:
         _deep_merge(self._data, updates)
 
     def save(self) -> None:
-        """把当前配置写回 config.yaml。"""
+        """把当前配置写回 config.yaml（原子替换，断电/崩溃不留半截 YAML）。"""
         path = ROOT / "config.yaml"
-        with path.open("w", encoding="utf-8") as f:
+        tmp = path.with_suffix(".yaml.tmp")
+        with tmp.open("w", encoding="utf-8") as f:
             yaml.safe_dump(self._data, f, allow_unicode=True, sort_keys=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
 
 
 config = Config(_load_yaml())

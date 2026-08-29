@@ -17,7 +17,8 @@ class OmniASREngine(ASREngine):
         super().__init__(on_result)
         from openai import OpenAI
 
-        self._client = OpenAI(base_url=base_url, api_key=api_key or "EMPTY")
+        # C4：客户端级超时 + 减小重试，omni 服务挂/慢时在 timeout 内抛错，避免唤醒/识别线程永久阻塞
+        self._client = OpenAI(base_url=base_url, api_key=api_key or "EMPTY", timeout=5.0, max_retries=1)
         self._model = model
         self._buf = bytearray()
 

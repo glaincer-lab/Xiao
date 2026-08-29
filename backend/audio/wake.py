@@ -10,11 +10,14 @@
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
 
 from backend.config import OMNI_BASE_URL, OMNI_MODEL, config
+
+logger = logging.getLogger(__name__)
 
 
 class WakeWordDetector:
@@ -93,14 +96,22 @@ def build_wake_word():
     keyword = config.get("wake_word.keyword", "小二")
 
     if engine == "omni":
+        from backend.audio.wake_chain import FallbackWakeDetector
         from backend.audio.wake_omni import OmniWakeDetector
 
         omni_cfg = config.section("llm.omni")
-        return OmniWakeDetector(
+        primary = OmniWakeDetector(
             base_url=omni_cfg.get("base_url", OMNI_BASE_URL),
             model=omni_cfg.get("model", OMNI_MODEL),
             api_key=omni_cfg.get("api_key"),
             keyword=keyword,
         )
+        # 本地 sherpa 唤醒保底：omni 失败/超时自动回退，保证「喊得醒」
+        try:
+            fallback = WakeWordDetector()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("本地 sherpa 唤醒不可用，omni 唤醒无本地回退: %s", e)
+            return primary
+        return FallbackWakeDetector(primary, fallback)
 
     return WakeWordDetector()
