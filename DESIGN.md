@@ -184,6 +184,7 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
   - `restart`：引擎类，保存后提示需重启后端——换 ASR/LLM/TTS 方案/模型/音色、唤醒词/阈值、麦克风设备等。
 - **配套接口**：`/api/audio/devices`（sounddevice 枚举）、`/api/tts/preview`（试听）、`/api/memory/clear`（一键清空 Agent 历史 + DSH 上下文）、`/api/provider/test`（服务商连通性测试：按环节发最小请求，无效 Key/超额/超时各回一句人话，不抛堆栈）。
 - **统一报错映射**：`backend/errors.py`（`human_reason` / `reason_from_text`）——管线任何环节的异常（对话、长任务、试听、设备枚举）都转成一句可播报的人话：401 = Key 失效、429 = 额度/限流、超时 = 网络；原始错误只进后端日志与前端日志面板，不抛堆栈给用户。
+- **首次启动向导**（`OnboardingWizard.tsx`，复用设置面板样式）：选语言 → 领 Key（DeepSeek / 通义百炼直达领取页 + 图文步骤）→ 连通测试（`/api/provider/test`，✅/❌ 含人话原因）→ 选大脑（`router.mode` 三选一 + DSH 可用性检测）→ 测麦克风（`/api/mic/echo`）。任何一步可跳过进 L0；「已完成」标记存本机 localStorage（`xiao_onboarded`），保存失败不写标记、下次仍会弹。
 
 ## 12. 与开源方案对比（横向定位）
 
