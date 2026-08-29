@@ -1,10 +1,26 @@
-# 小二（Xiao）· 语音工作助手 · 设计方案（v3）
+# 小二（Xiao）· 技术设计方案（v4）
 
-> **v3 定版（架构 + 技术栈锁定）**：架构 = 混合 C 三层（Python 语音引擎 + DSH 薄插件 JS + Electron/React UI）；技术栈 = **除唤醒词本地（Sherpa-ONNX「小二」）外，ASR/LLM 一律 API 优先**，并支持**多方案可存可切**（ASR：阿里云实时流式 qwen-audio 默认 / fun-asr 方言备选 + 本地 FunASR；LLM：DeepSeek/千问/OpenAI/GLM/Kimi 云端 + Ollama/MiniCPM-o 本地）。开发路线图见 `ROADMAP.md`。本文档 v2.1 的详细设计（状态机/路由/桥/审批/风险）与定版不冲突的部分继续有效。
-
-> 一句话定位：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，做成「语音控制的 Agent 工作台」。
+> **定位（v4 家人版）**：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，并在此基础上长成「生活在电脑里的助手、朋友、家人」。本文档负责**技术架构**（状态机/路由/桥/审批/风险）；产品愿景与设计哲学见 `PRODUCT.md`，里程碑全量设计（M0-M6：出网安全网关/记忆双轨/八态姿态/主动引擎/观察会话/家居接入/成长记录）见 `ROADMAP.md`，对话级验收见 `specs/EVAL.md`。
 >
-> 修订史：v2 新增「风险与应对」「语音审批」「长任务异步」三节；v2.1 吸收外部分析（DSH 版本更正 `0.1.1-rc.2`、审批栈源码核实 headless fail-closed、§9 补并发任务与失败/超时反馈）；v2.2 审批更新为**双层结构**——预测式语音审批 + 运行时审批桥 `xiao-approval-bridge`（已落地），A2 收窄为纯流式桥；v2.3 A2 web 流式桥落地（§7 重写为 A1/A2 双桥、§8 补 web 模式审批语义与 XIAO_GRANT fail-closed）。
+> **v3 定版（架构 + 技术栈锁定，继续有效）**：架构 = 混合 C 三层（Python 语音引擎 + DSH 薄插件 JS + Electron/React UI）；技术栈 = **除唤醒词本地（Sherpa-ONNX「小二」）外，ASR/LLM 一律 API 优先**，并支持**多方案可存可切**（ASR：阿里云实时流式 qwen-audio 默认 / fun-asr 方言备选 + 本地 FunASR；LLM：DeepSeek/千问/OpenAI/GLM/Kimi 云端 + Ollama/MiniCPM-o 本地）。
+>
+> 一句话定位：给通用 Agent 装上语音前端，做成「语音控制的 Agent 工作台」——并以此为底座向家人版演进。
+>
+> 修订史：v2 新增「风险与应对」「语音审批」「长任务异步」三节；v2.1 吸收外部分析（DSH 版本更正 `0.1.1-rc.2`、审批栈源码核实 headless fail-closed、§9 补并发任务与失败/超时反馈）；v2.2 审批更新为**双层结构**——预测式语音审批 + 运行时审批桥 `xiao-approval-bridge`（已落地），A2 收窄为纯流式桥；v2.3 A2 web 流式桥落地（§7 重写为 A1/A2 双桥、§8 补 web 模式审批语义与 XIAO_GRANT fail-closed）；**v4 对齐家人版路线图**——定位更新、新增 §11 架构演进层。
+
+## 0. 架构演进层（家人版新增，随里程碑落地）
+
+现有三层（语音前端 / DSH 大脑 / 薄桥）之上，v4 路线图新增四个横切层（详细规格在 ROADMAP §4，此处只给架构位置）：
+
+```
+┌─ 姿态层（M2）：router 之后第二层路由，八态 × 判定卡，管话怎么说
+├─ 记忆层（M1）：五要素条目 + 三层结构 + 双轨隔离，管记住什么忘掉什么
+├─ 主动层（M3）：预算制引擎 + 总闸门，管什么时候先开口
+└─ 安全层（M0.2）：出网网关（黑词本机拦截 + 人名占位混淆），管什么能出这台电脑
+```
+
+宏观状态机扩展（M0）：现有音频管线状态机之外，顶层增加 `ACTIVE / IDLE / DORMANT / RETURNING` 四态——DORMANT 冻结一切主动、零归因；RETURNING 分层问候。物理编排（M5）经 Home Assistant 网关执行，读回验证；观察会话（M4）复用现有审批与多模态贴图底座。
+
 
 ---
 

@@ -21,5 +21,9 @@
 
 ## 引擎分层（云 / 本地 / 保底）
 
-- 播报引擎：`Qwen 实时流式`（默认，边合成边播、首音快、语音跟字幕）→ `edge-tts`（免费云兜底）→ `CosyVoice v3` / `Qwen-Audio-TTS`（非流式付费云，flash 默认 / plus 追求音质）→ `Piper`（本地离线，最后保底）。
+- 播报引擎：`Qwen 实时流式`（默认，边合成边播、首音快、语音跟字幕）→ `edge-tts`（免费云兜底）→ `Piper`（本地离线，最后保底）→ `MiniCPM-o`（本地 vLLM，可选）。CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除。
 - MiniCPM-o 走本地 vLLM-omni 服务接入（`llm.omni` 的 `base_url` 默认 `localhost:8000`，与云 LLM 同样的 base_url + model + key 三件套），可分别承担唤醒 / 识别 / 播放，不作为默认引擎。
+
+## 文档体系
+
+产品愿景与设计哲学见 `docs/PRODUCT.md`（入口与文档地图）；里程碑全量设计（M0-M6）见 `docs/ROADMAP.md`；技术架构见 `docs/DESIGN.md`；对话级验收标准见 `docs/specs/EVAL.md`；模块设计书位于 `docs/specs/`（模板 `TEMPLATE.md`）。写代码前先读对应模块设计书。
