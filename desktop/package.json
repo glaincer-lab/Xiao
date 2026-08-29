@@ -2,12 +2,67 @@
   "name": "xiao-desktop",
   "version": "0.1.0",
   "private": true,
+  "author": "Xiao Project",
   "description": "小二 · 语音工作助手桌面壳（Electron）",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "prepare-runtime": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-runtime.ps1",
+    "dist": "npm run prepare-runtime && electron-builder --win",
+    "dist:dir": "npm run prepare-runtime && electron-builder --win --dir"
   },
   "devDependencies": {
-    "electron": "^31.3.0"
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "io.xiao.assistant", "productName": "Xiao",
+    "electronDist": "runtime/electron-dist",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "asar": true,
+    "files": [
+      "main.js",
+      "package.json",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**"
+        ]
+      },
+      { "from": "../run.py", "to": "run.py" },
+      { "from": "../config.yaml", "to": "config.yaml" },
+      { "from": "../.env.example", "to": ".env.example" },
+      { "from": "../requirements.txt", "to": "requirements.txt" },
+      { "from": "../requirements-local-asr.txt", "to": "requirements-local-asr.txt" },
+      { "from": "../frontend/dist", "to": "frontend/dist" },
+      { "from": "../models", "to": "models" },
+      { "from": "runtime/python", "to": "runtime/python" }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "Xiao-Setup-${version}.${ext}"
+    }
   }
 }

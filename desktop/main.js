@@ -1,16 +1,28 @@
 // 小二 · 语音工作助手 桌面壳（Electron）
 // 常驻托盘 + 自动拉起 Python 后端 + 关窗隐藏 + 可选开机自启
-const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, dialog } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const http = require('http')
 const net = require('net')
 
-const ROOT = path.resolve(__dirname, '..')
+// 打包后：backend/ run.py config.yaml models/ frontend/dist 都在 resources 下；开发态：仓库根
+const ROOT = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..')
 const DEV = process.env.XIAO_DEV === '1'
 const BACKEND_HOST = '127.0.0.1'
-const BACKEND_PORT = 8123
+// 端口跟随 config.yaml 的 server.port（打包态读 resources 下配置），读取失败回退 8123
+function readBackendPort() {
+  try {
+    const cfg = fs.readFileSync(path.join(ROOT, 'config.yaml'), 'utf8')
+    const m = cfg.match(/^server:\s*$[\s\S]*?^\s+port:\s*(\d+)/m)
+    if (m) return Number(m[1])
+  } catch {
+    /* 忽略 */
+  }
+  return 8123
+}
+const BACKEND_PORT = readBackendPort()
 const FRONTEND_URL = DEV ? 'http://localhost:5173' : `http://${BACKEND_HOST}:${BACKEND_PORT}`
 
 let mainWindow = null
@@ -38,6 +50,15 @@ async function bootstrap() {
 }
 
 function findPython() {
+  // 打包态：优先安装包内置的 Python 运行时（使用者无需装 Python）
+  if (app.isPackaged) {
+    const bundled = path.join(process.resourcesPath, 'runtime', 'python', 'python.exe')
+    if (fs.existsSync(bundled)) return bundled
+    dialog.showErrorBox('小二', '内置 Python 运行时缺失，安装包可能不完整。\n请重新下载安装包；问题仍存在请到项目主页反馈。')
+    app.quit()
+    return ''
+  }
+  // 开发态：仓库 .venv → 环境变量 → 系统 python
   const venv =
     process.platform === 'win32'
       ? path.join(ROOT, '.venv', 'Scripts', 'python.exe')
@@ -77,6 +98,7 @@ function waitForBackend() {
 
 function startBackend() {
   const py = findPython()
+  if (!py) return
   backendProc = spawn(py, ['run.py'], { cwd: ROOT, stdio: 'ignore' })
   backendProc.on('exit', () => {
     backendProc = null

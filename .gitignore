@@ -29,6 +29,10 @@ logs/
 # 截图工具运行时产物（B1，勿提交）
 screenshots/
 
+# 桌面打包产物与内置运行时（本机生成，勿提交）
+desktop/release/
+desktop/runtime/
+
 # 模型权重（运行时下载，勿提交）
 *.tflite
 models/
