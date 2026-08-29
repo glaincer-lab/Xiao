@@ -18,6 +18,7 @@ from backend.config import config
 from backend.bridge.dsh_bridge import DSHCancelled
 from backend.errors import reason_from_text
 from backend.llm.base import sanitize_images
+from backend.memory import memory_store
 from backend.rules import RuleEngine
 from backend.session.state import State, emit
 from backend.tools.base import registry as tool_registry
@@ -118,11 +119,12 @@ class Pipeline:
             self._router.reload_keywords()
 
     def clear_memory(self) -> None:
-        """一键清空对话记忆（Agent 历史 + DSH 多轮上下文）。"""
+        """一键清空记忆（Agent 历史 + DSH 多轮上下文 + 跨会话长期记忆）。"""
         if self._agent is not None:
             self._agent.reset()
         if self._bridge is not None:
             self._bridge.reset_context()
+        memory_store.clear()
 
     # ---- 状态（线程安全）----
     def set_state(self, s: State) -> None:

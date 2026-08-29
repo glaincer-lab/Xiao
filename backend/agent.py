@@ -12,6 +12,7 @@ from typing import Callable
 from backend.config import config
 from backend.errors import human_reason
 from backend.llm.base import ChatMessage, LLMClient
+from backend.memory import MemoryStore, memory_store
 from backend.session.state import State, emit
 from backend.tools.base import ToolRegistry
 from backend.tts.base import TTSEngine
@@ -71,12 +72,14 @@ class Agent:
         registry: ToolRegistry,
         set_state: Callable[[State], None] | None = None,
         on_done: Callable[[], None] | None = None,
+        memory: MemoryStore | None = None,
     ) -> None:
         self._llm = llm
         self._tts = tts
         self._registry = registry
         self._set_state = set_state or (lambda _s: None)
         self._on_done = on_done
+        self._memory = memory if memory is not None else memory_store
         self._history: list[ChatMessage] = []
 
     async def handle(self, text: str, images: list[str] | None = None) -> None:
@@ -189,7 +192,12 @@ class Agent:
         await self._tts.speak(text)
 
     def _messages(self) -> list[ChatMessage]:
-        return [ChatMessage(role="system", content=system_prompt())] + list(self._history)
+        """构建消息：系统提示词（并入长期记忆上下文）+ 对话历史。"""
+        sys = system_prompt()
+        mem_ctx = self._memory.context_text()
+        if mem_ctx:
+            sys = f"{sys}\n\n{mem_ctx}"
+        return [ChatMessage(role="system", content=sys)] + list(self._history)
 
     def _trim(self) -> None:
         limit = max_history()

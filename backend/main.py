@@ -342,9 +342,18 @@ async def health_probe() -> dict:
     return {"ok": True, "items": [asr, llm, tts, agent_item(agent_ok), offline_item(config.get_all())]}
 
 
+@app.get("/api/memory/list")
+async def memory_list() -> dict:
+    """长期记忆清单（只读）：跨会话记住的内容，供设置面板查看。"""
+    from backend.memory import memory_store
+
+    entries = memory_store.entries()
+    return {"ok": True, "count": len(entries), "entries": entries}
+
+
 @app.post("/api/memory/clear")
 async def clear_memory() -> dict:
-    """一键清空当前对话记忆（Agent 历史）。"""
+    """一键清空记忆：当前对话（Agent 历史 + DSH 上下文）+ 跨会话长期记忆。"""
     if pipeline is None:
         return {"ok": False, "msg": "未初始化"}
     pipeline.clear_memory()

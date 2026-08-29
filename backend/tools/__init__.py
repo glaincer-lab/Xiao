@@ -21,6 +21,7 @@ from backend.tools.computer import (
 )
 from backend.tools.media import MediaTool
 from backend.tools.open_app import OpenAppTool
+from backend.tools.remember import RememberTool
 from backend.tools.reminder import ReminderTool
 from backend.tools.system_control import LockScreenTool, ScreenshotTool, SleepTool, VolumeTool
 from backend.tools.weather import WeatherTool
@@ -35,6 +36,7 @@ def register_builtin_tools(on_reminder_fire: Callable[[str], None] | None = None
             "open_app",
             "weather",
             "reminder",
+            "remember",
             "volume",
             "screenshot",
             "lock_screen",
@@ -56,6 +58,7 @@ def register_builtin_tools(on_reminder_fire: Callable[[str], None] | None = None
         "open_app": OpenAppTool,
         "weather": WeatherTool,
         "reminder": lambda: ReminderTool(on_fire=on_reminder_fire),
+        "remember": RememberTool,
         "volume": VolumeTool,
         "screenshot": ScreenshotTool,
         "lock_screen": LockScreenTool,
