@@ -4,14 +4,14 @@
 
 A Chinese-voice assistant that lives on your Windows desktop — but it aims to be more than an assistant.
 
-**Long-term vision**: Assistant, friend, family. It gets work done, but it also remembers how you've grown, sits with you on bad nights, and speaks first when the moment is right — a companion built from software, not another obedient tool.
+**Long-term vision**: Assistant, friend, companion. It gets work done, but it also remembers how you've grown, sits with you on bad nights, and speaks first when the moment is right — a companion built from software, not another obedient tool.
 
 ## Our Three Product Philosophies
 
 Every design decision in Xiao traces back to these:
 
-1. **A memory like family** — it remembers, it forgives changes, and it never uses your own words against you. It learns to forget details and to keep feelings.
-2. **Proactive, but restrained** — initiative without memory is harassment; initiative with memory is family. Every proactive utterance passes one master gate. Silence beats small talk.
+1. **A memory like a companion** — it remembers, it forgives changes, and it never uses your own words against you. It learns to forget details and to keep feelings.
+2. **Proactive, but restrained** — initiative without memory is harassment; initiative with memory is what makes it a companion. Every proactive utterance passes one master gate. Silence beats small talk.
 3. **Sense before acting, verify after** — check device state before control, read it back after. Proactive means suggest; touching anything real requires approval.
 
 Full design thinking is public: [Product Spec](docs/PRODUCT.md) (Chinese) ｜ [Roadmap M0–M6](docs/ROADMAP.md) ｜ [Conversation Eval Suite](docs/specs/EVAL.md)
