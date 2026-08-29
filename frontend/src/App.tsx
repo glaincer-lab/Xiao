@@ -49,6 +49,8 @@ const CYCLE: SpriteMode[] = ['auto', 0, 1, 2, 3, 4]
 let idCounter = 1
 let stepIdCounter = 1
 const AUTO_POPUP_LEN = 100 // 回答超过这个字数，自动在中间弹大窗
+const MAX_IMAGES = 4
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024
 
 // 从工具入参里提取一句话摘要（本地聊天 agent 与 DSH 步骤共用）
 function summarizeArgs(name: string, args: unknown): string {
@@ -180,6 +182,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [toolActivity, setToolActivity] = useState('')
   const [input, setInput] = useState('')
+  const [pendingImages, setPendingImages] = useState<string[]>([])
   const [routerMode, setRouterMode] = useState('auto')
   const [expanded, setExpanded] = useState<Message | null>(null)
   const [interruptFlash, setInterruptFlash] = useState(false)
@@ -239,6 +242,7 @@ export default function App() {
   const logBodyRef = useRef<HTMLDivElement | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const followBottom = useRef(true)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const addMessage = useCallback((m: Omit<Message, 'id'>): Message => {
     const msg: Message = { ...m, id: idCounter++ }
@@ -450,12 +454,62 @@ export default function App() {
     return () => mo.disconnect()
   }, [])
 
+  const addImages = (imgs: string[]) => {
+    setPendingImages((prev) => {
+      const ok = imgs.filter((s) => s.startsWith('data:image/'))
+      return [...prev, ...ok].slice(0, MAX_IMAGES)
+    })
+  }
+
+  const pickImages = (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    void Promise.all(
+      Array.from(files)
+        .filter((f) => f.type.startsWith('image/') && f.size <= MAX_IMAGE_BYTES)
+        .map(
+          (f) =>
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(String(reader.result))
+              reader.onerror = reject
+              reader.readAsDataURL(f)
+            }),
+        ),
+    ).then(addImages)
+  }
+
+  const captureScreen = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+      try {
+        const video = document.createElement('video')
+        video.srcObject = stream
+        await new Promise<void>((resolve) => {
+          video.onloadedmetadata = () => resolve()
+          void video.play().catch(() => resolve())
+        })
+        const canvas = document.createElement('canvas')
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        if (canvas.width > 0 && canvas.height > 0) {
+          canvas.getContext('2d')?.drawImage(video, 0, 0)
+          addImages([canvas.toDataURL('image/jpeg', 0.9)])
+        }
+      } finally {
+        stream.getTracks().forEach((track) => track.stop())
+      }
+    } catch {
+      return
+    }
+  }
+
   const sendText = () => {
     const t = input.trim()
-    if (!t) return
-    wsRef.current?.send({ type: 'text', text: t })
-    addMessage({ role: 'user', text: t })
+    if (!t && pendingImages.length === 0) return
+    wsRef.current?.send({ type: 'text', text: t, images: pendingImages.length > 0 ? pendingImages : undefined })
+    addMessage({ role: 'user', text: t || `[图片 ×${pendingImages.length}]` })
     setInput('')
+    setPendingImages([])
     setExpanded(null)
   }
 
@@ -602,6 +656,22 @@ export default function App() {
           )}
           <section className="panel panel--composer">
             <div className="composer">
+              {pendingImages.length > 0 && (
+                <div className="composer-images">
+                  {pendingImages.map((src, i) => (
+                    <span key={i} className="composer-thumb">
+                      <img src={src} alt={`图片${i + 1}`} />
+                      <button
+                        className="thumb-x"
+                        title="移除"
+                        onClick={() => setPendingImages((prev) => prev.filter((_, j) => j !== i))}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <textarea
                 className="composer-input"
                 placeholder="也可以直接打字…（回车换行，Ctrl+回车发送）"
@@ -616,6 +686,23 @@ export default function App() {
                 }}
               />
               <div className="composer-actions">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(ev) => {
+                    pickImages(ev.target.files)
+                    ev.target.value = ''
+                  }}
+                />
+                <button className="btn" title="选择本地图片" onClick={() => fileRef.current?.click()}>
+                  贴图
+                </button>
+                <button className="btn" title="截取屏幕发给小二" onClick={() => void captureScreen()}>
+                  截屏
+                </button>
                 <button className="btn" onClick={sendText}>
                   发送
                 </button>

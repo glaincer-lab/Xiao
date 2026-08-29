@@ -75,9 +75,9 @@ class Agent:
         self._on_done = on_done
         self._history: list[ChatMessage] = []
 
-    async def handle(self, text: str) -> None:
+    async def handle(self, text: str, images: list[str] | None = None) -> None:
         self._set_state(State.PROCESSING)
-        self._history.append(ChatMessage(role="user", content=text))
+        self._history.append(ChatMessage(role="user", content=text, images=images or None))
         self._trim()
         try:
             await self._run()

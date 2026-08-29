@@ -146,7 +146,8 @@ async def ws_endpoint(ws: WebSocket) -> None:
             if t == "wake":
                 pipeline.wake_manually()
             elif t == "text":
-                pipeline.submit_text(msg.get("text", ""))
+                images = msg.get("images")
+                pipeline.submit_text(msg.get("text", ""), images if isinstance(images, list) else None)
             elif t == "router_mode":
                 pipeline.set_router_mode(msg.get("mode", "auto"))
             elif t == "approval_answer":

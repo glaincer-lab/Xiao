@@ -17,9 +17,12 @@ from backend.audio.wake import build_wake_word
 from backend.config import config
 from backend.bridge.dsh_bridge import DSHCancelled
 from backend.errors import reason_from_text
+from backend.llm.base import sanitize_images
 from backend.rules import RuleEngine
 from backend.session.state import State, emit
 from backend.tools.base import registry as tool_registry
+
+IMAGES_BLOCKED_REPLY = "当前没有开启图片输入，请在设置里勾选「支持图片输入」后再发图。"
 
 
 class Pipeline:
@@ -181,13 +184,13 @@ class Pipeline:
         """打断当前播报（前端按钮）。"""
         self._interrupt()
 
-    def submit_text(self, text: str) -> None:
-        """手动文本输入（测试 / 键盘输入），绕过 ASR。"""
+    def submit_text(self, text: str, images: list[str] | None = None) -> None:
+        """手动文本输入（测试 / 键盘输入），绕过 ASR；可附图片（data URL）。"""
         text = (text or "").strip()
-        if not text:
+        if not text and not images:
             return
         self._last_active = time.time()
-        self._dispatch(text)
+        self._dispatch(text, images)
 
     # ---- 内部 ----
     def _on_wake(self) -> None:
@@ -311,7 +314,7 @@ class Pipeline:
         else:
             self._pre_roll.append(chunk)
 
-    def _dispatch(self, text: str) -> None:
+    def _dispatch(self, text: str, images: list[str] | None = None) -> None:
         if self.state == State.CONFIRM_SHUTDOWN:
             self._handle_confirm(text)
             return
@@ -320,6 +323,9 @@ class Pipeline:
             return
         if self.state == State.WORKING:
             self._handle_working(text)
+            return
+        if images:
+            self._dispatch_images(text, images)
             return
         # 后台任务进展/取消（聆听态下也能问）
         if self._tasks is not None and self._tasks.active():
@@ -347,6 +353,37 @@ class Pipeline:
             self._on_dsh_task(text)
         elif self._loop is not None and self._agent is not None:
             asyncio.run_coroutine_threadsafe(self._agent.handle(text), self._loop)
+
+    # ---- 图片输入：强制走聊天 LLM 通道（DSH 协议不传图） ----
+    def _dispatch_images(self, text: str, images: list[str]) -> None:
+        imgs = sanitize_images(images)
+        if not imgs:
+            self._dispatch(text)
+            return
+        if not bool(config.get("llm.cloud.image_input", False)):
+            self._on_images_blocked()
+            return
+        if self._loop is None or self._agent is None:
+            return
+        body = text or "请看这张图片"
+        self._in_utterance = False
+        self._pre_roll.clear()
+        self._last_active = time.time()
+        asyncio.run_coroutine_threadsafe(self._agent.handle(body, imgs), self._loop)
+
+    def _on_images_blocked(self) -> None:
+        self._in_utterance = False
+        self._pre_roll.clear()
+        self._last_active = time.time()
+        self.set_state(State.SPEAKING)
+        emit("assistant_result", text=IMAGES_BLOCKED_REPLY)
+        if self._loop is not None:
+            asyncio.run_coroutine_threadsafe(self._say_images_blocked(), self._loop)
+
+    async def _say_images_blocked(self) -> None:
+        if self._tts is not None:
+            await self._speak(IMAGES_BLOCKED_REPLY)
+        self.set_state(State.LISTENING)
 
     # ---- 控制指令匹配 ----
     @staticmethod

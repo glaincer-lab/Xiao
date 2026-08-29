@@ -220,7 +220,7 @@ SCHEMA: list[dict] = [
      "hint": "保存备用（流式接入后生效）"},
     {"path": "llm.cloud.image_input", "label": "支持图片输入", "type": "checkbox", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "cloud"},
-     "hint": "保存备用（多模态输入启用后生效）"},
+     "hint": "开启后输入框出现贴图/截图按钮；需模型本身支持视觉（如 qwen-vl-max、glm-4v），DeepSeek 暂不支持图片"},
     {"path": "llm.cloud.top_p", "label": "采样 Top P", "type": "text", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "cloud"},
      "hint": "0~1，留空跟随模型默认"},
