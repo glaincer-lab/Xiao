@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.agent import Agent
-from backend.bridge.dsh_bridge import DSHBridge
+from backend.bridge import DSHBridge, build_bridge
 from backend.config import ROOT, config
 from backend.core import Pipeline
 from backend.llm.factory import build_llm
@@ -65,7 +65,7 @@ async def startup() -> None:
     llm = build_llm()
     tts = build_tts()
     router = Router()
-    bridge = DSHBridge()
+    bridge = build_bridge(event_sink=lambda kind, payload: emit(kind, **payload))
     perms = Perms()
     tasks = TaskManager(bridge)
     pipeline = Pipeline()
@@ -97,6 +97,10 @@ async def shutdown() -> None:
     if bridge is not None:
         try:
             bridge.cancel()
+        except Exception:
+            pass
+        try:
+            bridge.shutdown()
         except Exception:
             pass
     if tts is not None:

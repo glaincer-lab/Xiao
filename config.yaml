@@ -172,6 +172,8 @@ agent:
   max_history: 16
 bridge:
   dsh_command: dsh
+  mode: auto
+  web_port: 3081
   timeout_sec: 600
 tasks:
   max_concurrent: 1

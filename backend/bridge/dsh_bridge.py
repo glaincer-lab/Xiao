@@ -128,3 +128,6 @@ class DSHBridge:
                 self._proc.kill()
             except Exception:
                 pass
+
+    def shutdown(self) -> None:
+        """释放桥持有的常驻资源（headless 无常驻进程，no-op；web 子类覆盖）。"""

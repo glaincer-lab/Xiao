@@ -68,8 +68,9 @@ export function apply(ctx) {
     console.error('[xiao-approval] XIAO_GRANT 解析失败：', e && e.message ? e.message : e)
   }
 
-  // 实时工作面板：每个工具执行完就上报一步，前端 live 展示（上报失败不影响主流程）
+  // 实时工作面板：headless 模式下每个工具执行完上报一步（web 流式桥由 Python 直发，此处停报防重复）
   ctx.on('tools/result', (exec, result) => {
+    if (process.env.XIAO_STEP_DISABLE === '1') return
     try {
       const name = exec && (exec.name || exec.toolName) || 'tool'
       const summary = summarizeArgs(name, exec && exec.arguments)
