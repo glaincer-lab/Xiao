@@ -50,6 +50,7 @@
 | 多轮 DSH 上下文 | `bridge/` 记录最近任务与结果摘要，每轮打包传给 headless DSH | ✅ |
 | 多任务并发 + 语音取消消歧义 | 后台任务并发上限可配（`tasks.max_concurrent`，headless 桥自动钳制串行）；「取消第N个」/「取消「名字」」单独停止，裸取消停最近一个 | ✅ |
 | 多模态图片输入 | 输入框「贴图/截屏」发图（data URL，单条 ≤4 张）；`ChatMessage.images` 在 `to_dict()` 单点转 OpenAI vision parts；`llm.cloud.image_input` 硬开关，关闭时语音引导；带图强制走聊天通道（DSH 协议不传图） | ✅ |
+| 语音操电脑 | `computer.py` 六工具（鼠标/打字/热键/窗口/截屏看图/UIA 元素树）；总开关默认关 + 逐类语音审批（fail-closed，钩子异常即拒）；截屏用 Pillow（PowerShell 截屏被 Defender AMSI 拦截）；UIA walker 对 E_POINTER 容错，UWP 挂起窗以截屏兜底 | ✅ |
 | 星云状态形态 | 状态→3D 形态映射（待机球体/聆听八面体/思考∞/干活螺旋/播报圆柱/审批立方体） | ✅ |
 | 真实麦克风声线动画 | 后端采集麦克风算 RMS 电平，约 100ms 经 WebSocket 推送，前端 `VoiceLine` 画真实声线（替换假波纹 `Waveform` 与呼吸球 `Orb`） | ✅ |
 | 播报 4 方案管理 | `Qwen 实时流式` / `edge-tts` / `Piper` / `MiniCPM-o`，音色中文名展示（CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除） | ✅ |

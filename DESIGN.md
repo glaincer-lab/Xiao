@@ -122,13 +122,14 @@ DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `c
 - **A1 阶段（已核实：fail-closed 安全默认）**：`dsh --profile headless` 默认审批策略 `ask`，但 headless 不挂 Web/应答者，审批请求解析为 `unavailable` → 工具层映射 `deny`（"no approval channel is available"）。即**危险操作在无头模式下默认拒绝，且无外部注入点**。语音侧告知“这个操作被无头模式安全拦截了”，不静默执行。
   - ⚠ 别被 `DSH_PERMISSION_MODE=danger-full-access` 的名字骗了：它把审批策略切成 `never`，语义是**确定性拒绝**（源码 `NEVER_SENTENCE`：“actions that require approval are rejected automatically”），不是放行。
 - **第一层·预测式语音审批（已落地）**：状态机已有 `AWAIT_APPROVAL`；DSH 任务执行前，`core.py` 用权限关键词预测「需要哪些权限」，语音播报询问，用户可说「允许/拒绝」或点屏幕按钮（`answer_approval` 回填 future）。
-  > ⚠ **预测式的局限（须知情）**：关键词预测会**误报**（多问无关权限）和**漏报**（没命中关键词的高危动作不拦截）。尤其对**「调软件」类**（点鼠标/键盘、发消息、删数据）这种高危动作，漏报风险会被放大，**不能只靠预测式兜底**——届时需优先走 UIA/COM 这类可控接口，并对危险动作单独从严。DSH 内部真实触发的审批已由第二层精确接住。
+  > ⚠ **预测式的局限（须知情）**：关键词预测会**误报**（多问无关权限）和**漏报**（没命中关键词的高危动作不拦截）。尤其对**「调软件」类**（点鼠标/键盘、发消息、删数据）这种高危动作，漏报风险会被放大，**不能只靠预测式兜底**——届时需优先走 UIA/COM 这类可控接口，并对危险动作单独从严。DSH 内部真实触发的审批已由第二层精确接住；**「调软件」类的漏报缺口已由第三层（语音操电脑工具层逐次审批）闭合**。
 - **第二层·运行时审批桥（v2.2 已落地；源码核实 `plugins/xiao-approval-bridge/` + `backend/main.py`）**：headless 缺的「应答者」由 DSH Host-only 插件补上——插件在 `approval/request` 瀑布里注册 answerer，把 DSH 内部**真实审批请求**引回语音链路：
   1. DSH 工具触发审批（触发面 = `bash`/`pwsh` 沙箱升权重试、`write`/`edit` 写工作区外；网络访问**不触发** DSH 审批）；
   2. 插件先查 `XIAO_GRANT` 环境变量预授权（`BUCKET_OF_TOOL`：bash/pwsh→`command`，write/edit→`write_outside`），命中直接放行；
   3. 否则回环 `POST http://127.0.0.1:8123/api/dsh/approval`（仅 127.0.0.1/::1，否则 403）→ `core.request_approval()` 进 `AWAIT_APPROVAL`，语音 + 屏幕按钮双通道询问；
   4. 决策回填：`allowed-once`（一次性放行）/ `rejected` / `unavailable`（fail-closed）。
   - 这一层是**精确审批**：DSH 内部真触发了才问，不靠关键词预测、无误报；A1 的 fail-closed 结论对「不装本插件的原生 headless」依然成立（裸 headless 无 answerer → 默认拒绝）。
+- **第三层·工具层逐次审批（v3 已落地）**：语音操电脑六工具（`computer_mouse/type/hotkey/window` + `screen_look/uia_dump`）不进 DSH，由小二原生执行——每个动作执行前经 `computer.set_confirm_hook()`（`main.py` 注入 `core.request_tool_approval`）逐次语音审批，仅 allowed-once 放行；**钩子缺失/异常一律拒绝（fail-closed）**。窗口 list/focus/min/max 免确认（只读、无破坏），点按/打字/热键/关窗默认需确认（`tools.computer.confirm` 可配）；总开关 `tools.computer.enabled` 默认关，未开启时语音引导去设置勾选。
 - **A2 阶段（流式桥，已落地）**：审批注入**仍由运行时审批桥承担**（流式桥不接管审批）；A2 价值已兑现 = `dsh web` 的流式输出 / 连续会话（免每轮冷启动、重发历史）/ 工具事件回传（实时进度而非等终态）。web 模式的审批通道（回环 WS `/api/events.mux` 订阅 `approval/requested` 帧，经 `POST /api/respond` 注入 `{rpcId, approvalId, outcome:'allowed-once'|'rejected'}`；无认证、仅回环可达、只有一次性授权）保留为**备选路径**记录。
   - web 流式桥下 `XIAO_GRANT` 预授权**不适用**（常驻服务无法按任务变更授权），fail-closed：审批一律转发语音链——不因换桥放宽权限。
   - 代价：A2 从「薄桥 CLI」变成「常驻 DSH web + 语音↔HTTP 桥」，安全边界靠回环；DSH 仍在 rc 阶段，耦合越深、版本一变越痛（权衡取舍见 §7）。
@@ -192,6 +193,7 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
 - **配套接口**：`/api/audio/devices`（sounddevice 枚举）、`/api/tts/preview`（试听）、`/api/memory/clear`（一键清空 Agent 历史 + DSH 上下文）、`/api/provider/test`（服务商连通性测试：按环节发最小请求，无效 Key/超额/超时各回一句人话，不抛堆栈）、`/api/health/probe`（健康状态灯：并行探测 ASR/LLM/TTS 当前激活方案 + 检查本机 dsh 命令，返回各环节绿/红 + 延迟 + 一句人话原因）。
 - **统一报错映射**：`backend/errors.py`（`human_reason` / `reason_from_text`）——管线任何环节的异常（对话、长任务、试听、设备枚举）都转成一句可播报的人话：401 = Key 失效、429 = 额度/限流、超时 = 网络；原始错误只进后端日志与前端日志面板，不抛堆栈给用户。
 - **多模态图片输入（已落地）**：输入框「贴图/截屏」（截屏走 getDisplayMedia）生成 data URL，随 `{type:'text'}` 消息下发；`ChatMessage.images` 仅收 data:image/ 前缀、单条 ≤4 张（`sanitize_images` 双处清洗），在 `to_dict()` 单点转 OpenAI vision parts（text + image_url），openai_compat 零改动透传。
+- **语音操电脑六工具（v3 已落地）**：`backend/tools/computer.py`——鼠标（点按/双击/右键/移动/滚动）、打字（KEYBDINPUT Unicode，免输入法）、热键（VK 映射）、窗口（list/focus/min/max/close，EnumWindows）、截屏看图（Pillow `ImageGrab.grab(all_screens)`；**弃 PowerShell**——`CopyFromScreen+Save` 会被 Defender AMSI 当恶意脚本拦截）、UIA 元素树（comtypes 软依赖，walker 对树尾 E_POINTER 容错剪枝，UWP 挂起窗只读出宿主窗格时以 screen_look 兜底）。截屏经工具 `pending_images` 挂入多模态消息流（复用 `llm.cloud.image_input` 开关）。
 - **首次启动向导**（`OnboardingWizard.tsx`，复用设置面板样式）：选语言 → 领 Key（DeepSeek / 通义百炼直达领取页 + 图文步骤）→ 连通测试（`/api/provider/test`，✅/❌ 含人话原因）→ 选大脑（`router.mode` 三选一 + DSH 可用性检测）→ 测麦克风（`/api/mic/echo`）。任何一步可跳过进 L0；「已完成」标记存本机 localStorage（`xiao_onboarded`），保存失败不写标记、下次仍会弹。
 - **LLM 高级参数**（新增/编辑模型弹窗内）：模型名自填 + 引导（如「填 deepseek-chat / qwen-plus」，不内置下拉）；上下文窗口（输入/输出）、工具调用轮数（默认 500）、思考模式、图片输入、采样 Top P / Top K。`top_p` / `max_tokens` 透传各家，`top_k` 仅对兼容 extra_body 的供应商透传（DeepSeek/OpenAI/Kimi 仅保存不发送，避免 400）；弹窗内置「连通测试」按钮并提示「连通性测试会消耗少量 Token」。Agent 侧配套**有界多轮工具循环**：按「工具调用轮数」反复执行-回传-续推，超限时强制模型文本收尾，不再一轮就停。
 
