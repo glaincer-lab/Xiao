@@ -8,6 +8,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { PermsPanel } from './components/PermsPanel'
 import { TaskPanel, type Task } from './components/TaskPanel'
 import { WorkPanel, type WorkStep } from './components/WorkPanel'
+import { OnboardingWizard } from './components/OnboardingWizard'
 
 type Message = {
   id: number
@@ -178,6 +179,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showPerms, setShowPerms] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
+  // 首次启动向导（E1）：本机没有完成标记时弹出，完成后写 localStorage 不再弹
+  const [showWizard, setShowWizard] = useState(() => !localStorage.getItem('xiao_onboarded'))
   const [tasks, setTasks] = useState<Task[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [logOpen, setLogOpen] = useState(false) // 日志栏默认收起：点击「日志」才展开
@@ -682,6 +685,7 @@ export default function App() {
         </div>
       )}
 
+      {showWizard && <OnboardingWizard onClose={() => setShowWizard(false)} />}
       {showTasks && <TaskPanel tasks={tasks} onClose={() => setShowTasks(false)} />}
       {showPerms && <PermsPanel onClose={() => setShowPerms(false)} />}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} ui={ui} setUi={setUi} />}

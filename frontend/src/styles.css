@@ -1731,3 +1731,105 @@ body {
   0%, 100% { opacity: 0.55; transform: scale(0.96); }
   50% { opacity: 1; transform: scale(1.04); }
 }
+
+/* ---------- 首次启动向导（E1） ---------- */
+.modal--wiz {
+  width: min(92vw, 640px);
+}
+.wiz-steps {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 12px 18px 0;
+}
+.wiz-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+.wiz-step i {
+  font-style: normal;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  font-size: 11px;
+}
+.wiz-step--on {
+  color: var(--text);
+  border-color: rgba(91, 124, 250, 0.55);
+}
+.wiz-step--on i {
+  background: rgba(91, 124, 250, 0.25);
+  border-color: rgba(91, 124, 250, 0.55);
+}
+.wiz-step--done {
+  opacity: 0.75;
+}
+.wiz-cards {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wiz-card {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+.wiz-card:hover {
+  border-color: rgba(91, 124, 250, 0.55);
+}
+.wiz-card--on {
+  border-color: rgba(91, 124, 250, 0.8);
+  background: rgba(91, 124, 250, 0.12);
+}
+.wiz-card span {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.wiz-ollist {
+  margin: 8px 0 12px;
+  padding-left: 20px;
+}
+.wiz-verdict {
+  margin: 6px 0;
+  font-size: 14px;
+}
+.wiz-verdict--ok {
+  color: #4ade80;
+}
+.wiz-verdict--err {
+  color: #f87171;
+}
+.wiz-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--panel-border);
+}
+.wiz-foot .settings-msg {
+  flex: 1;
+  text-align: right;
+}
+.wiz-foot-actions {
+  display: flex;
+  gap: 10px;
+}

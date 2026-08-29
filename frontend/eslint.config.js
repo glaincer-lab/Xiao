@@ -23,9 +23,9 @@ export default tseslint.config(
     },
   },
   {
-    // SettingsPanel 是「配置结构」驱动的动态表单：路径取值/设值、状态里放的都是
-    // 后端 schema 传来的任意结构，显式 any 是这里的有意取舍，不是类型疏漏。
-    files: ['src/components/SettingsPanel.tsx'],
+    // SettingsPanel / OnboardingWizard 是「配置结构」驱动的动态表单：路径取值/设值、
+    // 状态里放的都是后端传来的任意结构，显式 any 是这里的有意取舍，不是类型疏漏。
+    files: ['src/components/SettingsPanel.tsx', 'src/components/OnboardingWizard.tsx'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
     },
