@@ -14,6 +14,7 @@ from __future__ import annotations
 import unittest
 
 from backend.config import OMNI_MODEL, Config
+from backend.llm.base import Completion
 from backend.perms import Perms
 from backend.router import Router
 from backend.session.state import EventBus, State
@@ -139,6 +140,196 @@ class TestLLMFactory(unittest.TestCase):
         client = factory.build_llm()
         self.assertIsInstance(client, OpenAICompatClient)
         self.assertEqual(client._model, OMNI_MODEL)
+
+
+class TestSampling(unittest.TestCase):
+    """E3 采样参数规整：留空不发送、越界收敛、top_k 只对宽容供应商透传。"""
+
+    def _patch(self, data):
+        import backend.llm.factory as factory
+
+        from backend.config import Config
+
+        old = factory.config
+        factory.config = Config(data)
+        self.addCleanup(lambda: setattr(factory, "config", old))
+        return factory
+
+    def test_empty_means_not_sent(self):
+        from backend.llm.factory import _sampling
+
+        self.assertEqual(_sampling("deepseek", "", None, ""), {})
+
+    def test_top_p_clamped(self):
+        from backend.llm.factory import _sampling
+
+        self.assertEqual(_sampling("openai", "1.7", None, None), {"top_p": 1.0})
+        self.assertEqual(_sampling("openai", "-3", None, None), {"top_p": 0.0})
+
+    def test_topk_strict_provider_store_only(self):
+        from backend.llm.factory import _sampling
+
+        self.assertEqual(_sampling("deepseek", "0.9", "40", "8192"), {"top_p": 0.9, "max_tokens": 8192})
+        self.assertEqual(_sampling("kimi", "0.9", "40", None), {"top_p": 0.9})
+
+    def test_topk_tolerant_provider_passthrough(self):
+        from backend.llm.factory import _sampling
+
+        self.assertEqual(
+            _sampling("dashscope", "0.9", "40", "8192"),
+            {"top_p": 0.9, "max_tokens": 8192, "extra_body": {"top_k": 40}},
+        )
+
+    def test_invalid_ignored(self):
+        from backend.llm.factory import _sampling
+
+        self.assertEqual(_sampling("openai", "abc", "x", "y"), {})
+
+    def test_scheme_fields_wired_deepseek(self):
+        factory = self._patch({
+            "llm": {"models": [
+                {"id": "d1", "provider": "deepseek", "model": "m1",
+                 "topP": "0.9", "topK": "40", "contextOutput": "8192"},
+            ], "active": "d1"},
+        })
+        client = factory.build_llm()
+        self.assertEqual(client._top_p, 0.9)
+        self.assertEqual(client._max_tokens, 8192)
+        self.assertIsNone(client._extra_body)  # deepseek 不透传 top_k
+
+    def test_scheme_fields_wired_dashscope_topk(self):
+        factory = self._patch({
+            "llm": {"models": [
+                {"id": "q1", "provider": "dashscope", "model": "m1", "topK": "40"},
+            ], "active": "q1"},
+        })
+        client = factory.build_llm()
+        self.assertEqual(client._extra_body, {"top_k": 40})
+
+
+class TestToolRounds(unittest.TestCase):
+    """E3 工具调用轮数：默认 500，配置可覆盖，非法值回落默认。"""
+
+    def _patch_agent_config(self, data):
+        import backend.agent as agent_mod
+
+        from backend.config import Config
+
+        old = agent_mod.config
+        agent_mod.config = Config(data)
+        self.addCleanup(lambda: setattr(agent_mod, "config", old))
+
+    def test_default_500(self):
+        self._patch_agent_config({})
+        from backend.agent import DEFAULT_TOOL_ROUNDS, tool_rounds
+
+        self.assertEqual(tool_rounds(), DEFAULT_TOOL_ROUNDS)
+        self.assertEqual(DEFAULT_TOOL_ROUNDS, 500)
+
+    def test_config_override(self):
+        self._patch_agent_config({"llm": {"cloud": {"tool_rounds": 7}}})
+        from backend.agent import tool_rounds
+
+        self.assertEqual(tool_rounds(), 7)
+
+    def test_invalid_falls_back(self):
+        self._patch_agent_config({"llm": {"cloud": {"tool_rounds": "abc"}}})
+        from backend.agent import tool_rounds
+
+        self.assertEqual(tool_rounds(), 500)
+
+
+class _FakeLLM:
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    async def complete(self, messages, tools=None):
+        self.calls.append({"n": len(messages), "tools": tools})
+        return self.replies.pop(0)
+
+
+class _FakeTTS:
+    def __init__(self):
+        self.spoken = []
+
+    async def speak(self, text):
+        self.spoken.append(text)
+
+
+class _FakeRegistry:
+    def __init__(self):
+        self.called = []
+
+    def schemas(self):
+        return [{"type": "function", "function": {"name": "noop", "parameters": {}}}]
+
+    async def call(self, name, **kwargs):
+        self.called.append(name)
+        return "ok"
+
+
+class TestAgentMultiRound(unittest.TestCase):
+    """E3 多轮工具循环：连环工具调用可继续；轮数用尽强制收尾。"""
+
+    def _agent(self, llm):
+        import asyncio as _asyncio
+
+        from backend.agent import Agent
+
+        tts, reg = _FakeTTS(), _FakeRegistry()
+        agent = Agent(llm=llm, tts=tts, registry=reg)
+        return agent, tts, reg
+
+    def test_multi_round_tool_loop(self):
+        import asyncio
+
+        tc = {"id": "c1", "type": "function", "function": {"name": "noop", "arguments": "{}"}}
+        llm = _FakeLLM([
+            Completion(content="", tool_calls=[tc]),
+            Completion(content="", tool_calls=[dict(tc, id="c2")]),
+            Completion(content="搞定", tool_calls=[]),
+        ])
+        agent, tts, reg = self._agent(llm)
+        asyncio.run(agent.handle("做点事"))
+        self.assertEqual(reg.called, ["noop", "noop"])  # 两轮都被执行
+        self.assertEqual(len(llm.calls), 3)
+        self.assertIsNotNone(llm.calls[1]["tools"])  # 续轮仍带 tools
+        self.assertEqual(agent._history[-1].content, "搞定")
+        self.assertEqual(tts.spoken[-1], "搞定")
+
+    def test_round_limit_forces_summary(self):
+        import asyncio
+
+        import backend.agent as agent_mod
+
+        from backend.config import Config
+
+        old = agent_mod.config
+        agent_mod.config = Config({"llm": {"cloud": {"tool_rounds": 1}}})
+        self.addCleanup(lambda: setattr(agent_mod, "config", old))
+
+        tc = {"id": "c1", "type": "function", "function": {"name": "noop", "arguments": "{}"}}
+        llm = _FakeLLM([
+            Completion(content="", tool_calls=[tc]),
+            Completion(content="收尾", tool_calls=[]),
+        ])
+        agent, tts, reg = self._agent(llm)
+        asyncio.run(agent.handle("做点事"))
+        self.assertEqual(reg.called, ["noop"])
+        self.assertEqual(len(llm.calls), 2)
+        self.assertIsNone(llm.calls[1]["tools"])  # 强制收尾轮不带 tools
+        self.assertEqual(tts.spoken[-1], "收尾")
+
+    def test_pure_chat_untouched(self):
+        import asyncio
+
+        llm = _FakeLLM([Completion(content="你好呀", tool_calls=[])])
+        agent, tts, reg = self._agent(llm)
+        asyncio.run(agent.handle("在吗"))
+        self.assertEqual(reg.called, [])
+        self.assertEqual(len(llm.calls), 1)
+        self.assertEqual(tts.spoken, ["你好呀"])
 
 
 if __name__ == "__main__":

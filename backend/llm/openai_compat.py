@@ -14,6 +14,9 @@ class OpenAICompatClient(LLMClient):
         api_key: str | None = None,
         temperature: float = 0.3,
         timeout: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
+        extra_body: dict | None = None,
     ) -> None:
         from openai import AsyncOpenAI  # 延迟导入
 
@@ -33,6 +36,9 @@ class OpenAICompatClient(LLMClient):
         )
         self._model = model
         self._temperature = temperature
+        self._top_p = top_p
+        self._max_tokens = max_tokens
+        self._extra_body = extra_body
 
     async def complete(
         self,
@@ -44,6 +50,12 @@ class OpenAICompatClient(LLMClient):
             "messages": [m.to_dict() for m in messages],
             "temperature": self._temperature,
         }
+        if self._top_p is not None:
+            kwargs["top_p"] = self._top_p
+        if self._max_tokens is not None:
+            kwargs["max_tokens"] = self._max_tokens
+        if self._extra_body:
+            kwargs["extra_body"] = self._extra_body
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"

@@ -17,6 +17,36 @@ from backend.config import (
 from backend.llm.base import LLMClient
 from backend.llm.openai_compat import OpenAICompatClient
 
+# 允许透传 top_k（经 extra_body）的供应商：其余家（DeepSeek/OpenAI/Kimi）仅保存不发送，避免 400
+_TOPK_PASSTHROUGH = {"dashscope", "glm", "ollama", "omni"}
+
+
+def _sampling(
+    provider: str,
+    top_p: float | str | None = None,
+    top_k: int | str | None = None,
+    max_tokens: int | str | None = None,
+) -> dict:
+    """把采样类参数规整成 OpenAICompatClient 可接收的形式；留空一律不发送。"""
+    out: dict = {}
+
+    def _num(v):  # noqa: ANN001
+        try:
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    tp = _num(top_p)
+    if tp is not None:
+        out["top_p"] = min(max(tp, 0.0), 1.0)
+    mt = _num(max_tokens)
+    if mt is not None and mt > 0:
+        out["max_tokens"] = int(mt)
+    tk = _num(top_k)
+    if tk is not None and tk > 0 and provider in _TOPK_PASSTHROUGH:
+        out["extra_body"] = {"top_k": int(tk)}
+    return out
+
 
 def _build_scheme(m: dict) -> LLMClient:
     """按 models[] 里的一条方案构建客户端。
@@ -29,6 +59,7 @@ def _build_scheme(m: dict) -> LLMClient:
     base_url = m.get("baseUrl")
     api_key = m.get("apiKey")
     temperature = float(m.get("temperature", 0.3))
+    sampling = _sampling(p, m.get("topP"), m.get("topK"), m.get("contextOutput"))
 
     if p == "ollama":
         return OpenAICompatClient(
@@ -36,6 +67,7 @@ def _build_scheme(m: dict) -> LLMClient:
             model=model or OLLAMA_MODEL,
             api_key="EMPTY",  # Ollama 无需真实 key
             temperature=temperature,
+            **sampling,
         )
 
     if p == "omni":
@@ -44,6 +76,7 @@ def _build_scheme(m: dict) -> LLMClient:
             model=model or OMNI_MODEL,
             api_key=api_key or None,
             temperature=temperature,
+            **sampling,
         )
 
     # 云端 5 家（OpenAI 兼容）
@@ -55,6 +88,7 @@ def _build_scheme(m: dict) -> LLMClient:
         model=model or model_default,
         api_key=api_key or (env(env_key) if env_key else None),
         temperature=temperature,
+        **sampling,
     )
 
 
@@ -77,6 +111,12 @@ def build_llm() -> LLMClient:
             model=cfg.get("model", OLLAMA_MODEL),
             api_key="EMPTY",
             temperature=float(cfg.get("temperature", 0.3)),
+            **_sampling(
+                "ollama",
+                cfg.get("top_p"),
+                cfg.get("top_k"),
+                cfg.get("max_tokens"),
+            ),
         )
 
     cfg = config.section("llm.cloud")
@@ -102,4 +142,10 @@ def build_llm() -> LLMClient:
         model=model or model_default,
         api_key=api_key or (env(env_key) if env_key else None),
         temperature=temperature,
+        **_sampling(
+            provider_cloud,
+            cfg.get("top_p"),
+            cfg.get("top_k"),
+            cfg.get("max_tokens"),
+        ),
     )

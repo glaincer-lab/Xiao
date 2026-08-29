@@ -30,6 +30,7 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 DEFAULT_MAX_HISTORY = 16
+DEFAULT_TOOL_ROUNDS = 500
 
 
 def system_prompt() -> str:
@@ -44,6 +45,18 @@ def max_history() -> int:
         return max(1, int(v))
     except (TypeError, ValueError):
         return DEFAULT_MAX_HISTORY
+
+
+def tool_rounds() -> int:
+    """单次任务允许的最大工具调用轮数（E3 高级设置）；留空/非法时用默认 500。"""
+    for path in ("llm.cloud.tool_rounds", "llm.local.tool_rounds"):
+        try:
+            v = int(float(config.get(path, 0) or 0))
+        except (TypeError, ValueError):
+            continue
+        if v > 0:
+            return v
+    return DEFAULT_TOOL_ROUNDS
 
 
 class Agent:
@@ -95,15 +108,25 @@ class Agent:
                 self._on_done()
 
     async def _run(self) -> None:
-        completion = await self._llm.complete(self._messages(), tools=self._registry.schemas())
+        tools = self._registry.schemas()
+        completion = await self._llm.complete(self._messages(), tools=tools)
 
-        if completion.tool_calls:
-            # ---- 阶段A：计划回复 ----
-            plan = (completion.content or "").strip() or self._default_plan(completion.tool_calls)
-            emit("assistant_plan", text=plan)
-            await self._speak(plan)
+        # ---- 多轮工具循环（E3：轮数上限见 tool_rounds()，默认 500）----
+        limit = tool_rounds()
+        used = 0
+        plan_said = False
+        executed = False
 
-            # ---- 执行工具 ----
+        while completion.tool_calls and used < limit:
+            if not plan_said:
+                # ---- 阶段A：计划回复（整个任务只播一次）----
+                plan = (completion.content or "").strip() or self._default_plan(completion.tool_calls)
+                emit("assistant_plan", text=plan)
+                await self._speak(plan)
+                plan_said = True
+            executed = True
+
+            # ---- 执行本轮工具 ----
             self._set_state(State.EXECUTING)
             self._history.append(
                 ChatMessage(
@@ -128,19 +151,23 @@ class Agent:
                 self._history.append(
                     ChatMessage(role="tool", content=result, tool_call_id=tc.get("id", ""), name=name)
                 )
+            used += 1
+            if used < limit:
+                completion = await self._llm.complete(self._messages(), tools=tools)
 
-            # ---- 阶段B：结果回复 ----
-            completion2 = await self._llm.complete(self._messages())
-            result_text = (completion2.content or "").strip()
-            emit("assistant_result", text=result_text)
-            await self._speak(result_text)
-            self._history.append(ChatMessage(role="assistant", content=result_text))
-        else:
-            # ---- 纯对话 ----
-            reply = (completion.content or "").strip()
-            emit("assistant_result", text=reply)
-            await self._speak(reply)
-            self._history.append(ChatMessage(role="assistant", content=reply))
+        if completion.tool_calls:
+            # 轮数用尽模型仍想继续调工具：不带 tools 再问一次，强制文本收尾
+            print(f"[agent] 工具调用轮数已达上限（{limit}），先汇报已完成部分")
+            emit("log", level="warn", message=f"工具调用轮数已达上限（{limit}），先汇报已完成部分")
+            completion = await self._llm.complete(self._messages())
+
+        # ---- 阶段B：结果回复 ----
+        result_text = (completion.content or "").strip()
+        if executed and not result_text:
+            result_text = "这轮先执行到这里，需要继续就说一声。"
+        emit("assistant_result", text=result_text)
+        await self._speak(result_text)
+        self._history.append(ChatMessage(role="assistant", content=result_text))
 
     async def _speak(self, text: str) -> None:
         self._set_state(State.SPEAKING)

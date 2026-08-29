@@ -53,6 +53,26 @@ class TestSchema(unittest.TestCase):
         self.assertEqual(field["type"], "number")
         self.assertEqual(field["min"], 5)
 
+    def test_llm_cloud_advanced_fields_exist(self):
+        """E3：LLM 高级设置字段齐全，且采样类留空语义用文本框承载。"""
+        paths = {f["path"] for f in SCHEMA}
+        for p in (
+            "llm.cloud.context_input",
+            "llm.cloud.context_output",
+            "llm.cloud.tool_rounds",
+            "llm.cloud.thinking",
+            "llm.cloud.image_input",
+            "llm.cloud.top_p",
+            "llm.cloud.top_k",
+        ):
+            self.assertIn(p, paths)
+        # number 输入框空值会被前端转成 0，「留空=不发送」必须用 text
+        self.assertEqual(next(f for f in SCHEMA if f["path"] == "llm.cloud.top_p")["type"], "text")
+        self.assertEqual(next(f for f in SCHEMA if f["path"] == "llm.cloud.top_k")["type"], "text")
+        tr = next(f for f in SCHEMA if f["path"] == "llm.cloud.tool_rounds")
+        self.assertEqual(tr["type"], "number")
+        self.assertEqual(tr["min"], 1)
+
     def test_show_if_refers_to_existing_path(self):
         paths = {f["path"] for f in SCHEMA}
         for f in SCHEMA:

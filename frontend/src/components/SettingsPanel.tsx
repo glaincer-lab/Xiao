@@ -132,6 +132,13 @@ type SavedModel = {
   baseUrl: string
   apiKey?: string
   temperature?: number
+  contextInput?: string
+  contextOutput?: string
+  toolRounds?: string
+  thinking?: string
+  imageInput?: boolean
+  topP?: string
+  topK?: string
 }
 // 已保存的识别方案（识别多方案管理）
 type SavedASR = {
@@ -200,8 +207,10 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [echoBusy, setEchoBusy] = useState(false)
   const [echoMsg, setEchoMsg] = useState('')
   const [showAddModel, setShowAddModel] = useState(false)
-  const [addForm, setAddForm] = useState({ provider: 'deepseek', model: 'deepseek-v4-pro', name: '', apiKey: '', baseUrl: 'https://api.deepseek.com/v1', temperature: 0.3 })
+  const [addForm, setAddForm] = useState({ provider: 'deepseek', model: 'deepseek-v4-pro', name: '', apiKey: '', baseUrl: 'https://api.deepseek.com/v1', temperature: 0.3, contextInput: '', contextOutput: '', toolRounds: '', thinking: 'default', imageInput: false, topP: '', topK: '' })
   const [editModelId, setEditModelId] = useState<string | null>(null)
+  const [llmTesting, setLlmTesting] = useState(false)
+  const [llmTestMsg, setLlmTestMsg] = useState('')
   const [showAddASR, setShowAddASR] = useState(false)
   const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'fun-asr-flash-8k-realtime', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
   const [editASRId, setEditASRId] = useState<string | null>(null)
@@ -510,10 +519,21 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
         setField('llm.cloud.model', m.model)
         setField('llm.cloud.api_key', m.apiKey || '')
         setField('llm.cloud.temperature', m.temperature ?? 0.3)
+        setField('llm.cloud.context_input', m.contextInput ?? '')
+        setField('llm.cloud.context_output', m.contextOutput ?? '')
+        setField('llm.cloud.tool_rounds', m.toolRounds ?? '')
+        setField('llm.cloud.thinking', m.thinking || 'default')
+        setField('llm.cloud.image_input', !!m.imageInput)
+        setField('llm.cloud.top_p', m.topP ?? '')
+        setField('llm.cloud.top_k', m.topK ?? '')
       } else if (kind === 'local') {
         setField('llm.local.base_url', m.baseUrl)
         setField('llm.local.model', m.model)
         setField('llm.local.temperature', m.temperature ?? 0.3)
+        setField('llm.local.tool_rounds', m.toolRounds ?? '')
+        setField('llm.local.max_tokens', m.contextOutput ?? '')
+        setField('llm.local.top_p', m.topP ?? '')
+        setField('llm.local.top_k', m.topK ?? '')
       } else {
         setField('llm.omni.base_url', m.baseUrl)
         setField('llm.omni.model', m.model)
@@ -529,18 +549,47 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
 
     const startNewModel = () => {
       setEditModelId(null)
-      setAddForm({ provider: 'deepseek', model: 'deepseek-v4-pro', name: '', apiKey: '', baseUrl: 'https://api.deepseek.com/v1', temperature: 0.3 })
+      setAddForm({ provider: 'deepseek', model: 'deepseek-v4-pro', name: '', apiKey: '', baseUrl: 'https://api.deepseek.com/v1', temperature: 0.3, contextInput: '', contextOutput: '', toolRounds: '', thinking: 'default', imageInput: false, topP: '', topK: '' })
+      setLlmTestMsg('')
       setShowAddModel(true)
     }
 
     const startEditModel = (m: SavedModel) => {
       setEditModelId(m.id)
-      setAddForm({ provider: m.provider, model: m.model, name: m.name, apiKey: m.apiKey || '', baseUrl: m.baseUrl, temperature: m.temperature ?? 0.3 })
+      setAddForm({ provider: m.provider, model: m.model, name: m.name, apiKey: m.apiKey || '', baseUrl: m.baseUrl, temperature: m.temperature ?? 0.3, contextInput: m.contextInput || '', contextOutput: m.contextOutput || '', toolRounds: m.toolRounds || '', thinking: m.thinking || 'default', imageInput: !!m.imageInput, topP: m.topP || '', topK: m.topK || '' })
+      setLlmTestMsg('')
       setShowAddModel(true)
+    }
+
+    const testLLM = async () => {
+      setLlmTestMsg('')
+      setLlmTesting(true)
+      try {
+        const r = await fetch(`${API_BASE}/api/provider/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: 'llm', model: { provider: formDef?.cloudProvider || addForm.provider, model: addForm.model, baseUrl: addForm.baseUrl, apiKey: addForm.apiKey } }),
+        })
+        const j = await r.json()
+        setLlmTestMsg(j.ok ? `✅ ${j.msg || '连接成功'}` : `❌ ${j.msg || '连接失败'}`)
+      } catch {
+        setLlmTestMsg('❌ 无法连接后端服务，请确认小二已启动')
+      } finally {
+        setLlmTesting(false)
+      }
     }
 
     const saveModelForm = () => {
       const def = LLM_PROVIDERS.find((x) => x.id === addForm.provider)
+      const adv = {
+        contextInput: addForm.contextInput,
+        contextOutput: addForm.contextOutput,
+        toolRounds: addForm.toolRounds,
+        thinking: addForm.thinking,
+        imageInput: addForm.imageInput,
+        topP: addForm.topP,
+        topK: addForm.topK,
+      }
       if (editModelId) {
         updateModel(editModelId, {
           name: addForm.name || def?.name || addForm.provider,
@@ -549,6 +598,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           baseUrl: addForm.baseUrl || def?.baseUrl || '',
           apiKey: addForm.apiKey,
           temperature: addForm.temperature,
+          ...adv,
         })
       } else {
         const m: SavedModel = {
@@ -559,6 +609,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           baseUrl: addForm.baseUrl || def?.baseUrl || '',
           apiKey: addForm.apiKey,
           temperature: addForm.temperature,
+          ...adv,
         }
         setField('llm.models', [...savedModels, m])
         applyModel(m)
@@ -634,12 +685,75 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               </label>
             )}
 
+            {formDef?.kind !== 'omni' && (
+              <>
+                <label className="settings-field">
+                  <span className="settings-field-label">上下文窗口(输入)</span>
+                  <select value={addForm.contextInput} onChange={(e) => setAddForm({ ...addForm, contextInput: e.target.value })}>
+                    <option value="">跟随模型默认</option>
+                    <option value="131072">128k</option>
+                    <option value="262144">256k</option>
+                    <option value="524288">512k</option>
+                    <option value="1048576">1M</option>
+                  </select>
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field-label">上下文窗口(输出)</span>
+                  <select value={addForm.contextOutput} onChange={(e) => setAddForm({ ...addForm, contextOutput: e.target.value })}>
+                    <option value="">跟随模型默认</option>
+                    <option value="4096">4k</option>
+                    <option value="16384">16k</option>
+                    <option value="32768">32k</option>
+                    <option value="131072">128k</option>
+                  </select>
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field-label">工具调用轮数</span>
+                  <input type="text" inputMode="numeric" placeholder="默认 500" value={addForm.toolRounds} onChange={(e) => setAddForm({ ...addForm, toolRounds: e.target.value.replace(/[^0-9]/g, '') })} />
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field-label">思考模式</span>
+                  <select value={addForm.thinking} onChange={(e) => setAddForm({ ...addForm, thinking: e.target.value })}>
+                    <option value="default">跟随模型默认</option>
+                    <option value="on">开启思考</option>
+                    <option value="off">关闭思考</option>
+                  </select>
+                </label>
+                <label className="settings-field">
+                  <input type="checkbox" checked={addForm.imageInput} onChange={(e) => setAddForm({ ...addForm, imageInput: e.target.checked })} />
+                  <span className="settings-field-label">支持图片输入</span>
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field-label">采样 Top P</span>
+                  <input type="text" inputMode="decimal" placeholder="0~1，留空跟随模型默认" value={addForm.topP} onChange={(e) => setAddForm({ ...addForm, topP: e.target.value })} />
+                </label>
+                <label className="settings-field">
+                  <span className="settings-field-label">采样 Top K</span>
+                  <input type="text" inputMode="numeric" placeholder="留空不发送；DeepSeek/OpenAI/Kimi 暂不透传" value={addForm.topK} onChange={(e) => setAddForm({ ...addForm, topK: e.target.value })} />
+                </label>
+                <div className="settings-guide">
+                  <div>思考模式、图片输入、上下文输入为预留项：先保存，后续版本生效；输出上限、工具轮数、Top P/Top K 保存即生效。</div>
+                </div>
+              </>
+            )}
+
             {(formDef?.keyHint || formDef?.recommend) && (
               <div className="settings-guide">
                 {formDef?.keyHint && <div>{formDef.keyHint}</div>}
                 {formDef?.recommend && <div>{formDef.recommend}</div>}
               </div>
             )}
+
+            {formDef?.needsKey && (
+              <div className="settings-actions">
+                <button type="button" className="btn" disabled={llmTesting || !addForm.apiKey} onClick={testLLM}>{llmTesting ? '测试中…' : '连通测试'}</button>
+                {llmTestMsg && <span className="settings-msg">{llmTestMsg}</span>}
+              </div>
+            )}
+
+            <div className="settings-guide">
+              <div>连通性测试会消耗少量 Token；保存后立即生效。</div>
+            </div>
 
             <div className="settings-actions">
               <button className="btn" onClick={saveModelForm}>保存</button>

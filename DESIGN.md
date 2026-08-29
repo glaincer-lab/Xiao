@@ -185,6 +185,7 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
 - **配套接口**：`/api/audio/devices`（sounddevice 枚举）、`/api/tts/preview`（试听）、`/api/memory/clear`（一键清空 Agent 历史 + DSH 上下文）、`/api/provider/test`（服务商连通性测试：按环节发最小请求，无效 Key/超额/超时各回一句人话，不抛堆栈）。
 - **统一报错映射**：`backend/errors.py`（`human_reason` / `reason_from_text`）——管线任何环节的异常（对话、长任务、试听、设备枚举）都转成一句可播报的人话：401 = Key 失效、429 = 额度/限流、超时 = 网络；原始错误只进后端日志与前端日志面板，不抛堆栈给用户。
 - **首次启动向导**（`OnboardingWizard.tsx`，复用设置面板样式）：选语言 → 领 Key（DeepSeek / 通义百炼直达领取页 + 图文步骤）→ 连通测试（`/api/provider/test`，✅/❌ 含人话原因）→ 选大脑（`router.mode` 三选一 + DSH 可用性检测）→ 测麦克风（`/api/mic/echo`）。任何一步可跳过进 L0；「已完成」标记存本机 localStorage（`xiao_onboarded`），保存失败不写标记、下次仍会弹。
+- **LLM 高级参数**（新增/编辑模型弹窗内）：模型名自填 + 引导（如「填 deepseek-chat / qwen-plus」，不内置下拉）；上下文窗口（输入/输出）、工具调用轮数（默认 500）、思考模式、图片输入、采样 Top P / Top K。`top_p` / `max_tokens` 透传各家，`top_k` 仅对兼容 extra_body 的供应商透传（DeepSeek/OpenAI/Kimi 仅保存不发送，避免 400）；弹窗内置「连通测试」按钮并提示「连通性测试会消耗少量 Token」。Agent 侧配套**有界多轮工具循环**：按「工具调用轮数」反复执行-回传-续推，超限时强制模型文本收尾，不再一轮就停。
 
 ## 12. 与开源方案对比（横向定位）
 
