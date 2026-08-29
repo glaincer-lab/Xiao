@@ -48,6 +48,7 @@
 | 麦克风设备下拉 + TTS 试听 | `sounddevice` 枚举输入设备；edge-tts 试听 | ✅ |
 | 软配置热加载 | 可打断/审批词表/DSH 关键词/提示词等保存即生效，引擎类提示重启 | ✅ |
 | 多轮 DSH 上下文 | `bridge/` 记录最近任务与结果摘要，每轮打包传给 headless DSH | ✅ |
+| 多任务并发 + 语音取消消歧义 | 后台任务并发上限可配（`tasks.max_concurrent`，headless 桥自动钳制串行）；「取消第N个」/「取消「名字」」单独停止，裸取消停最近一个 | ✅ |
 | 星云状态形态 | 状态→3D 形态映射（待机球体/聆听八面体/思考∞/干活螺旋/播报圆柱/审批立方体） | ✅ |
 | 真实麦克风声线动画 | 后端采集麦克风算 RMS 电平，约 100ms 经 WebSocket 推送，前端 `VoiceLine` 画真实声线（替换假波纹 `Waveform` 与呼吸球 `Orb`） | ✅ |
 | 播报 4 方案管理 | `Qwen 实时流式` / `edge-tts` / `Piper` / `MiniCPM-o`，音色中文名展示（CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除） | ✅ |
@@ -95,4 +96,4 @@
 
 ## 五、一句话总结
 
-> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（qwen-audio 默认、fun-asr 方言备选），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地；DSH 桥已升级 web 流式（实时进度，失败自动降级 headless）；打包链路已通（安装包构建 + 内置后端冒烟通过），剩双击安装包的端到端实测。
+> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（qwen-audio 默认、fun-asr 方言备选），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地；DSH 桥已升级 web 流式（实时进度，失败自动降级 headless），后台任务支持多任务并发与按任务取消；打包链路已通（安装包构建 + 内置后端冒烟通过），剩双击安装包的端到端实测。

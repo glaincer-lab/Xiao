@@ -138,7 +138,7 @@ DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `c
 - **留在 WORKING**：可问「进展」（报已用秒数）、说「取消」。
 - **后台化**：说「后台跑 / 你先忙」→ 助手回“好的，我后台继续，完成后叫你”→ 回到待机，任务继续；**完成后语音主动通知**“任务完成了：…”。
 - 两段式回复（先说准备做什么 → 完成再汇报结果）不变。
-- **后台并发**：后台化会同时存在多个 DSH 任务，状态机需把单一 `WORKING` 升级为**任务列表**（每个带 id/状态/完成事件），“取消”要能消歧义指向哪个任务。
+- **后台并发（已落地）**：后台化会同时存在多个 DSH 任务，状态机把单一 `WORKING` 升级为**任务列表**（每个带 id/状态/完成事件）；“取消”可消歧义——「取消第2个」按创建序、「取消「任务名」」按引号名匹配、裸「取消」停最近一个，越界/未找到会语音备注。并发上限 `tasks.max_concurrent`（默认 2）；web 流式桥每轮独立会话天然支持并发，headless 桥是单进程槽会自动钳制回 1 串行。
 - **失败/超时反馈**：`WORKING --失败/超时--> SPEAKING(报原因) --> SLEEPING`，不能让任务卡在 WORKING 里一声不吭。
 
 ## 10. 风险与应对
@@ -164,6 +164,8 @@ router.mode         → auto | chat | dsh
 router.log_path     → logs/routes.jsonl
 router.dsh_keywords / working_status_phrases / working_cancel_phrases
 router.rules        → L0 规则指令开关与词表（keywords 按规则覆盖，B1）
+tasks.max_concurrent → 后台任务并发上限（默认 2；headless 桥自动钳制 1）
+tasks.log_path      → logs/tasks.json（任务持久化）
 
 # 多方案管理（四环节）：models[] 存方案，active 指向当前方案
 wake_word.engine    → sherpa（本地）| cloud（方言·预留）| omni（一体化·预留）
