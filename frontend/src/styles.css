@@ -1655,6 +1655,28 @@ body {
   color: var(--cyan);
   opacity: 0.8;
 }
+.work-live {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px 4px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.work-live-title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.work-live-text {
+  margin: 0;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--cyan);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 /* ==================== 关机确认：玻璃拟态对话框（曜钢） ==================== */
 /* 遮罩：点击空白处等同「取消」，把一句话发回对话管线 */

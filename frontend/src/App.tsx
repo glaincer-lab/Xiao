@@ -160,6 +160,13 @@ function describeEvent(e: ServerEvent): { label: string; kind: string } | null {
       return { label: `提醒：${truncate(String(e.text ?? ''))}`, kind: 'warn' }
     case 'app_shutdown':
       return { label: '程序即将关闭', kind: 'warn' }
+    case 'work_step': {
+      const name = String(e.name ?? 'tool')
+      const label = e.status === 'start' ? `执行 ${name}` : e.status === 'error' ? `${name} 失败` : `${name} 完成`
+      return { label, kind: e.status === 'error' ? 'warn' : 'tool' }
+    }
+    case 'dsh_chunk':
+      return null
     default:
       return { label: e.type, kind: 'info' }
   }
@@ -186,6 +193,7 @@ export default function App() {
   const [logOpen, setLogOpen] = useState(false) // 日志栏默认收起：点击「日志」才展开
   const [dshAvailable, setDshAvailable] = useState<boolean | null>(null)
   const [workSteps, setWorkSteps] = useState<WorkStep[]>([])
+  const [dshLive, setDshLive] = useState('')
   const [approvalText, setApprovalText] = useState('')
   const [clock, setClock] = useState('')
   const [shuttingDown, setShuttingDown] = useState(false) // 收到 app_shutdown 后置真：显示关机谢幕遮罩
@@ -322,9 +330,24 @@ export default function App() {
       case 'work_step': {
         const name = String(e.name ?? 'tool')
         const status = e.status === 'error' ? 'error' : e.status === 'start' ? 'start' : 'done'
-        pushWorkStep({ name, status: status as WorkStep['status'], summary: truncate(String(e.summary ?? ''), 120), source: 'dsh' })
+        const summary = truncate(String(e.summary ?? ''), 120)
+        setWorkSteps((prev) => {
+          if (status !== 'start') {
+            for (let i = prev.length - 1; i >= 0; i--) {
+              if (prev[i].name === name && prev[i].status === 'start') {
+                const next = [...prev]
+                next[i] = { ...next[i], status, summary: summary || next[i].summary }
+                return next
+              }
+            }
+          }
+          return [...prev.slice(-199), { id: stepIdCounter++, name, status: status as WorkStep['status'], summary, source: 'dsh', time: nowTime() }]
+        })
         break
       }
+      case 'dsh_chunk':
+        setDshLive((prev) => (prev + String(e.text ?? '')).slice(-2000))
+        break
       case 'router_mode':
         setRouterMode(String(e.mode ?? 'auto'))
         break
@@ -333,6 +356,7 @@ export default function App() {
         break
       case 'task_event': {
         const t = e as unknown as Task
+        if (t.status === 'running') setDshLive('')
         setTasks((prev) => {
           const i = prev.findIndex((x) => x.id === t.id)
           if (i >= 0) {
@@ -565,8 +589,16 @@ export default function App() {
         </section>
 
         <aside className="col col--right">
-          {(workSteps.length > 0 || activeTaskCount > 0) && (
-            <WorkPanel steps={workSteps} activeTaskCount={activeTaskCount} onClear={() => setWorkSteps([])} />
+          {(workSteps.length > 0 || activeTaskCount > 0 || dshLive) && (
+            <WorkPanel
+              steps={workSteps}
+              activeTaskCount={activeTaskCount}
+              live={dshLive}
+              onClear={() => {
+                setWorkSteps([])
+                setDshLive('')
+              }}
+            />
           )}
           <section className="panel panel--composer">
             <div className="composer">

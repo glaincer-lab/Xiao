@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 export type WorkStep = {
   id: number
   name: string
@@ -16,13 +18,22 @@ const STATUS_ICON: Record<WorkStep['status'], string> = {
 export function WorkPanel({
   steps,
   activeTaskCount,
+  live,
   onClear,
 }: {
   steps: WorkStep[]
   activeTaskCount: number
+  live?: string
   onClear: () => void
 }) {
   const list = [...steps].reverse()
+  const liveRef = useRef<HTMLPreElement>(null)
+
+  useEffect(() => {
+    if (liveRef.current) {
+      liveRef.current.scrollTop = liveRef.current.scrollHeight
+    }
+  }, [live])
 
   return (
     <section className="panel panel--work">
@@ -35,6 +46,12 @@ export function WorkPanel({
           清空
         </button>
       </div>
+      {live ? (
+        <div className="work-live">
+          <span className="work-live-title">实时输出</span>
+          <pre ref={liveRef} className="work-live-text">{live}</pre>
+        </div>
+      ) : null}
       <div className="work-body">
         {list.length === 0 ? (
           <span className="work-empty">暂无进行中的步骤</span>
