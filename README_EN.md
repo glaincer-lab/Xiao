@@ -6,7 +6,7 @@ An always-on Chinese voice assistant for Windows: wake it with「小二」(Xiao 
 
 **What it is**: a voice frontend for a general-purpose agent (DeepSeek Harness, DSH). It turns DSH into a "voice-controlled agent workbench" — not just weather and web search, but reading/writing files, running commands, and multi-step agent loops. The voice layer only does three things: wake, transcribe, and route; the hard part (agent loop, coding tools, subagents, knowledge base) is delegated to DSH.
 
-**Pipeline**: Sherpa-ONNX local Chinese wake word (free, offline, zero training) → Silero VAD → Aliyun streaming ASR (cloud `fun-asr-flash-8k-realtime` default + qwen-audio / qwen3-asr; local FunASR as fallback) → routing (chat via DeepSeek/Qwen/OpenAI/GLM/Kimi cloud, or local Ollama; work via DSH) → voice approval for dangerous actions → speech (Qwen realtime streaming default, edge-tts free cloud, CosyVoice v3 / Qwen-Audio-TTS paid cloud, Piper offline, MiniCPM-o local vLLM).
+**Pipeline**: Sherpa-ONNX local Chinese wake word (free, offline, zero training) → Silero VAD → Aliyun streaming ASR (cloud `fun-asr-flash-8k-realtime` default + qwen-audio / qwen3-asr; local FunASR as fallback) → routing (chat via DeepSeek/Qwen/OpenAI/GLM/Kimi cloud, or local Ollama / MiniCPM-o (local vLLM); work via DSH) → voice approval for dangerous actions → speech (Qwen realtime streaming default, edge-tts free cloud, CosyVoice v3 / Qwen-Audio-TTS paid cloud, Piper offline, MiniCPM-o local vLLM).
 
 **Multi-provider**: wake / ASR / TTS / LLM each support multiple providers (card list + create/edit modal + one-click switch; model names are free-form, follow official docs). Dangerous actions (network / writing outside workspace / delete / install / system changes) require voice approval; DSH headless mode is fail-closed. Long tasks can run in the background with completion notification.
 
@@ -32,7 +32,7 @@ Xiao is not a voice brain built from scratch — it is a **voice frontend for De
 - **Wake**: local Sherpa-ONNX keyword spotting, native Chinese「小二」, zero training, offline
 - **VAD**: Silero VAD (ONNX), robust speech/noise separation
 - **ASR**: Aliyun streaming (fun-asr-flash-8k-realtime default + qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime), local FunASR fallback; multiple providers
-- **Brain**: DeepSeek / Qwen / OpenAI / GLM / Kimi (all OpenAI-compatible) + local Ollama, function calling
+- **Brain**: DeepSeek / Qwen / OpenAI / GLM / Kimi (all OpenAI-compatible) + local Ollama / MiniCPM-o (local vLLM), function calling
 - **DSH execution**: routes to DeepSeek Harness for real tasks (read/write files, run commands, multi-step agent loops), with multi-turn context, voice approval, background long tasks
 - **TTS**: 6 providers — Qwen realtime streaming (default, ~0.4s first audio, syncs with subtitles) / edge-tts free cloud / CosyVoice v3 / Qwen-Audio-TTS (paid cloud, flash/plus tiers) / Piper offline / MiniCPM-o (local vLLM)
 - **Live voice line**: real microphone RMS level pushed over WebSocket, rendered as a live waveform (not a fake animation)
@@ -69,7 +69,7 @@ backend/
   bridge/           ★ the only place that knows DSH (headless CLI + multi-turn context)
   audio/            mic / vad / wake
   asr/              cloud fun-asr-flash-8k-realtime(default)/qwen-audio/qwen3-asr / local FunASR
-  llm/              cloud DeepSeek/Qwen/OpenAI/GLM/Kimi / local Ollama
+  llm/              cloud DeepSeek/Qwen/OpenAI/GLM/Kimi / local Ollama / MiniCPM-o (local vLLM)
   tts/              Qwen realtime / edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o
   tools/            search / open / weather / reminders (registry)
   devices/          device adapter abstraction (Huawei smart-home reserved)
@@ -148,7 +148,7 @@ Click "Settings" (top-right): left nav + right scroll, schema-driven (`backend/s
 | Wake | local Sherpa-ONNX「小二」 | unified MiniCPM-o (local vLLM) |
 | ASR | cloud fun-asr-flash-8k-realtime (default) / qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime, local FunASR | unified MiniCPM-o (local vLLM) |
 | TTS | Qwen realtime streaming (default) / edge-tts / CosyVoice v3 / Qwen-Audio-TTS (paid cloud, flash/plus) / Piper offline / MiniCPM-o (local vLLM) | — |
-| LLM | cloud DeepSeek/Qwen/OpenAI/GLM/Kimi, local Ollama | — |
+| LLM | cloud DeepSeek/Qwen/OpenAI/GLM/Kimi, local Ollama, MiniCPM-o (local vLLM) | — |
 
 ## Cloud / Local Switch
 
@@ -156,6 +156,7 @@ Click "Settings" (top-right): left nav + right scroll, schema-driven (`backend/s
 |---|---|---|
 | ASR | `pip install -r requirements-local-asr.txt`, create/select a "local FunASR" provider | FunASR `paraformer-zh`, slower on CPU |
 | LLM | install Ollama, `ollama pull qwen2.5:7b`, select "local Ollama" | Ollama's OpenAI-compatible endpoint (no key) |
+| LLM (local vLLM) | start local vLLM-omni (`llm.omni` defaults to `localhost:8000`), select "MiniCPM-o" | OpenAI-compatible endpoint; same base_url+model+key trio |
 
 ## Extending: Add a Tool
 
@@ -191,6 +192,22 @@ npm start
 - Closing the window hides to tray; backend and mic keep running
 - Tray menu: show/hide, launch on startup, quit
 - Auto-starts the backend: prefers `.venv\Scripts\python.exe` (override with `XIAO_PYTHON`)
+
+## Development & Testing
+
+Backend uses Python unit tests (`tests/`); the frontend gates on type checks + Lint (`eslint.config.js`, ESLint v9 flat config):
+
+```powershell
+# Backend unit tests
+.venv\Scripts\python.exe -m unittest discover -s tests
+
+# Frontend gate (typecheck + Lint; both must pass)
+cd frontend
+npm run check
+
+# Frontend production build (tsc && vite build)
+npm run build
+```
 
 ## Known Limitations
 

@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from backend.config import OLLAMA_BASE_URL, OLLAMA_MODEL, OMNI_BASE_URL, OMNI_MODEL
+
 # 标签页顺序：大模型是独立板块，放在播报（TTS）之后
 GROUPS = [
     {"key": "wake", "label": "唤醒"},
@@ -58,7 +60,7 @@ PERM_CATEGORIES = [
 VLLM_GUIDE = (
     "作为「大脑」接入：MiniCPM-o 通过 vLLM 的 OpenAI 兼容端点接入，填地址 + 模型即可（本地无 Key）。\n"
     "部署：NVIDIA GPU（约 9B 参数）+ vLLM（MiniCPM-o 多模态需 vllm-omni 分支，见官方 README）。\n"
-    "步骤：① 装 vLLM → ② 下载 openbmb/MiniCPM-o-4_5 → ③ 启动服务 → ④ 上方填地址与模型名。\n"
+    f"步骤：① 装 vLLM → ② 下载 {OMNI_MODEL} → ③ 启动服务 → ④ 上方填地址与模型名。\n"
     "注意：其「一体化语音」（唤醒 / 识别 / 播报）仍待后续接入。"
 )
 
@@ -160,14 +162,17 @@ SCHEMA: list[dict] = [
     {"path": "_guide.tts.piper", "label": "引导", "type": "guide", "group": "tts",
      "guide": "本地 Piper：完全离线合成，作为断网保底。\n依赖：pip install piper-tts；声库 models/zh_CN-huayan-medium.onnx（已随项目提供）。"},
     {"path": "_guide.tts.omni", "label": "引导", "type": "guide", "group": "tts",
-     "guide": "MiniCPM-o 通过本地 vLLM-omni 服务播报（llm.omni 的 base_url，默认 localhost:8000）。\n需本机已启动 vLLM-omni，否则无声音。"},
+     "guide": f"MiniCPM-o 通过本地 vLLM-omni 服务播报（llm.omni 的 base_url，默认 {OMNI_BASE_URL}）。\n需本机已启动 vLLM-omni，否则无声音。"},
 
     # ---- 大模型（独立板块，接入接口） ----
     {"path": "llm.provider", "label": "模型来源", "type": "select", "group": "llm", "reload": "restart",
      "options": [
          {"value": "cloud", "label": "云端（供应商 API）", "status": "ok"},
          {"value": "local", "label": "本地 Ollama（OpenAI 兼容）", "status": "ok"},
+         {"value": "omni", "label": "一体化 MiniCPM-o（本地 vLLM）", "status": "ok"},
      ]},
+    {"path": "llm.timeout_sec", "label": "响应超时(秒)", "type": "number", "group": "llm", "reload": "restart",
+     "min": 5, "max": 300, "hint": "调用大模型超过该秒数即判超时；云端慢网络可适当调大"},
     {"path": "llm.cloud.provider", "label": "云端服务商", "type": "select", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "cloud"},
      "options": [
@@ -187,19 +192,19 @@ SCHEMA: list[dict] = [
      "min": 0, "max": 1.0, "step": 0.05, "hint": "越低越稳定，越高越发散"},
     {"path": "llm.local.base_url", "label": "本地地址", "type": "text", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "local"},
-     "hint": "Ollama 地址，默认 http://localhost:11434/v1"},
+     "hint": f"Ollama 地址，默认 {OLLAMA_BASE_URL}"},
     {"path": "llm.local.model", "label": "本地模型", "type": "text", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "local"},
-     "hint": "如 qwen2.5:7b"},
+     "hint": f"如 {OLLAMA_MODEL}"},
     {"path": "llm.local.temperature", "label": "随机度", "type": "slider", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "local"},
      "min": 0, "max": 1.0, "step": 0.05},
     {"path": "llm.omni.base_url", "label": "vLLM 服务地址", "type": "text", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "omni"},
-     "hint": "如 http://localhost:8000/v1"},
+     "hint": f"如 {OMNI_BASE_URL}"},
     {"path": "llm.omni.model", "label": "一体化模型名", "type": "text", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "omni"},
-     "hint": "如 openbmb/MiniCPM-o-4_5"},
+     "hint": f"如 {OMNI_MODEL}"},
     {"path": "_guide.llm.omni", "label": "引导", "type": "guide", "group": "llm",
      "show_if": {"path": "llm.provider", "value": "omni"}, "guide": VLLM_GUIDE},
     {"path": "agent.system_prompt", "label": "系统提示词（人设）", "type": "textarea", "group": "llm", "reload": "soft",

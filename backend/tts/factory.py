@@ -13,7 +13,7 @@ provider 收敛为 6 类：
 """
 from __future__ import annotations
 
-from backend.config import config
+from backend.config import OMNI_BASE_URL, OMNI_MODEL, config
 from backend.tts.base import TTSEngine
 from backend.tts.edge_tts import EdgeTTS
 
@@ -51,8 +51,8 @@ def _build_omni() -> TTSEngine:
 
     omni_cfg = config.section("llm.omni")
     return OmniTTSEngine(
-        base_url=omni_cfg.get("base_url", "http://localhost:8000/v1"),
-        model=omni_cfg.get("model", "openbmb/MiniCPM-o-4_5"),
+        base_url=omni_cfg.get("base_url", OMNI_BASE_URL),
+        model=omni_cfg.get("model", OMNI_MODEL),
         api_key=omni_cfg.get("api_key"),
     )
 

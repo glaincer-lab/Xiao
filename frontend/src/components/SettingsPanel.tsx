@@ -695,7 +695,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const renderASRConfig = () => {
     const savedASR: SavedASR[] = config ? (getPath(config, 'asr.models') || []) : []
     const activeASR = config ? (getPath(config, 'asr.active') || '') : ''
-    const activeASRScheme = savedASR.find((m) => m.id === activeASR)
 
     const applyASR = (m: SavedASR) => {
       setField('asr.active', m.id)
@@ -1358,7 +1357,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   }
 
   const allTabs = [...groups, ...EXTRA_TABS]
-  const activeTab = allTabs.find((t) => t.key === tab) ?? allTabs[0]
   const currentInput = config ? getPath(config, 'audio.input_device') : undefined
 
   return (

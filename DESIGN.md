@@ -53,7 +53,7 @@ xiao\
 │   ├── backend\
 │   │   ├── audio\  mic/vad/wake
 │   │   ├── asr\    阿里云实时流式(fun-asr默认/qwen-audio/qwen3) / FunASR(本地)
-│   │   ├── llm\    OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama)
+│   │   ├── llm\    OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama/MiniCPM-o)
 │   │   ├── tts\    edge-tts(免费云) + CosyVoice v3/Qwen-Audio-TTS(付费云) + Piper(离线) + MiniCPM-o(vLLM)
 │   │   ├── tools\  搜索/打开/天气/提醒
 │   │   ├── bridge\ ★ 唯一知道 DSH 的地方
@@ -210,9 +210,10 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
 
 1. **密钥**：真实 key 只在本机 `.env`（已 gitignore），`config.yaml` 一律留空，仓库只留 `.env.example`（全占位符）。
 2. **Git**：schannel SSL 失败，用 `git -c http.sslBackend=openssl`；push 用 gh token 拼 URL（`gh auth token` + `x-access-token:<tok>@github.com`）。
-3. **Python 环境**：用 `.venv\Scripts\python.exe`（3.12，venv 无 pip，用 `uv` 装包，需设 `UV_CACHE_DIR` 到临时目录）。
+3. **Python 环境**：用 `.venv\Scripts\python.exe`（3.12，venv 无 pip，用 `uv` 装包，需设 `UV_CACHE_DIR` 到临时目录）。**勿用 3.14**（torch/FunASR 无 wheel）。若本机只有 uv 管理的 3.12，用其完整解释器路径建 venv（`py -3.12` 不一定可用）。
 4. **项目规则**：设计以「第三使用者视角」考虑（可分发、开箱即用、不写死本机路径），见 `AGENTS.md`。
 5. **音色命名坑**：三套音色命名互不通用——CosyVoice 短名（`longanyang`）、Qwen-Audio-TTS 带模型前缀（`qwen-audio-3.0-tts-flash-longxxx`）、Qwen 实时流式英文名（Ethan 等）；存储层统一存短名、运行时拼接。
 6. **重启生效**：引擎类配置改动（`reload: restart`）需重启后端；`reload: soft` 保存即热加载。
 7. **云 TTS 语速边界（已核）**：仅 edge-tts 有 `rate` 语速（±50%，设置里可选）；CosyVoice v3 / Qwen-Audio-TTS 底层 `SpeechSynthesizer` 支持 `speech_rate`（0.5~2.0，<1 放慢、>1 加快）但**当前代码未透传**；Qwen 实时流式（`qwen_rt`）官方明确**不支持** `speech_rate`（Qwen-TTS-Realtime 系列忽略该字段），原生调速走不通，仅可换 `qwen3-tts-instruct-flash-realtime` 用指令近似控制。
 8. **设计文档位置（勿丢失）**：设置系统与 UI 设计记录已移至 `dev/settings-design.md`（**gitignore，不推送**）。该文件含方案①②③、字段注册表、UI 对比、实施顺序与待确认项，是「设置 + 界面」后续迭代的设计依据。核心待办：健康检查+自动降级（⬜）、星云 Canvas 2D 重做（⬜）、快速抽屉/全屏高级页细化（⬜）。下次继续设置/UI 工作时**一定先读此文件**。
+9. **测试门禁**：后端 `python -m unittest discover -s tests`；前端 `npm run check`（= typecheck + lint，ESLint v9 扁平配置 `frontend/eslint.config.js`）+ `npm run build`。模型/配置类一致性回归集中在 `tests/`（如 LLM 工厂 omni 路径、设置 schema 选项合法性）。

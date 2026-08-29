@@ -89,9 +89,22 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
-    """优雅关停：结束音频线程、取消挂起的审批，避免进程残留音频设备占用。"""
+    """优雅关停：结束音频线程、取消挂起的审批，并释放 TTS/桥接/任务资源，避免进程残留占用水。"""
     if pipeline is not None:
         pipeline.stop()
+    if bridge is not None:
+        try:
+            bridge.cancel()
+        except Exception:
+            pass
+    if tts is not None:
+        for release in (getattr(tts, "stop", None), getattr(tts, "close", None)):
+            if release is None:
+                continue
+            try:
+                release()
+            except Exception:
+                pass
 
 
 @app.websocket("/ws")

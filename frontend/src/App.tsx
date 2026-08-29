@@ -30,17 +30,6 @@ const UI_DEFAULTS: UISettings = {
   leftWidth: 260,
   sprite: 'auto',
 }
-const FONT_OPTIONS = [
-  { value: "'Microsoft YaHei', 'PingFang SC', sans-serif", label: '微软雅黑' },
-  { value: "'SimHei', sans-serif", label: '黑体' },
-  { value: "'KaiTi', 'STKaiti', serif", label: '楷体' },
-  { value: "'SimSun', serif", label: '宋体' },
-  { value: "'Segoe UI', sans-serif", label: 'Segoe UI' },
-  { value: "'Arial', sans-serif", label: 'Arial' },
-  { value: "'Georgia', serif", label: 'Georgia' },
-  { value: "'Consolas', 'Courier New', monospace", label: 'Consolas 等宽' },
-]
-
 const STATE_LABELS: Record<string, string> = {
   idle: '待机',
   listening: '聆听中',
@@ -85,16 +74,23 @@ function summarizeArgs(name: string, args: unknown): string {
   return t.length > 90 ? t.slice(0, 90) + '…' : t
 }
 
+let _chimeCtx: AudioContext | null = null
+
 function playChime() {
   try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ctx = new Ctx()
+    // 复用单个 AudioContext（浏览器对同时存在的 context 数量严格受限），
+    // 避免每次唤醒都新建一个再也不释放的 context → 导致资源泄漏/无声
+    const Ctx =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const ctx = _chimeCtx ?? (_chimeCtx = new Ctx())
+    if (ctx.state === 'suspended') void ctx.resume()
     const now = ctx.currentTime
     const gain = ctx.createGain()
     gain.gain.setValueAtTime(0.0001, now)
     gain.gain.exponentialRampToValueAtTime(0.35, now + 0.03)
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7)
     gain.connect(ctx.destination)
+    const oscs: OscillatorNode[] = []
     ;[880, 1174.66].forEach((f, i) => {
       const o = ctx.createOscillator()
       o.type = 'sine'
@@ -102,6 +98,22 @@ function playChime() {
       o.connect(gain)
       o.start(now + i * 0.09)
       o.stop(now + 0.7)
+      oscs.push(o)
+    })
+    // 播完自动断开节点图，让本次音频可被回收；context 本体保留复用
+    oscs[oscs.length - 1].addEventListener('ended', () => {
+      for (const o of oscs) {
+        try {
+          o.disconnect()
+        } catch {
+          /* noop */
+        }
+      }
+      try {
+        gain.disconnect()
+      } catch {
+        /* noop */
+      }
     })
   } catch {
     /* 忽略音频播放限制 */
@@ -275,12 +287,12 @@ export default function App() {
       case 'assistant_plan': {
         const text = String(e.text ?? '')
         setApprovalText(text)
-        const msg = addMessage({ role: 'assistant', text, kind: 'plan' })
+        addMessage({ role: 'assistant', text, kind: 'plan' })
         break
       }
       case 'assistant_result': {
         const text = String(e.text ?? '')
-        const msg = addMessage({ role: 'assistant', text, kind: 'result' })
+        addMessage({ role: 'assistant', text, kind: 'result' })
         break
       }
       case 'tool_call': {

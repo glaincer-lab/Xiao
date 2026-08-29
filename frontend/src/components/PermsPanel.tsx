@@ -40,7 +40,7 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
   const toggle = async (id: string, granted: boolean) => {
     setMsg('')
     try {
-      const r = await fetch('http://127.0.0.1:8123/api/perms/standing', {
+      const r = await fetch(`${API_BASE}/api/perms/standing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category: id, granted }),

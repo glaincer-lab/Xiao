@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import unittest
 
-from backend.config import Config
+from backend.config import OMNI_MODEL, Config
 from backend.perms import Perms
 from backend.router import Router
 from backend.session.state import EventBus, State
@@ -100,6 +100,45 @@ class TestSmoke(unittest.TestCase):
         """冒烟：FastAPI app 可构造，验证全模块导入无错、中间件/端点注册成功。"""
         from backend.main import app
         self.assertEqual(app.title, "Xiao Voice Assistant")
+
+
+class TestLLMFactory(unittest.TestCase):
+    """LLM 工厂回归：scheme 与旧字段两条路径都必须能构建 omni，不得抛 ValueError。"""
+
+    def _patch(self, data):
+        import backend.llm.factory as factory
+
+        from backend.config import Config
+
+        old = factory.config
+        factory.config = Config(data)
+        self.addCleanup(lambda: setattr(factory, "config", old))
+        return factory
+
+    def test_omni_scheme_builds_with_explicit_fields(self):
+        factory = self._patch({
+            "llm": {
+                "models": [
+                    {"id": "o1", "provider": "omni", "baseUrl": "http://127.0.0.1:8000/v1",
+                     "model": "MiniCPM-o-4_5", "api_key": "k", "temperature": 0.4},
+                ],
+                "active": "o1",
+            }
+        })
+        from backend.llm.openai_compat import OpenAICompatClient
+
+        client = factory.build_llm()
+        self.assertIsInstance(client, OpenAICompatClient)
+        self.assertEqual(client._model, "MiniCPM-o-4_5")
+        self.assertEqual(client._temperature, 0.4)
+
+    def test_omni_scheme_falls_back_to_defaults(self):
+        factory = self._patch({"llm": {"models": [{"id": "o1", "provider": "omni"}], "active": "o1"}})
+        from backend.llm.openai_compat import OpenAICompatClient
+
+        client = factory.build_llm()
+        self.assertIsInstance(client, OpenAICompatClient)
+        self.assertEqual(client._model, OMNI_MODEL)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ webrtcvad-wheels>=2.0.10
 sherpa-onnx>=1.13
 onnxruntime>=1.17
 openai>=1.30
-dashscope>=1.20
+dashscope>=1.27  # qwen3-asr-flash-realtime 需要含 dashscope.audio.qwen_omni（OmniRealtime）
 edge-tts==7.2.8
 pygame>=2.5.0
 requests>=2.31

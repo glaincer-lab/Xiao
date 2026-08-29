@@ -5,18 +5,17 @@
 """
 from __future__ import annotations
 
-from backend.config import config, env
+from backend.config import (
+    LLM_CLOUD_DEFAULTS,
+    OMNI_BASE_URL,
+    OMNI_MODEL,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    config,
+    env,
+)
 from backend.llm.base import LLMClient
 from backend.llm.openai_compat import OpenAICompatClient
-
-# 云端供应商：默认 base_url、默认模型、回退用的环境变量 key（None 表示仅用配置里的 Key）
-_CLOUD_DEFAULTS = {
-    "deepseek": ("https://api.deepseek.com/v1", "deepseek-v4-pro", "DEEPSEEK_API_KEY"),
-    "dashscope": ("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", "DASHSCOPE_API_KEY"),
-    "openai": ("https://api.openai.com/v1", "gpt-4o-mini", "OPENAI_API_KEY"),
-    "glm": ("https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", None),
-    "kimi": ("https://api.moonshot.cn/v1", "moonshot-v1-8k", None),
-}
 
 
 def _build_scheme(m: dict) -> LLMClient:
@@ -33,16 +32,24 @@ def _build_scheme(m: dict) -> LLMClient:
 
     if p == "ollama":
         return OpenAICompatClient(
-            base_url=base_url or "http://localhost:11434/v1",
-            model=model or "qwen2.5:7b",
+            base_url=base_url or OLLAMA_BASE_URL,
+            model=model or OLLAMA_MODEL,
             api_key="EMPTY",  # Ollama 无需真实 key
             temperature=temperature,
         )
 
+    if p == "omni":
+        return OpenAICompatClient(
+            base_url=base_url or OMNI_BASE_URL,
+            model=model or OMNI_MODEL,
+            api_key=api_key or None,
+            temperature=temperature,
+        )
+
     # 云端 5 家（OpenAI 兼容）
-    if p not in _CLOUD_DEFAULTS:
+    if p not in LLM_CLOUD_DEFAULTS:
         raise ValueError(f"未支持的 LLM provider: {p}")
-    base_url_default, model_default, env_key = _CLOUD_DEFAULTS[p]
+    base_url_default, model_default, env_key = LLM_CLOUD_DEFAULTS[p]
     return OpenAICompatClient(
         base_url=base_url or base_url_default,
         model=model or model_default,
@@ -66,21 +73,30 @@ def build_llm() -> LLMClient:
     if provider == "local":
         cfg = config.section("llm.local")
         return OpenAICompatClient(
-            base_url=cfg.get("base_url", "http://localhost:11434/v1"),
-            model=cfg.get("model", "qwen2.5:7b"),
+            base_url=cfg.get("base_url", OLLAMA_BASE_URL),
+            model=cfg.get("model", OLLAMA_MODEL),
             api_key="EMPTY",
             temperature=float(cfg.get("temperature", 0.3)),
         )
 
     cfg = config.section("llm.cloud")
-    p = cfg.get("provider", "deepseek")
+    provider_cloud = cfg.get("provider", "deepseek")
     temperature = float(cfg.get("temperature", 0.3))
     model = cfg.get("model")
     api_key = cfg.get("api_key") or None  # 优先读配置，回退环境变量
 
-    if p not in _CLOUD_DEFAULTS:
-        raise ValueError(f"未支持的 LLM provider: {p}")
-    base_url_default, model_default, env_key = _CLOUD_DEFAULTS[p]
+    if provider_cloud == "omni":
+        omni = config.section("llm.omni")
+        return OpenAICompatClient(
+            base_url=omni.get("base_url", OMNI_BASE_URL),
+            model=omni.get("model", OMNI_MODEL),
+            api_key=omni.get("api_key") or None,
+            temperature=temperature,
+        )
+
+    if provider_cloud not in LLM_CLOUD_DEFAULTS:
+        raise ValueError(f"未支持的 LLM provider: {provider_cloud}")
+    base_url_default, model_default, env_key = LLM_CLOUD_DEFAULTS[provider_cloud]
     return OpenAICompatClient(
         base_url=cfg.get("base_url", base_url_default),
         model=model or model_default,

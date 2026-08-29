@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from backend.config import config
+from backend.config import OMNI_BASE_URL, OMNI_MODEL, config
 
 
 class WakeWordDetector:
@@ -50,7 +50,10 @@ class WakeWordDetector:
             model_dir = ROOT / model_dir
 
         # sherpa-onnx 关键词文件：每行一个关键词，拼音按空格分隔（如 "x iǎo èr"）
-        keywords_file = Path(".tmp") / "keywords.txt"
+        # 基于项目根目录而非进程 CWD，保证从任意目录启动都能落地到 .tmp
+        from backend.config import ROOT
+
+        keywords_file = ROOT / ".tmp" / "keywords.txt"
         keywords_file.parent.mkdir(parents=True, exist_ok=True)
         keywords_file.write_text(f"{self._pinyin} @{self._keyword}\n", encoding="utf-8")
 
@@ -94,8 +97,8 @@ def build_wake_word():
 
         omni_cfg = config.section("llm.omni")
         return OmniWakeDetector(
-            base_url=omni_cfg.get("base_url", "http://localhost:8000/v1"),
-            model=omni_cfg.get("model", "openbmb/MiniCPM-o-4_5"),
+            base_url=omni_cfg.get("base_url", OMNI_BASE_URL),
+            model=omni_cfg.get("model", OMNI_MODEL),
             api_key=omni_cfg.get("api_key"),
             keyword=keyword,
         )

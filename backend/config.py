@@ -71,3 +71,24 @@ config = Config(_load_yaml())
 def env(name: str, default: str | None = None) -> str | None:
     """读取环境变量（含 .env）。"""
     return os.environ.get(name, default)
+
+
+# ---- 引擎默认参数（唯一事实来源）----
+# 各工厂 / 注册表 / 前端提示统一从这里读取，避免同一默认值在多处硬编码而漂移。
+# 一体化 MiniCPM-o 经本地 vLLM-omni 服务接入（与云 LLM 同为 base_url+model+key 三件套）
+OMNI_BASE_URL = "http://localhost:8000/v1"
+OMNI_MODEL = "openbmb/MiniCPM-o-4_5"
+
+# 本地 Ollama（OpenAI 兼容端点，无需真实 Key）
+OLLAMA_BASE_URL = "http://localhost:11434/v1"
+OLLAMA_MODEL = "qwen2.5:7b"
+
+# 云端 LLM 供应商默认参数：默认 base_url、默认模型、回退用的环境变量 key
+# （None 表示仅用配置里的 key，不读环境变量）
+LLM_CLOUD_DEFAULTS = {
+    "deepseek": ("https://api.deepseek.com/v1", "deepseek-v4-pro", "DEEPSEEK_API_KEY"),
+    "dashscope": ("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", "DASHSCOPE_API_KEY"),
+    "openai": ("https://api.openai.com/v1", "gpt-4o-mini", "OPENAI_API_KEY"),
+    "glm": ("https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", None),
+    "kimi": ("https://api.moonshot.cn/v1", "moonshot-v1-8k", None),
+}

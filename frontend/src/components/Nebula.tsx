@@ -498,6 +498,10 @@ export function Nebula({
     const clock = new THREE.Clock()
     let raf = 0
     let time = 0
+    // 渲染帧率上限：低性能模式 30fps，普通 45fps；时间仍按真实流逝推进（dt/clock 不丢步），仅降低 GPU 提交频率
+    const TARGET_FPS = lowPerf ? 30 : 45
+    const FRAME_MS = 1000 / TARGET_FPS
+    let lastRender = performance.now()
 
     const animate = () => {
       // 用真实流逝秒数（而非每帧固定步长），呼吸/环绕速度与屏幕刷新率无关
@@ -608,7 +612,11 @@ export function Nebula({
       )
       camera.lookAt(0, 0, 0)
 
-      renderer.render(scene, camera)
+      const now = performance.now()
+      if (now - lastRender >= FRAME_MS) {
+        renderer.render(scene, camera)
+        lastRender = now
+      }
       time += dt
       raf = requestAnimationFrame(animate)
     }

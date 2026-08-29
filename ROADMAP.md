@@ -19,7 +19,7 @@
 | 前端 | React + TypeScript + Three.js | Electron 壳 | 星云背景 + 对话界面 |
 | DSH 集成 | 薄插件（JS/TS，只做桥接） | 随 DSH | 不改 DSH 核心 |
 
-> **核心原则**：唤醒词本地（常驻、低延迟、离线必须）；其余一律 API 优先（用户已有 DeepSeek/千问/DashScope key，省去本地部署麻烦）。本地 FunASR / Ollama 作为备选已接（OpenAI 兼容端点）；播报另加 Piper 本地离线作断网保底、MiniCPM-o 走本地 vLLM。多方案通过 `models[] + active` 切换。
+> **核心原则**：唤醒词本地（常驻、低延迟、离线必须）；其余一律 API 优先（用户已有 DeepSeek/千问/DashScope key，省去本地部署麻烦）。本地 FunASR / Ollama 作为备选已接（OpenAI 兼容端点）；LLM 另支持 MiniCPM-o 走本地 vLLM-omni（同 base_url+model+key 三件套）；播报加 Piper 本地离线作断网保底。多方案通过 `models[] + active` 切换。
 
 ---
 
@@ -37,7 +37,7 @@
 | **Phase 5** | DSH 薄插件：语音桥 + 审批转发（XIAO_GRANT 环境变量） | 桥接跑通 | ✅ |
 | **Phase 6** | 语音审批：`AWAIT_APPROVAL` + 屏幕按钮/语音「允许/拒绝」 | 语音审批可用 | ✅ |
 | **Phase 7** | 长任务后台化：任务列表 + 后台跑/进展/取消 + 完成通知 | 异步长任务体验 | ✅ |
-| **Phase 8** | 集成测试 + 打包 + 文档 | 可分发版本 | 🟡 文档已刷新；打包/集成测试待做 |
+| **Phase 8** | 集成测试 + 打包 + 文档 | 可分发版本 | 🟡 文档已刷新；后端单测与前端门禁（typecheck/lint/build）已落地；打包与端到端集成测试待做 |
 
 ### 已落地但超出原始规划的功能
 

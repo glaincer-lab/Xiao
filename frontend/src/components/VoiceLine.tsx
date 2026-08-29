@@ -64,8 +64,8 @@ export function VoiceLine({ level, state = 'idle' }: { level: number; state?: st
     // 状态双色：当前状态色（暗端）+ 其亮化版（亮端），切换时平滑过渡
     let colA: [number, number, number] = [74, 125, 255]
     let colB: [number, number, number] = [160, 190, 255]
-    let colFrom: [number, number, number] = [...colA]
-    let colTo: [number, number, number] = [...colB]
+    const colFrom: [number, number, number] = [...colA]
+    const colTo: [number, number, number] = [...colB]
     const readStateColors = (s: string) => {
       const table = stateColorsFromCss()
       // stateColorsFromCss 返回 THREE.Color（0~1），转成 0~255 的 RGB 元组，避免 base[0] 取到 undefined 变 NaN

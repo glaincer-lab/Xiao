@@ -148,7 +148,7 @@ class Pipeline:
         self._thread.start()
 
     def stop(self) -> None:
-        """优雅关停：结束音频线程并取消挂起的审批（进程退出时调用）。
+        """优雅关停：结束音频线程、取消挂起的审批并释放 ASR 连接（进程退出时调用）。
 
         MicStream.read 为阻塞读，线程通常在一个音频块（几十毫秒）内退出，
         join 给 2s 余量兜底。
@@ -160,6 +160,14 @@ class Pipeline:
         t = getattr(self, "_thread", None)
         if t is not None and t.is_alive():
             t.join(timeout=2.0)
+        asr = getattr(self, "_asr", None)
+        if asr is not None:
+            close = getattr(asr, "close", None)
+            if close is not None:
+                try:
+                    close()
+                except Exception:
+                    pass
 
     # ---- 外部控制（前端按钮 / 手动输入）----
     def wake_manually(self) -> None:
@@ -236,35 +244,45 @@ class Pipeline:
                 except Exception:
                     time.sleep(0.01)
                     continue
-                self._emit_mic_level(chunk)
-                s = self.state
-                if s in (State.IDLE, State.SLEEPING):
-                    if self._wake_enabled and self._wake is not None and self._wake.feed(chunk):
-                        self._on_wake()
-                elif s == State.LISTENING:
-                    self._handle_listening(chunk)
-                    # 仅当双方都安静（不在语音中）才累计超时；说话期间不计入
-                    if not self._in_utterance and time.time() - self._last_active > self._session_timeout:
-                        self._in_utterance = False
-                        self.set_state(State.SLEEPING)
-                elif s == State.CONFIRM_SHUTDOWN:
-                    self._handle_listening(chunk)
-                    if not self._in_utterance and time.time() - self._last_active > self._shutdown_timeout:
-                        self._in_utterance = False
-                        self._pre_roll.clear()
-                        self._last_active = time.time()
-                        self.set_state(State.LISTENING)  # 确认超时，自动取消关闭
-                elif s == State.WORKING:
-                    self._handle_listening(chunk)
-                    # 长任务无静音超时；结束由 _run_dsh 切回 LISTENING
-                elif s == State.AWAIT_APPROVAL:
-                    self._handle_listening(chunk)
-                    # 审批超时由 request_approval 的 wait_for 兜底并切回状态
-                elif s == State.SPEAKING:
-                    # 播报中监听打断：命中唤醒词则停播；播报文本含唤醒词时屏蔽（防自听回声）
-                    if self._bargein_enabled and not self._speaking_suppress and self._wake is not None and self._wake.feed(chunk):
-                        self._interrupt()
-                # PROCESSING/EXECUTING：丢弃音频，避免自听回声
+                try:
+                    self._process_chunk(chunk)
+                except Exception:
+                    # 任何未捕获异常都不允许杀死音频线程：记录后继续下一帧
+                    import traceback
+                    emit("log", level="error", message="音频循环出错，已跳过该帧")
+                    traceback.print_exc()
+                    time.sleep(0.01)
+
+    def _process_chunk(self, chunk: bytes) -> None:
+        self._emit_mic_level(chunk)
+        s = self.state
+        if s in (State.IDLE, State.SLEEPING):
+            if self._wake_enabled and self._wake is not None and self._wake.feed(chunk):
+                self._on_wake()
+        elif s == State.LISTENING:
+            self._handle_listening(chunk)
+            # 仅当双方都安静（不在语音中）才累计超时；说话期间不计入
+            if not self._in_utterance and time.time() - self._last_active > self._session_timeout:
+                self._in_utterance = False
+                self.set_state(State.SLEEPING)
+        elif s == State.CONFIRM_SHUTDOWN:
+            self._handle_listening(chunk)
+            if not self._in_utterance and time.time() - self._last_active > self._shutdown_timeout:
+                self._in_utterance = False
+                self._pre_roll.clear()
+                self._last_active = time.time()
+                self.set_state(State.LISTENING)  # 确认超时，自动取消关闭
+        elif s == State.WORKING:
+            self._handle_listening(chunk)
+            # 长任务无静音超时；结束由 _run_dsh 切回 LISTENING
+        elif s == State.AWAIT_APPROVAL:
+            self._handle_listening(chunk)
+            # 审批超时由 request_approval 的 wait_for 兜底并切回状态
+        elif s == State.SPEAKING:
+            # 播报中监听打断：命中唤醒词则停播；播报文本含唤醒词时屏蔽（防自听回声）
+            if self._bargein_enabled and not self._speaking_suppress and self._wake is not None and self._wake.feed(chunk):
+                self._interrupt()
+        # PROCESSING/EXECUTING：丢弃音频，避免自听回声
 
     def _handle_listening(self, chunk: bytes) -> None:
         ev = self._vad.feed(chunk)

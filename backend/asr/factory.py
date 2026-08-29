@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from backend.asr.base import ASREngine, ResultCallback
-from backend.config import config, env
+from backend.config import OMNI_BASE_URL, OMNI_MODEL, config, env
 
 
 def _build_cloud(on_result: ResultCallback, model: str, api_key: str | None) -> ASREngine:
@@ -34,8 +34,8 @@ def _build_omni(on_result: ResultCallback) -> ASREngine:
     omni_cfg = config.section("llm.omni")
     return OmniASREngine(
         on_result,
-        base_url=omni_cfg.get("base_url", "http://localhost:8000/v1"),
-        model=omni_cfg.get("model", "openbmb/MiniCPM-o-4_5"),
+        base_url=omni_cfg.get("base_url", OMNI_BASE_URL),
+        model=omni_cfg.get("model", OMNI_MODEL),
         api_key=omni_cfg.get("api_key"),
     )
 

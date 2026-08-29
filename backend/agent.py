@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Callable
 
@@ -66,6 +67,16 @@ class Agent:
         self._trim()
         try:
             await self._run()
+        except asyncio.TimeoutError:
+            # LLM 超时专享话术：不吞掉，点明是「响应慢」，引导用户重试
+            print("[agent] LLM 响应超时")
+            try:
+                fallback = "我这边响应有点慢，请稍等几秒再试。"
+                emit("assistant_result", text=fallback)
+                await self._speak(fallback)
+                self._history.append(ChatMessage(role="assistant", content=fallback))
+            except Exception:  # noqa: BLE001
+                pass
         except Exception as e:  # noqa: BLE001
             # 兜底：LLM/工具异常也要把状态机放回 IDLE，并给用户一句可感知的反馈
             print(f"[agent] 处理失败: {e}")
