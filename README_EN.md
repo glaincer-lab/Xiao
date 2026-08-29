@@ -182,6 +182,8 @@ Then register it in `register_builtin_tools` in `backend/tools/__init__.py` and 
 
 ## Desktop Shell (Electron · system tray)
 
+Development mode:
+
 ```powershell
 cd frontend && npm run build && cd ..
 cd desktop
@@ -192,6 +194,21 @@ npm start
 - Closing the window hides to tray; backend and mic keep running
 - Tray menu: show/hide, launch on startup, quit
 - Auto-starts the backend: prefers `.venv\Scripts\python.exe` (override with `XIAO_PYTHON`)
+
+### Packaging (no Python required)
+
+Publisher steps (online build machine):
+
+```powershell
+cd frontend && npm run build && cd ..
+cd desktop
+npm install
+npm run dist
+```
+
+Output: `desktop/release/Xiao-Setup-*.exe`. `npm run dist` first runs `scripts/prepare-runtime.ps1`, which assembles `desktop/runtime/python` (embeddable Python + pip dependencies + wake-word/VAD/Piper models; first run downloads from the network, later runs reuse the cache) and hands it to electron-builder.
+
+End users (third-user perspective): double-click the installer — it silently installs to the user directory (`%LOCALAPPDATA%\Programs\Xiao`, **no admin rights needed**) and auto-starts. The installer bundles the Python runtime and all dependencies, so **end users do not need to install Python**. API keys stay in a local `.env` per key hygiene (copy `.env.example` from the install directory, or fill them in the settings panel).
 
 ## Development & Testing
 

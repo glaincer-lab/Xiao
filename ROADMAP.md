@@ -37,7 +37,7 @@
 | **Phase 5** | DSH 薄插件：语音桥 + 审批转发（XIAO_GRANT 环境变量） | 桥接跑通 | ✅ |
 | **Phase 6** | 语音审批：`AWAIT_APPROVAL` + 屏幕按钮/语音「允许/拒绝」 | 语音审批可用 | ✅ |
 | **Phase 7** | 长任务后台化：任务列表 + 后台跑/进展/取消 + 完成通知 | 异步长任务体验 | ✅ |
-| **Phase 8** | 集成测试 + 打包 + 文档 | 可分发版本 | 🟡 文档已刷新；后端单测与前端门禁（typecheck/lint/build）已落地；打包与端到端集成测试待做 |
+| **Phase 8** | 集成测试 + 打包 + 文档 | 可分发版本 | 🟡 文档已刷新；后端单测与前端门禁（typecheck/lint/build）已落地；打包链路已通（electron-builder 内置 Python 运行时：安装包与 win-unpacked 构建成功、内置后端启动冒烟通过）；双击 exe 的 GUI 实测待做（本机沙箱禁 GUI 进程，待真实桌面验证） |
 
 ### 已落地但超出原始规划的功能
 
@@ -95,4 +95,4 @@
 
 ## 五、一句话总结
 
-> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（qwen-audio 默认、fun-asr 方言备选），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地，剩打包与集成测试。
+> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（qwen-audio 默认、fun-asr 方言备选），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地；打包链路已通（安装包构建 + 内置后端冒烟通过），剩双击安装包的端到端实测。

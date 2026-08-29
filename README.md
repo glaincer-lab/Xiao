@@ -211,6 +211,8 @@ class MyTool(Tool):
 
 ## 桌面壳（Electron · 常驻托盘）
 
+开发模式：
+
 ```powershell
 cd frontend && npm run build && cd ..
 cd desktop
@@ -221,6 +223,21 @@ npm start
 - 关闭窗口 = 隐藏到托盘，后端与麦克风监听**持续常驻**
 - 托盘菜单：显示/隐藏、开机自启、退出
 - 自动拉起后端：优先用项目根 `.venv\Scripts\python.exe`（可用 `XIAO_PYTHON` 指定），后端已在运行则复用
+
+### 打包分发（免装 Python）
+
+发布者三步（需联网的打包机）：
+
+```powershell
+cd frontend && npm run build && cd ..
+cd desktop
+npm install
+npm run dist
+```
+
+产物：`desktop/release/Xiao-Setup-*.exe`。`npm run dist` 先执行 `scripts/prepare-runtime.ps1`，自动组装 `desktop/runtime/python`（Python embeddable + pip 依赖 + 唤醒/VAD/Piper 模型，首次联网下载、之后增量复用），再交给 electron-builder 打包。
+
+使用者（第三使用者视角）：双击安装包 → 静默安装到用户目录（`%LOCALAPPDATA%\Programs\Xiao`，**免管理员**）→ 自动启动。安装包已内置 Python 运行时与全部依赖，**使用者无需安装 Python**；密钥仍按「密钥卫生」放本机 `.env`（复制安装目录下 `.env.example` 起步，或直接在设置面板填写）。
 
 ## 开发与测试
 
