@@ -1,8 +1,8 @@
 """长任务后台化：任务注册表 + 后台执行队列 + 状态/事件/持久化。
 
 设计：
-- 每个任务一个 asyncio 后台协程，经 Semaphore 限流（默认 1，即串行执行 DSH，保证稳定；
-  可通过 config 的 tasks.max_concurrent 调大，但并发 DSH 子进程会竞争 headless profile，慎调）。
+- 每个任务一个 asyncio 后台协程，经 Semaphore 限流（config 的 tasks.max_concurrent，默认 2；
+  web 桥每轮独立会话天然支持并发，headless 桥是单进程槽会自动钳制回 1 串行）。
 - 状态：pending（排队）→ running（执行）→ done / failed / cancelled。
 - 状态变化通过 emit('task_event', ...) 推给前端；完成/失败时回调 notify 做语音播报。
 - 历史持久化到 logs/tasks.json，重启后仍能看到上次任务列表。
@@ -24,9 +24,12 @@ class TaskManager:
         self._bridge = bridge
         self._tasks: dict[str, dict] = {}
         self._order: list[str] = []
-        # 固定并发 1：DSHBridge 为单进程槽（_proc/_cancelled），并发任务会互相取消
-        self._limit = 1
+        limit = max(1, int(config.get("tasks.max_concurrent", 2) or 2))
+        if not getattr(bridge, "supports_concurrent", False):
+            limit = 1
+        self._limit = limit
         self._sem = asyncio.Semaphore(self._limit)
+        self._handles: dict[str, asyncio.Task] = {}
         self._log_path = os.path.join(ROOT, str(config.get("tasks.log_path", "logs/tasks.json")))
         self._load()
 
@@ -48,11 +51,18 @@ class TaskManager:
         self._order.append(task_id)
         self._save()
         self._emit_task(task)
-        asyncio.get_running_loop().create_task(self._run(task_id, notify))
+        handle = asyncio.get_running_loop().create_task(self._run(task_id, notify))
+        self._handles[task_id] = handle
         return task_id
 
     # ---- 后台执行 ----
     async def _run(self, task_id: str, notify) -> None:
+        try:
+            await self._exec(task_id, notify)
+        finally:
+            self._handles.pop(task_id, None)
+
+    async def _exec(self, task_id: str, notify) -> None:
         task = self._tasks[task_id]
         async with self._sem:
             if task["status"] != "pending":
@@ -94,7 +104,14 @@ class TaskManager:
         if task is None or task["status"] not in ("pending", "running"):
             return False
         if task["status"] == "running":
-            self._bridge.cancel()
+            if getattr(self._bridge, "supports_concurrent", False):
+                handle = self._handles.get(task_id)
+                if handle is not None and not handle.done():
+                    handle.cancel()
+                else:
+                    self._bridge.cancel()
+            else:
+                self._bridge.cancel()
         task["status"] = "cancelled"
         task["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         self._save()

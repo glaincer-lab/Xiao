@@ -324,7 +324,7 @@ class Pipeline:
         # 后台任务进展/取消（聆听态下也能问）
         if self._tasks is not None and self._tasks.active():
             if self._matches(text, self._working_cancel_phrases):
-                self._handle_task_cancel()
+                self._handle_task_cancel(text)
                 return
             if self._matches(text, self._working_status_phrases):
                 self._handle_task_status()
@@ -687,14 +687,66 @@ class Pipeline:
         self._last_active = time.time()
         self.set_state(State.LISTENING)
 
-    def _handle_task_cancel(self) -> None:
+    def _handle_task_cancel(self, text: str = "") -> None:
         self._in_utterance = False
         self._pre_roll.clear()
         self._last_active = time.time()
-        ok = self._tasks.cancel() if self._tasks is not None else False
-        reply = "好的，正在停止。" if ok else "现在没有正在进行的任务。"
+        if self._tasks is None:
+            reply = "现在没有正在进行的任务。"
+        else:
+            target, note = self._match_task_target(text)
+            if note:
+                reply = note
+            elif target is not None:
+                ok = self._tasks.cancel(target["id"])
+                reply = f"好的，「{target['text']}」正在停止。" if ok else "现在没有正在进行的任务。"
+            else:
+                ok = self._tasks.cancel()
+                reply = "好的，正在停止。" if ok else "现在没有正在进行的任务。"
         if self._loop is not None:
             asyncio.run_coroutine_threadsafe(self._speak_and_listen(reply), self._loop)
+
+    def _match_task_target(self, text: str) -> tuple[dict | None, str | None]:
+        """从取消话语中解析目标任务：返回 (目标任务, 语音备注)；裸取消返回 (None, None)。"""
+        active = self._tasks.active() if self._tasks is not None else []
+        if not active:
+            return None, None
+        import re
+
+        ordinal = self._parse_ordinal(text)
+        if ordinal is not None:
+            if 1 <= ordinal <= len(active):
+                return active[ordinal - 1], None
+            return None, f"现在只有 {len(active)} 个任务在进行。"
+        m = re.search(r"[「『“\"']([^」』”\"']+)[」』”\"']", text)
+        if m:
+            key = m.group(1).strip()
+            for t in active:
+                if key and key in t["text"]:
+                    return t, None
+            return None, "没有找到这个任务。"
+        return None, None
+
+    @staticmethod
+    def _parse_ordinal(text: str) -> int | None:
+        import re
+
+        m = re.search(r"第\s*([0-9０-９]+|[一二三四五六七八九十两]+)\s*个", text)
+        if not m:
+            return None
+        raw = m.group(1).translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+        if raw.isdigit():
+            return int(raw)
+        digits = {"零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+        if raw == "十":
+            return 10
+        if "十" in raw:
+            left, _, right = raw.partition("十")
+            value = (digits.get(left, 1) if left else 1) * 10
+            if right:
+                value += digits.get(right, 0)
+            return value
+        return digits.get(raw)
 
     def _handle_task_status(self) -> None:
         self._in_utterance = False
