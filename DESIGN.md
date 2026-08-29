@@ -4,7 +4,7 @@
 
 > 一句话定位：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，做成「语音控制的 Agent 工作台」。
 >
-> 修订史：v2 新增「风险与应对」「语音审批」「长任务异步」三节；v2.1 吸收外部分析（DSH 版本更正 `0.1.1-rc.2`、审批栈源码核实 headless fail-closed、§9 补并发任务与失败/超时反馈）；v2.2 审批更新为**双层结构**——预测式语音审批 + 运行时审批桥 `xiao-approval-bridge`（已落地），A2 收窄为纯流式桥。
+> 修订史：v2 新增「风险与应对」「语音审批」「长任务异步」三节；v2.1 吸收外部分析（DSH 版本更正 `0.1.1-rc.2`、审批栈源码核实 headless fail-closed、§9 补并发任务与失败/超时反馈）；v2.2 审批更新为**双层结构**——预测式语音审批 + 运行时审批桥 `xiao-approval-bridge`（已落地），A2 收窄为纯流式桥；v2.3 A2 web 流式桥落地（§7 重写为 A1/A2 双桥、§8 补 web 模式审批语义与 XIAO_GRANT fail-closed）。
 
 ---
 
@@ -102,14 +102,16 @@ LISTENING ──说「关闭」──► CONFIRM_SHUTDOWN（两步确认）─�
 | 清空对话 / 重新开始… | 清空历史，留聆听态 | 否 |
 | 你把自己关了吧 / 退出程序… | 两步确认 → 退出整个后端 | 是 |
 
-## 7. DSH 桥接（A1 已落地 · A2 规划）
+## 7. DSH 桥接（A1/A2 均已落地）
 
-- **A1（已落地并验证）**：`dsh --profile headless "任务"`，走最稳定的 CLI 面。headless 无状态，`backend/bridge/dsh_bridge.py` **自己维护多轮上下文**——记录最近 N 轮任务与结果摘要（`_context_max=6`，结果摘要截断 500 字），每轮把「历史 + 当前任务」打包成一条 prompt 发给 DSH，绕开 headless 的 stateless。
+- **A1（headless CLI，已落地并验证）**：`dsh --profile headless "任务"`，走最稳定的 CLI 面。headless 无状态，`backend/bridge/dsh_bridge.py` **自己维护多轮上下文**——记录最近 N 轮任务与结果摘要（`_context_max=6`，结果摘要截断 500 字），每轮把「历史 + 当前任务」打包成一条 prompt 发给 DSH，绕开 headless 的 stateless。
   - 清空历史 / 退下 / 设置面板「一键清空记忆」都会同步清 DSH 上下文（`reset_context()`）。
   - 代价：非流式、进程冷启动、每轮重发历史 token。
-- **A2（规划，优先级高于工作面板）**：耦合 DSH 的 WS/RPC（即常驻 `dsh web` + 连其回环 WS/HTTP，而非 headless CLI），实现流式 + 连续会话 + 工具事件回传（审批注入已由运行时审批桥落地，见 §8，不再依赖 A2）。
-  - 代价：DSH 处于 rc 阶段（实测 `0.1.1-rc.2`），耦合越深、版本一变越痛。**先 A1 稳、后 A2 快，是权衡而非偷懒。**
-- **版本风险应对**：锁版本 + 单一适配层（`bridge/`）+ 优先走稳定 CLI 面；DSH 变动只改一个文件。
+- **A2（web 流式桥，已落地）**：`backend/bridge/dsh_web_bridge.py` 按需常驻拉起 `dsh web`（回环 127.0.0.1:3081，`bridge.web_port` 可配），经**同一端口的 HTTP RPC（POST `/api/{method}`）+ WS 事件流（`/api/events.mux`）**交互：`session.create`/`session.prompt` 发任务，事件流接 `tool/call|result`（前端步骤条）与 `assistant/chunk`（工作面板「实时输出」，尾 2000 字自动滚底），`turn/end` 收终态。多轮上下文由 DSH 服务端会话承担，免每轮冷启动与重发历史；会话失效自动重建一次；web 子进程注入 `XIAO_STEP_DISABLE=1`，审批桥插件停报步骤避免重复。
+  - `bridge.mode` 三档：`headless`（旧行为）/ `web`（仅 web，基础设施不可用直接报错）/ `auto`（默认，web 起不来**永久降级** headless，本次运行不再重试）。
+  - 安全边界：仅回环 + Host 栅栏（DSH web 自带）；**web 模式下 `XIAO_GRANT` 预授权不适用**（常驻服务无法按任务变更授权），按 fail-closed 处理——审批一律转发语音链（见 §8）。
+  - 代价：耦合 DSH web 面（rc 阶段，实测 `0.1.1-rc.2`），耦合越深、版本一变越痛——由 `mode: auto` 降级链兜底。**先 A1 稳、后 A2 快，是权衡而非偷懒。**
+- **版本风险应对**：锁版本 + 单一适配层（`bridge/`）+ `auto` 双面（web → headless）兜底；DSH 变动只改一个文件。
 
 ## 8. 语音审批（安全）
 
@@ -125,7 +127,8 @@ DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `c
   3. 否则回环 `POST http://127.0.0.1:8123/api/dsh/approval`（仅 127.0.0.1/::1，否则 403）→ `core.request_approval()` 进 `AWAIT_APPROVAL`，语音 + 屏幕按钮双通道询问；
   4. 决策回填：`allowed-once`（一次性放行）/ `rejected` / `unavailable`（fail-closed）。
   - 这一层是**精确审批**：DSH 内部真触发了才问，不靠关键词预测、无误报；A1 的 fail-closed 结论对「不装本插件的原生 headless」依然成立（裸 headless 无 answerer → 默认拒绝）。
-- **A2 阶段（流式桥，规划；v2.2 收窄）**：审批注入**已由运行时审批桥实现**，A2 剩余价值 = `dsh web` 的流式输出 / 连续会话（免每轮冷启动、重发历史）/ 工具事件回传（实时进度而非等终态）。web 模式的审批通道（回环 WS `/api/events.mux` 订阅 `approval/requested` 帧，经 `POST /api/respond` 注入 `{rpcId, approvalId, outcome:'allowed-once'|'rejected'}`；无认证、仅回环可达、只有一次性授权）作为插件桥的**备选路径**保留记录，不再阻塞路线图。
+- **A2 阶段（流式桥，已落地）**：审批注入**仍由运行时审批桥承担**（流式桥不接管审批）；A2 价值已兑现 = `dsh web` 的流式输出 / 连续会话（免每轮冷启动、重发历史）/ 工具事件回传（实时进度而非等终态）。web 模式的审批通道（回环 WS `/api/events.mux` 订阅 `approval/requested` 帧，经 `POST /api/respond` 注入 `{rpcId, approvalId, outcome:'allowed-once'|'rejected'}`；无认证、仅回环可达、只有一次性授权）保留为**备选路径**记录。
+  - web 流式桥下 `XIAO_GRANT` 预授权**不适用**（常驻服务无法按任务变更授权），fail-closed：审批一律转发语音链——不因换桥放宽权限。
   - 代价：A2 从「薄桥 CLI」变成「常驻 DSH web + 语音↔HTTP 桥」，安全边界靠回环；DSH 仍在 rc 阶段，耦合越深、版本一变越痛（权衡取舍见 §7）。
 
 ## 9. 长任务与异步交互
@@ -154,6 +157,8 @@ DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `c
 agent.workspace     → ../03_Workspace（相对项目根；DSH 工作区）
 agent.system_prompt / agent.max_history  → 系统提示词 / 记忆轮数（软配置，保存即生效）
 bridge.dsh_command  → dsh（.ps1 自动用 powershell 拉起）
+bridge.mode         → auto（默认，web 失败永久降级 headless）| web | headless
+bridge.web_port     → 3081（dsh web 回环端口）
 bridge.timeout_sec  → 600
 router.mode         → auto | chat | dsh
 router.log_path     → logs/routes.jsonl

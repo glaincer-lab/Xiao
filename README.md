@@ -16,7 +16,7 @@
 
 - **DSH 是什么**：一个「一切皆插件」的通用 Agent 框架，负责真正的智能——agent 循环、编程工具（读写文件 / 跑命令）、subagent、workflow、知识库检索等。
 - **小二的角色**：只做语音三件事——唤醒、识别、路由；一句话走「聊天」还是「干活(DSH)」由路由层决定。
-- **如何桥接**：经 `backend/bridge/`（全系统唯一知道 DSH 的地方）调用 `dsh --profile headless`，多轮上下文由桥接层自己维护；危险操作经 `plugins/xiao-approval-bridge` 审批桥插件回传到语音做审批。
+- **如何桥接**：经 `backend/bridge/`（全系统唯一知道 DSH 的地方）接入 DSH——默认常驻 `dsh web` 流式桥（实时进度反馈），连不上自动降级 `dsh --profile headless`；多轮上下文由 DSH 会话/桥接层维护；危险操作经 `plugins/xiao-approval-bridge` 审批桥插件回传到语音做审批。
 - **DSH 是外部依赖**：本仓库不含任何 DSH 代码，使用前需自行安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（已验证版本 `0.1.1-rc.2`）。
 
 > 一句话：DSH 提供「能改文件、跑命令、多步迭代」的大脑，小二提供语音这层皮。
@@ -31,7 +31,7 @@
 - **断句**：Silero VAD（ONNX 推理），精准区分语音与环境噪声
 - **识别**：云端阿里云实时流式（qwen-audio-3.0-asr-flash-streaming 默认 + fun-asr-flash-8k-realtime 方言备选），本地可切 FunASR；多方案可存可切
 - **大脑**：DeepSeek / 通义千问 / OpenAI / GLM / Kimi（全 OpenAI 兼容）+ 本地 Ollama / MiniCPM-o（本地 vLLM），支持 function calling；多方案可存可切
-- **DSH 干活**：路由到 DeepSeek Harness 执行真实任务（读写文件、跑命令、多步 Agent 循环），带多轮上下文、语音审批、长任务后台化
+- **DSH 干活**：路由到 DeepSeek Harness 执行真实任务（读写文件、跑命令、多步 Agent 循环），带多轮上下文、实时进度反馈（工具步骤 + 中间输出）、语音审批、长任务后台化
 - **播报**：4 方案可切——Qwen 实时流式（默认，边合成边播、首音约 0.4s、语音跟字幕）/ edge-tts 免费云 / Piper 本地离线（保底）/ MiniCPM-o（本地 vLLM）
 - **声线动画**：麦克风真实 RMS 电平经 WebSocket 推给前端，画实时声线（非假波纹）
 - **可插拔工具**：联网搜索、打开应用/网址、查天气、设置提醒
@@ -63,7 +63,7 @@ backend/
   router.py         路由层（auto/chat/dsh 三档 + 关键词）
   perms.py          权限模型（5 类常驻授权 + 关键词预测 + 待授权）
   tasks.py          长任务后台化（队列 + 并发 + 持久化）
-  bridge/           ★ 唯一知道 DSH 的地方（headless CLI + 多轮上下文）
+  bridge/           ★ 唯一知道 DSH 的地方（dsh web 流式桥 / headless CLI + 多轮上下文）
   audio/            mic.py 采集 / vad.py 断句 / wake.py 唤醒词
   asr/              云端 qwen-audio(默认)/fun-asr(方言备选) / 本地 FunASR
   llm/              云端 DeepSeek/通义/OpenAI/GLM/Kimi / 本地 Ollama / MiniCPM-o(本地 vLLM)
@@ -156,6 +156,7 @@ npm run dev
 | `dsh` | 强制走 DSH 干活 |
 
 - DSH 干活支持**多轮上下文**：连续任务会带上前面几轮的任务与结果摘要，让 DSH 记住「之前聊到哪」
+- DSH 任务**实时反馈**：工作面板实时显示工具执行步骤（bash/write…）与 agent 中间输出；默认走 `dsh web` 流式桥（`bridge.mode: auto`），`dsh web` 不可用时自动降级 headless
 - 长任务可后台化，说「进展」问状态、说「取消」停止；完成后语音主动通知
 - 危险操作（联网/写工作区外/删除/安装/改系统）走**语音审批**：助手问「允许吗？」，说「允许/拒绝」或点屏幕按钮
 

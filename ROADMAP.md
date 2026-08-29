@@ -95,4 +95,4 @@
 
 ## 五、一句话总结
 
-> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（qwen-audio 默认、fun-asr 方言备选），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地；打包链路已通（安装包构建 + 内置后端冒烟通过），剩双击安装包的端到端实测。
+> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（qwen-audio 默认、fun-asr 方言备选），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地；DSH 桥已升级 web 流式（实时进度，失败自动降级 headless）；打包链路已通（安装包构建 + 内置后端冒烟通过），剩双击安装包的端到端实测。
