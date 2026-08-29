@@ -25,6 +25,7 @@ CATEGORIES: tuple[tuple[str, str, str], ...] = (
     ("delete", "删除文件", "删除、清理文件"),
     ("install", "安装软件包", "pip / npm 等安装依赖"),
     ("system", "修改系统", "改注册表、服务、系统配置"),
+    ("computer", "操电脑", "语音控制鼠标键盘与 GUI 操作"),
 )
 
 

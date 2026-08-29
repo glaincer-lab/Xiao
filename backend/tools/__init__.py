@@ -11,6 +11,14 @@ from backend.config import config
 from backend.tools.base import ToolRegistry, registry
 from backend.tools.clipboard import ClipboardTool
 from backend.tools.clock import RateTool, TimeTool
+from backend.tools.computer import (
+    ComputerHotkeyTool,
+    ComputerMouseTool,
+    ComputerTypeTool,
+    ComputerWindowTool,
+    ScreenLookTool,
+    UiADumpTool,
+)
 from backend.tools.media import MediaTool
 from backend.tools.open_app import OpenAppTool
 from backend.tools.reminder import ReminderTool
@@ -35,6 +43,12 @@ def register_builtin_tools(on_reminder_fire: Callable[[str], None] | None = None
             "clipboard",
             "time_now",
             "exchange_rate",
+            "computer_mouse",
+            "computer_type",
+            "computer_hotkey",
+            "computer_window",
+            "screen_look",
+            "uia_dump",
         ],
     )
     factories = {
@@ -50,6 +64,12 @@ def register_builtin_tools(on_reminder_fire: Callable[[str], None] | None = None
         "clipboard": ClipboardTool,
         "time_now": TimeTool,
         "exchange_rate": RateTool,
+        "computer_mouse": ComputerMouseTool,
+        "computer_type": ComputerTypeTool,
+        "computer_hotkey": ComputerHotkeyTool,
+        "computer_window": ComputerWindowTool,
+        "screen_look": ScreenLookTool,
+        "uia_dump": UiADumpTool,
     }
     for name in enabled:
         factory = factories.get(name)

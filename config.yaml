@@ -257,6 +257,12 @@ tools:
   - clipboard
   - time_now
   - exchange_rate
+  - computer_mouse
+  - computer_type
+  - computer_hotkey
+  - computer_window
+  - screen_look
+  - uia_dump
   # 天气不指定城市时的默认城市（留空则按 IP 自动定位）
   default_city: ''
   web_search:
@@ -350,3 +356,21 @@ perms:
     - 系统服务
     - 改系统
     - 修改系统
+    computer:
+    - 帮我点
+    - 点击
+    - 双击
+    - 右键
+    - 鼠标
+    - 滚动
+    - 帮我输入
+    - 打字
+    - 帮我按
+    - 热键
+    - 快捷键
+    - 关闭窗口
+    - 最小化
+    - 最大化
+    - 切到窗口
+    - 截屏看
+    - 看看屏幕

@@ -620,6 +620,11 @@ class Pipeline:
             self.set_state(State.WORKING if self._dsh_started_at is not None else State.LISTENING)
         return decision
 
+    async def request_tool_approval(self, action: str, *, prompt: str | None = None) -> bool:
+        """供工具层（语音操电脑）逐次审批：仅 allowed-once 返回 True，拒绝/超时/不可用一律 False。"""
+        decision = await self.request_approval(action, prompt=prompt, on_timeout="rejected")
+        return decision == "allowed-once"
+
     def _handle_approval(self, text: str) -> None:
         """聆听态收到一句话，判断允许/拒绝并回填审批 future。"""
         self._in_utterance = False

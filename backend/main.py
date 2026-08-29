@@ -22,7 +22,7 @@ from backend.provider_test import test_provider
 from backend.router import Router
 from backend.session.state import State, bus, emit
 from backend.tasks import TaskManager
-from backend.tools import register_builtin_tools
+from backend.tools import computer, register_builtin_tools
 from backend.tools.base import registry
 from backend.tts.factory import build_preview_tts, build_tts
 
@@ -86,6 +86,7 @@ async def startup() -> None:
         pipeline.on_agent_done()
 
     register_builtin_tools(on_reminder_fire=notify)
+    computer.set_confirm_hook(pipeline.request_tool_approval)
     pipeline.start(loop)
 
 

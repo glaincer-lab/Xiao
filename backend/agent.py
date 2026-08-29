@@ -26,7 +26,11 @@ DEFAULT_SYSTEM_PROMPT = (
     "4. 普通对话直接回答，不要调用工具。\n"
     "5. 用户的话已由语音识别转写，可能有少量同音错字，请结合上下文理解意图。\n"
     "6. 日常自称用「我」，不要主动说出「小二」这三个字（会触发语音唤醒打断自己）；"
-    "只有用户明确问你的名字时才可以说「小二」。"
+    "只有用户明确问你的名字时才可以说「小二」。\n"
+    "7. 语音操电脑（computer_mouse/computer_type/computer_hotkey/computer_window/screen_look/uia_dump）："
+    "点按、打字、热键、关窗这类动作会先走语音审批，用户说允许才执行，被拒绝就停止并向用户说明；"
+    "需要坐标的动作先用 screen_look 或 uia_dump 查看屏幕元素位置再操作；"
+    "uia_dump 依赖本机 comtypes 支持库，未安装时按工具返回的提示引导用户。"
 )
 
 DEFAULT_MAX_HISTORY = 16
@@ -151,6 +155,17 @@ class Agent:
                 self._history.append(
                     ChatMessage(role="tool", content=result, tool_call_id=tc.get("id", ""), name=name)
                 )
+                tool_obj = self._registry.get(name)
+                imgs = getattr(tool_obj, "pending_images", None) if tool_obj is not None else None
+                if imgs:
+                    self._history.append(
+                        ChatMessage(
+                            role="user",
+                            content=f"[{name}] 结果截图已附上，请结合图片继续回答。",
+                            images=list(imgs),
+                        )
+                    )
+                    tool_obj.pending_images = None
             used += 1
             if used < limit:
                 completion = await self._llm.complete(self._messages(), tools=tools)

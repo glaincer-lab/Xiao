@@ -268,6 +268,9 @@ class _FakeRegistry:
         self.called.append(name)
         return "ok"
 
+    def get(self, name):
+        return None
+
 
 class TestAgentMultiRound(unittest.TestCase):
     """E3 多轮工具循环：连环工具调用可继续；轮数用尽强制收尾。"""

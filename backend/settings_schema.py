@@ -258,6 +258,8 @@ SCHEMA: list[dict] = [
     {"path": "agent.workspace", "label": "工作目录", "type": "text", "group": "exec", "reload": "restart"},
     {"path": "tasks.max_concurrent", "label": "任务并发数", "type": "number", "group": "exec", "reload": "restart", "min": 1, "max": 1,
      "hint": "固定 1：DSH 桥为单进程槽，并发任务会互相取消"},
+    {"path": "tools.computer.enabled", "label": "语音操电脑", "type": "checkbox", "group": "exec", "reload": "soft",
+     "hint": "开启后可语音控制鼠标键盘/窗口/截屏看图；点按、打字、热键、关窗逐次语音审批"},
     # ---- 权限 ----
     {"path": "approval.enabled", "label": "审批开关", "type": "checkbox", "group": "perms", "reload": "soft"},
     {"path": "approval.timeout_ms", "label": "审批超时(毫秒)", "type": "number", "group": "perms", "reload": "soft"},
