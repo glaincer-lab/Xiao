@@ -10,9 +10,9 @@
 |---|---|---|---|
 | 唤醒词 | Sherpa-ONNX「小二」（3.3MB） | **本地** | 唯一本地组件，零训练、中文原生 |
 | VAD 断句 | Silero VAD | 本地（轻量工具） | 语音断句必要组件，非「模型部署」 |
-| ASR 主用 | 阿里云实时流式（DashScope API） | **云端 API** | 已有 key，高精度；`fun-asr-flash-8k-realtime`（方言，默认）+ `qwen-audio-3.0-asr-flash-streaming` / `qwen3-asr-flash-realtime`（普通话 16k） |
+| ASR 主用 | 阿里云实时流式（DashScope API） | **云端 API** | 已有 key，高精度；`qwen-audio-3.0-asr-flash-streaming`（普通话 16k，默认）+ `fun-asr-flash-8k-realtime`（方言备选 8k；qwen3-asr 已按砍云清单移除） |
 | ASR 备选 | FunASR 本地 | 本地 | 需 `requirements-local-asr.txt`，torch 数 GB |
-| TTS | Qwen 实时流式（默认）+ edge-tts + CosyVoice v3 / Qwen-Audio-TTS（付费云）+ Piper（本地）+ MiniCPM-o（本地 vLLM） | 云 + 本地 | 6 方案可切；流式边合成边播首音约 0.4s，非流式付费云各带 flash/plus 档位 |
+| TTS | Qwen 实时流式（默认）+ edge-tts（免费云）+ Piper（本地）+ MiniCPM-o（本地 vLLM） | 云 + 本地 | 4 方案可切；流式边合成边播首音约 0.4s（CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除） |
 | LLM 主用 | DeepSeek / 千问 / OpenAI / GLM / Kimi | **云端 API** | 全 OpenAI 兼容，UI 可切换 |
 | LLM 备选 | Ollama 本地 / MiniCPM-o(vLLM) | 本地 | OpenAI 兼容端点接入 |
 | 后端 | FastAPI + WebSocket（Python） | 本地进程 | 异步高性能 |
@@ -50,7 +50,7 @@
 | 多轮 DSH 上下文 | `bridge/` 记录最近任务与结果摘要，每轮打包传给 headless DSH | ✅ |
 | 星云状态形态 | 状态→3D 形态映射（待机球体/聆听八面体/思考∞/干活螺旋/播报圆柱/审批立方体） | ✅ |
 | 真实麦克风声线动画 | 后端采集麦克风算 RMS 电平，约 100ms 经 WebSocket 推送，前端 `VoiceLine` 画真实声线（替换假波纹 `Waveform` 与呼吸球 `Orb`） | ✅ |
-| 播报 6 方案管理 | `edge-tts` / `Qwen 实时流式` / `CosyVoice v3` / `Qwen-Audio-TTS` / `Piper` / `MiniCPM-o`，付费云各带 flash/plus 档位，音色中文名展示 | ✅ |
+| 播报 4 方案管理 | `Qwen 实时流式` / `edge-tts` / `Piper` / `MiniCPM-o`，音色中文名展示（CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除） | ✅ |
 | Qwen 实时流式播报 | `qwen3-tts-flash-realtime` 边合成边播，首音约 0.4s，语音紧跟字幕；连接预热复用 | ✅ |
 | Piper 本地离线保底 | `piper-tts` + `zh_CN-huayan-medium` 声库，断网也能播报（GPL-3.0，列为可选依赖） | ✅ |
 | 项目规则 AGENTS.md | 第三使用者视角 + 引擎分层 | ✅ |
@@ -60,7 +60,7 @@
 
 | 项 | 说明 | 优先级 |
 |---|---|---|
-| **云 TTS 语速** | ① CosyVoice v3 / Qwen-Audio-TTS：给 `backend/tts/cosyvoice.py` 的 `SpeechSynthesizer` 透传 `speech_rate`（0.5~2.0），并在设置注册表加对应控件（当前 `tts.rate` 仅对 edge 生效）；② Qwen 实时流式（qwen_rt）官方不支持 `speech_rate`，原生调速走不通，仅可换 `qwen3-tts-instruct-flash-realtime` 以指令近似 | 中 |
+| **云 TTS 语速** | CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除（`tts.rate` 当前仅对 edge-tts 生效）；Qwen 实时流式（qwen_rt）官方不支持 `speech_rate`，原生调速走不通，仅可换 `qwen3-tts-instruct-flash-realtime` 以指令近似 | 中 |
 | 端到端集成测试 + 打包分发 | Electron 安装包，README 安装步骤核对「第三使用者视角」 | 高 |
 | MiniCPM-o 本地 vLLM 三角色实测 | 唤醒/识别/播报三角色一体化，端口预设 `localhost:8000` | 中 |
 | `docs/screenshot.png` 界面截图更新 | 声线动画 + 星云重做后的界面快照 | 低 |
@@ -87,7 +87,7 @@
 | 项 | 状态 | 何时做 |
 |---|---|---|
 | MiniCPM-o 一体化语音（唤醒/识别/播报） | 🟡 播报/识别/唤醒三角色已接入（走本地 vLLM，端口预设 localhost:8000），未做端到端一体对话 | 需要端到端一体语音时 |
-| 付费云 TTS / 本地 Piper | ✅ 已接入（Qwen 实时流式 + CosyVoice v3 / Qwen-Audio-TTS 付费云 + Piper 本地离线保底） | — |
+| 云 TTS / 本地 Piper | ✅ 已接入（Qwen 实时流式 + edge-tts 免费云 + Piper 本地离线保底；CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除） | — |
 | 华为智能家居 | 不实现 | 后期 |
 | 多语言唤醒 | 不实现 | 后期 |
 
@@ -95,4 +95,4 @@
 
 ## 五、一句话总结
 
-> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（fun-asr 默认），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地，剩打包与集成测试。
+> 唤醒词本地「小二」（Sherpa-ONNX），识别走阿里云实时流式 ASR（qwen-audio 默认、fun-asr 方言备选），大脑走 DeepSeek/千问云端或 DSH，播报默认 Qwen 实时流式（首音约 0.4s）并可切 edge-tts / Piper / MiniCPM-o。Python 语音引擎 + DSH 薄插件 + Electron 星云界面，8 个阶段主线已全部落地，剩打包与集成测试。

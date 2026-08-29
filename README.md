@@ -6,7 +6,7 @@
 
 **本质**：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，做成「语音控制的 Agent 工作台」——不只是查天气、搜网页，还能读文件、写代码、跑命令、多步迭代完成任务。语音层只负责唤醒、识别、路由，最难的部分（agent 循环、编程工具、subagent、知识库）外包给 DSH。
 
-**核心链路**：Sherpa-ONNX 本地中文唤醒（免费、离线、零训练）→ Silero VAD 断句 → 阿里云实时流式识别（云端 fun-asr-flash-8k-realtime 默认 + qwen-audio / qwen3-asr，本地可切 FunASR）→ 路由（聊天走 DeepSeek/通义/OpenAI/GLM/Kimi 云端，或本地 Ollama / MiniCPM-o(本地 vLLM)；干活走 DSH）→ 危险操作语音审批 → 播报（Qwen 实时流式默认，边合成边播语音紧跟字幕；可选 edge-tts 免费云、CosyVoice v3 / Qwen-Audio-TTS 付费云、Piper 本地离线、MiniCPM-o 本地 vLLM）。
+**核心链路**：Sherpa-ONNX 本地中文唤醒（免费、离线、零训练）→ Silero VAD 断句 → 阿里云实时流式识别（云端 qwen-audio 默认 + fun-asr 方言备选，本地可切 FunASR）→ 路由（聊天走 DeepSeek/通义/OpenAI/GLM/Kimi 云端，或本地 Ollama / MiniCPM-o(本地 vLLM)；干活走 DSH）→ 危险操作语音审批 → 播报（Qwen 实时流式默认，边合成边播语音紧跟字幕；可选 edge-tts 免费云、Piper 本地离线、MiniCPM-o 本地 vLLM）。
 
 **多方案管理**：唤醒 / 识别 / 播报 / 大模型四环节均支持多方案（卡片列表 + 新建编辑 + 一键切换，模型名手填、以官方为准）；危险操作（联网 / 写工作区外 / 删除 / 安装 / 改系统）语音审批，DSH 无头模式 fail-closed；长任务后台化 + 完成通知。
 
@@ -31,10 +31,10 @@
 
 - **唤醒**：本地 Sherpa-ONNX 关键词识别，中文原生「小二」，零训练、离线
 - **断句**：Silero VAD（ONNX 推理），精准区分语音与环境噪声
-- **识别**：云端阿里云实时流式（fun-asr-flash-8k-realtime 默认 + qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime），本地可切 FunASR；多方案可存可切
+- **识别**：云端阿里云实时流式（qwen-audio-3.0-asr-flash-streaming 默认 + fun-asr-flash-8k-realtime 方言备选），本地可切 FunASR；多方案可存可切
 - **大脑**：DeepSeek / 通义千问 / OpenAI / GLM / Kimi（全 OpenAI 兼容）+ 本地 Ollama / MiniCPM-o（本地 vLLM），支持 function calling；多方案可存可切
 - **DSH 干活**：路由到 DeepSeek Harness 执行真实任务（读写文件、跑命令、多步 Agent 循环），带多轮上下文、语音审批、长任务后台化
-- **播报**：6 方案可切——Qwen 实时流式（默认，边合成边播、首音约 0.4s、语音跟字幕）/ edge-tts 免费云 / CosyVoice v3 / Qwen-Audio-TTS（付费云，各带 flash/plus 档位）/ Piper 本地离线（保底）/ MiniCPM-o（本地 vLLM）
+- **播报**：4 方案可切——Qwen 实时流式（默认，边合成边播、首音约 0.4s、语音跟字幕）/ edge-tts 免费云 / Piper 本地离线（保底）/ MiniCPM-o（本地 vLLM）
 - **声线动画**：麦克风真实 RMS 电平经 WebSocket 推给前端，画实时声线（非假波纹）
 - **两段式回复**：计划回复 → 工具执行 → 结果回复
 - **可插拔工具**：联网搜索、打开应用/网址、查天气、设置提醒；预留华为智能家居设备接入
@@ -49,7 +49,7 @@
      → 流式 ASR(云端Paraformer/本地FunASR) ──WS──►  文字实时上屏
      → 路由(router) → chat(DeepSeek 直连) 或 dsh(DSH 干活)
      → 工具执行(可插拔) / DSH 桥(bridge)
-     → TTS(Qwen 实时流式 / edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o) ──► 语音播报
+     → TTS(Qwen 实时流式 / edge-tts / Piper / MiniCPM-o) ──► 语音播报
 ```
 
 技术栈：**Python 3.11/3.12 + FastAPI + WebSocket**（后端）｜**React + Vite + TypeScript + Three.js**（前端）。
@@ -68,7 +68,7 @@ backend/
   tasks.py          长任务后台化（队列 + 并发 + 持久化）
   bridge/           ★ 唯一知道 DSH 的地方（headless CLI + 多轮上下文）
   audio/            mic.py 采集 / vad.py 断句 / wake.py 唤醒词
-  asr/              云端 fun-asr-flash-8k-realtime(默认)/qwen-audio/qwen3-asr / 本地 FunASR
+  asr/              云端 qwen-audio(默认)/fun-asr(方言备选) / 本地 FunASR
   llm/              云端 DeepSeek/通义/OpenAI/GLM/Kimi / 本地 Ollama / MiniCPM-o(本地 vLLM)
   tts/              Qwen 实时流式 / edge-tts / CosyVoice v3 / Qwen-Audio-TTS / Piper / MiniCPM-o
   tools/            搜索 / 打开应用 / 天气 / 提醒（注册表）
@@ -174,8 +174,8 @@ npm run dev
 | 环节 | 已接入（✅） | 预留（⬜） |
 |---|---|---|
 | 唤醒 | 本地 Sherpa-ONNX「小二」 | 一体化 MiniCPM-o（本地 vLLM） |
-| 识别 | 云端 fun-asr-flash-8k-realtime（默认）/ qwen-audio-3.0-asr-flash-streaming / qwen3-asr-flash-realtime、本地 FunASR | 一体化 MiniCPM-o（本地 vLLM） |
-| 播报 | Qwen 实时流式（默认，边合成边播）/ edge-tts 免费云 / CosyVoice v3 / Qwen-Audio-TTS（付费云，flash/plus）/ Piper 本地离线 / MiniCPM-o（本地 vLLM） | — |
+| 识别 | 云端 qwen-audio-3.0-asr-flash-streaming（默认）/ fun-asr-flash-8k-realtime（方言备选）、本地 FunASR | 一体化 MiniCPM-o（本地 vLLM） |
+| 播报 | Qwen 实时流式（默认，边合成边播）/ edge-tts 免费云 / Piper 本地离线 / MiniCPM-o（本地 vLLM） | — |
 | 大模型 | 云端 DeepSeek/通义/OpenAI/GLM/Kimi、本地 Ollama、MiniCPM-o（本地 vLLM） | — |
 
 **实时生效分档**：软配置（可打断、审批词表、DSH 关键词、系统提示词、记忆轮数）保存即生效；引擎类（换方案/模型/音色/阈值/麦克风）保存后提示需重启后端。模型名手填，以各厂商官方文档为准。

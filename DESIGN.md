@@ -52,7 +52,7 @@ xiao\
 ├── 02_Assistant\      ← ★ 语音系统（一套系统一个文件夹，独立可运行）
 │   ├── backend\
 │   │   ├── audio\  mic/vad/wake
-│   │   ├── asr\    阿里云实时流式(fun-asr默认/qwen-audio/qwen3) / FunASR(本地)
+│   │   ├── asr\    阿里云实时流式(qwen-audio默认/fun-asr方言备选) / FunASR(本地)
 │   │   ├── llm\    OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama/MiniCPM-o)
 │   │   ├── tts\    edge-tts(免费云) + CosyVoice v3/Qwen-Audio-TTS(付费云) + Piper(离线) + MiniCPM-o(vLLM)
 │   │   ├── tools\  搜索/打开/天气/提醒
@@ -167,7 +167,7 @@ router.rules        → L0 规则指令开关与词表（keywords 按规则覆�
 # 多方案管理（四环节）：models[] 存方案，active 指向当前方案
 wake_word.engine    → sherpa（本地）| cloud（方言·预留）| omni（一体化·预留）
 asr.provider        → cloud | local(FunASR) | omni（预留）
-asr.cloud.model     → paraformer-realtime-v2（普通话）/ fun-asr-flash-8k-realtime（方言·8k）
+asr.cloud.model     → qwen-audio-3.0-asr-flash-streaming（普通话·默认）/ fun-asr-flash-8k-realtime（方言备选·8k）
 llm.provider        → cloud | local(Ollama) | omni(MiniCPM-o vLLM)
 llm.cloud.provider  → deepseek / dashscope / openai / glm / kimi（全 OpenAI 兼容）
 tts.provider        → edge（免费云）| cloud（付费·预留）| piper（预留）| omni（预留）
