@@ -215,7 +215,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [llmTesting, setLlmTesting] = useState(false)
   const [llmTestMsg, setLlmTestMsg] = useState('')
   const [showAddASR, setShowAddASR] = useState(false)
-  const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'fun-asr-flash-8k-realtime', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
+  const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'qwen-audio-3.0-asr-flash-streaming', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
   const [editASRId, setEditASRId] = useState<string | null>(null)
   const [showAddTTS, setShowAddTTS] = useState(false)
   const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; tier: 'flash' | 'plus'; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-huayan-medium.onnx' })
@@ -869,7 +869,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
 
     const startNewASR = () => {
       setEditASRId(null)
-      setAsrForm({ provider: 'cloud', model: 'fun-asr-flash-8k-realtime', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
+      setAsrForm({ provider: 'cloud', model: 'qwen-audio-3.0-asr-flash-streaming', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
       setShowAddASR(true)
     }
 
@@ -933,7 +933,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               <span className="settings-field-label">识别方式</span>
               <select value={asrForm.provider} onChange={(e) => {
                 const p = e.target.value as 'cloud' | 'local' | 'omni'
-                setAsrForm({ ...asrForm, provider: p, model: p === 'cloud' ? 'fun-asr-flash-8k-realtime' : p === 'local' ? 'paraformer-zh' : '' })
+                setAsrForm({ ...asrForm, provider: p, model: p === 'cloud' ? 'qwen-audio-3.0-asr-flash-streaming' : p === 'local' ? 'paraformer-zh' : '' })
               }}>
                 <option value="cloud">✅ 云端（Fun-ASR / Qwen）</option>
                 <option value="local">✅ 本地 FunASR</option>
@@ -1138,8 +1138,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               }}>
                 <option value="qwen_rt">✅ Qwen 实时流式（快，语音跟字幕）</option>
                 <option value="edge">✅ edge-tts 免费云</option>
-                <option value="cosyvoice">✅ CosyVoice v3（付费云，高音质）</option>
-                <option value="qwen">✅ Qwen-Audio-TTS（付费云）</option>
                 <option value="piper">✅ 本地 Piper（离线）</option>
                 <option value="omni">✅ MiniCPM-o（本地 vLLM）</option>
               </select>

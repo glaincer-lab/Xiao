@@ -80,24 +80,17 @@ asr:
   provider: cloud
   active: asr_qwen_audio
   models:
-  - id: asr_aliyun
-    name: Fun-ASR（方言，默认）
-    provider: cloud
-    model: fun-asr-flash-8k-realtime
-    apiKey: ''
-    localEngine: funasr
-    localModelDir: ''
   - id: asr_qwen_audio
-    name: Qwen-Audio（普通话+方言）
+    name: Qwen-Audio（普通话，默认）
     provider: cloud
     model: qwen-audio-3.0-asr-flash-streaming
     apiKey: ''
     localEngine: funasr
     localModelDir: ''
-  - id: asr_qwen3
-    name: Qwen3-ASR（普通话）
+  - id: asr_aliyun
+    name: Fun-ASR（方言备选）
     provider: cloud
-    model: qwen3-asr-flash-realtime
+    model: fun-asr-flash-8k-realtime
     apiKey: ''
     localEngine: funasr
     localModelDir: ''
@@ -153,22 +146,6 @@ tts:
     voice: zh-CN-YunjianNeural
     rate: +30%
     tier: flash
-    apiKey: ''
-    piperModel: models/zh_CN-huayan-medium.onnx
-  - id: tts_cosyvoice
-    name: CosyVoice v3（付费云，高音质）
-    provider: cosyvoice
-    voice: longanlang_v3
-    tier: flash
-    rate: +0%
-    apiKey: ''
-    piperModel: models/zh_CN-huayan-medium.onnx
-  - id: tts_qwen
-    name: Qwen-Audio-TTS（付费云）
-    provider: qwen
-    voice: longyingsongliu
-    tier: flash
-    rate: +0%
     apiKey: ''
     piperModel: models/zh_CN-huayan-medium.onnx
   - id: tts_piper
