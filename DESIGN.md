@@ -1,20 +1,16 @@
 # 小二（Xiao）· 语音工作助手 · 设计方案（v3）
 
-> **v3 定版（架构 + 技术栈锁定）**：架构 = 混合 C 三层（Python 语音引擎 + DSH 薄插件 JS + Electron/React UI）；技术栈 = **除唤醒词本地（Sherpa-ONNX「小二」）外，ASR/LLM 一律 API 优先**，并支持**多方案可存可切**（ASR：Paraformer 云端普通话/方言 + 本地 FunASR；LLM：DeepSeek/千问/OpenAI/GLM/Kimi 云端 + Ollama/MiniCPM-o 本地）。开发路线图见 `ROADMAP.md`。本文档 v2.1 的详细设计（状态机/路由/桥/审批/风险）与定版不冲突的部分继续有效。
+> **v3 定版（架构 + 技术栈锁定）**：架构 = 混合 C 三层（Python 语音引擎 + DSH 薄插件 JS + Electron/React UI）；技术栈 = **除唤醒词本地（Sherpa-ONNX「小二」）外，ASR/LLM 一律 API 优先**，并支持**多方案可存可切**（ASR：阿里云实时流式 qwen-audio 默认 / fun-asr 方言备选 + 本地 FunASR；LLM：DeepSeek/千问/OpenAI/GLM/Kimi 云端 + Ollama/MiniCPM-o 本地）。开发路线图见 `ROADMAP.md`。本文档 v2.1 的详细设计（状态机/路由/桥/审批/风险）与定版不冲突的部分继续有效。
 
 > 一句话定位：给通用 Agent（DeepSeek Harness，DSH）装上语音前端，做成「语音控制的 Agent 工作台」。
 >
-> v2 变更：新增「风险与应对」「语音审批」「长任务异步」三节；路线图把 **A2 流式桥**提到「工作面板 UI」之前。
->
-> v2.1 修订（吸收外部分析）：DSH 版本更正为 `0.1.1-rc.2`；§8 补 DSH 审批栈源码核实结论（headless fail-closed；A2 走 web 模式注入）；§9 补并发任务列表与失败/超时反馈；§10 增风险 5；§12 对比表拆分并软化表述；§13 增「失败回退」「历史摘要压缩」两项。
->
-> v2.2 修订：§8 审批更新为**双层结构**——预测式语音审批（第一层）+ 运行时审批桥 `xiao-approval-bridge`（第二层，**已落地**：插件 answerer + 回环 `/api/dsh/approval`，源码核实）；A2 收窄为纯流式桥，审批注入不再依赖 `dsh web`。
+> 修订史：v2 新增「风险与应对」「语音审批」「长任务异步」三节；v2.1 吸收外部分析（DSH 版本更正 `0.1.1-rc.2`、审批栈源码核实 headless fail-closed、§9 补并发任务与失败/超时反馈）；v2.2 审批更新为**双层结构**——预测式语音审批 + 运行时审批桥 `xiao-approval-bridge`（已落地），A2 收窄为纯流式桥。
 
 ---
 
 ## 1. 定位与核心判断
 
-**本质不是「语音助手」，而是「给通用 Agent 装语音前端」。** 传统语音助手在“自己造大脑”（意图引擎、技能系统、多轮对话）；本设计把最难的部分外包给 DSH（agent 循环 + 编程工具 + subagent + 知识库），自己只做三件事：
+**本质不是「语音助手」，而是「给通用 Agent 装语音前端」。** 传统语音助手在「自己造大脑」（意图引擎、技能系统、多轮对话）；本设计把最难的部分外包给 DSH（agent 循环 + 编程工具 + subagent + 知识库），自己只做三件事：
 
 1. **语音链路**：唤醒 / 识别 / 断句 / 合成（已跑通，中文识别对标微信/豆包）
 2. **路由**：一句话走「聊天」还是「干活(DSH)」
@@ -25,7 +21,7 @@
 | 边界 | 内容 |
 |---|---|
 | 进程边界 | 语音系统是独立进程，DSH 是被调用的外部服务，只经 CLI/API 通信，互不侵入 |
-| 目录边界 | `02_Assistant`(语音系统) / `~/.dsh`(DSH 运行时) / `01_DSH`(插件开发) / `03_Workspace`(工作区) 互不重叠 |
+| 目录边界 | 本仓库（语音系统）/ `~/.dsh`(DSH 运行时) / DSH 插件开发目录 / Agent 工作区（`agent.workspace` 配置）互不重叠 |
 | 耦合边界 | 桥的两端各一个模块知道 DSH：Python 侧 `backend/bridge/` + DSH 侧薄插件(JS)；DSH 升级只改这两处 |
 
 ## 2. 整体架构
@@ -33,9 +29,9 @@
 ```
 [语音前端]                          [DSH 大脑]
  Sherpa-ONNX 唤醒「小二」             agent 循环
- Paraformer 流式 ASR / FunASR 本地   编程工具（文件/终端）
+ 阿里云流式 ASR(qwen-audio)/FunASR   编程工具（文件/终端）
  Silero VAD 断句         薄桥接      subagent / workflow
- edge-tts TTS         ───────────▶  知识库检索
+ TTS(Qwen流式/edge/Piper/omni) ─▶  知识库检索
  DeepSeek/千问(chat 通道)            DSH 薄插件(JS) 注入
  自定义工具(天气/提醒/打开/搜索)
 ```
@@ -47,24 +43,24 @@
 ## 3. 目录结构
 
 ```
-xiao\
-├── 01_DSH\            ← DSH 插件开发（不动）
-├── 02_Assistant\      ← ★ 语音系统（一套系统一个文件夹，独立可运行）
-│   ├── backend\
-│   │   ├── audio\  mic/vad/wake
-│   │   ├── asr\    阿里云实时流式(qwen-audio默认/fun-asr方言备选) / FunASR(本地)
-│   │   ├── llm\    OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama/MiniCPM-o)
-│   │   ├── tts\    edge-tts(免费云) + CosyVoice v3/Qwen-Audio-TTS(付费云) + Piper(离线) + MiniCPM-o(vLLM)
-│   │   ├── tools\  搜索/打开/天气/提醒
-│   │   ├── bridge\ ★ 唯一知道 DSH 的地方
-│   │   ├── session\ 状态机 + 事件总线
-│   │   ├── router.py 路由层
-│   │   ├── agent.py core.py main.py
-│   ├── frontend\  React 工作台
-│   ├── desktop\   Electron 壳（可选）
-│   ├── plugins\   DSH 薄插件（审批桥 xiao-approval-bridge）
-│   └── config.yaml / .env / run.py
-└── 03_Workspace\      ← ★ Agent 工作目录（DSH 读写文件处，运行时自动创建）
+Xiao\（本仓库 · 语音系统，独立可运行）
+├── backend\
+│   ├── audio\  mic/vad/wake
+│   ├── asr\    阿里云实时流式(qwen-audio默认/fun-asr方言备选) / FunASR(本地)
+│   ├── llm\    OpenAI兼容(DeepSeek/通义/OpenAI/GLM/Kimi/Ollama/MiniCPM-o)
+│   ├── tts\    Qwen 实时流式(默认) + edge-tts(免费云) + Piper(离线) + MiniCPM-o(vLLM)
+│   ├── tools\  搜索/打开/天气/提醒
+│   ├── bridge\ ★ 唯一知道 DSH 的地方
+│   ├── session\ 状态机 + 事件总线
+│   ├── router.py 路由层
+│   ├── agent.py core.py main.py
+├── frontend\  React 工作台
+├── desktop\   Electron 壳（可选）
+├── plugins\   DSH 薄插件（审批桥 xiao-approval-bridge）
+└── config.yaml / .env.example / run.py
+
+~/.dsh\              ← DSH 运行时（DSH 自建，独立于本仓库）
+<agent.workspace>    ← Agent 工作目录（DSH 读写文件处，运行时自动创建；config.yaml 可配，默认相对项目根）
 ```
 
 ## 4. 状态机
@@ -79,7 +75,7 @@ LISTENING ──说「关闭」──► CONFIRM_SHUTDOWN（两步确认）─�
 
 - `WORKING`：DSH 任务执行中，可问「进展」报已用秒数、说「取消」停止；**支持后台化**（见 §9）。
 - `CONFIRM_SHUTDOWN`：关闭前二次确认，5 秒不答自动取消。
-- `AWAIT_APPROVAL`（**规划**）：危险工具审批态，见 §8。
+- `AWAIT_APPROVAL`：危险工具审批态，见 §8（双层审批已落地）。
 
 ## 5. 路由（A1b 双通道）
 
@@ -96,7 +92,7 @@ LISTENING ──说「关闭」──► CONFIRM_SHUTDOWN（两步确认）─�
 - **手动强制**：前端顶栏「自动/聊天/DSH」三档开关，实时下发 `router_mode`。
 - **L0 规则层（B1，优先于路由）**：`backend/rules.py` 在路由之前先匹配触发词——音量/静音、截图、锁屏/睡眠、播放/暂停/上下曲、剪贴板复制/粘贴/朗读、查时间、查天气、查汇率、定时提醒、打开应用/网址——命中直接执行内置工具并播报，**无 LLM、无 key 也能用**；提取不到必要参数（如「提醒我」没说多久、单说「打开」）自动回落对话/DSH 不硬拦截。词表在 `config.yaml` 的 `router.rules.keywords`（可按规则覆盖默认口令，`router.rules.enabled: false` 一键关）。锁屏/睡眠为「先说完再做」型，避免动作打断播报。
 
-设计意图：解决“闲聊要快、干活要慢”的语义错配——agent 任务动辄几十秒到几分钟，不能每句都走 DSH。
+设计意图：解决「闲聊要快、干活要慢」的语义错配——agent 任务动辄几十秒到几分钟，不能每句都走 DSH。
 
 ## 6. 语音控制指令
 
@@ -112,7 +108,7 @@ LISTENING ──说「关闭」──► CONFIRM_SHUTDOWN（两步确认）─�
   - 清空历史 / 退下 / 设置面板「一键清空记忆」都会同步清 DSH 上下文（`reset_context()`）。
   - 代价：非流式、进程冷启动、每轮重发历史 token。
 - **A2（规划，优先级高于工作面板）**：耦合 DSH 的 WS/RPC（即常驻 `dsh web` + 连其回环 WS/HTTP，而非 headless CLI），实现流式 + 连续会话 + 工具事件回传（审批注入已由运行时审批桥落地，见 §8，不再依赖 A2）。
-  - 代价：DSH 处于 rc 阶段（实测 `0.1.1-rc.2（读自本机发行版 package.json）`），耦合越深、版本一变越痛。**先 A1 稳、后 A2 快，是权衡而非偷懒。**
+  - 代价：DSH 处于 rc 阶段（实测 `0.1.1-rc.2`），耦合越深、版本一变越痛。**先 A1 稳、后 A2 快，是权衡而非偷懒。**
 - **版本风险应对**：锁版本 + 单一适配层（`bridge/`）+ 优先走稳定 CLI 面；DSH 变动只改一个文件。
 
 ## 8. 语音审批（安全）
@@ -130,7 +126,7 @@ DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `c
   4. 决策回填：`allowed-once`（一次性放行）/ `rejected` / `unavailable`（fail-closed）。
   - 这一层是**精确审批**：DSH 内部真触发了才问，不靠关键词预测、无误报；A1 的 fail-closed 结论对「不装本插件的原生 headless」依然成立（裸 headless 无 answerer → 默认拒绝）。
 - **A2 阶段（流式桥，规划；v2.2 收窄）**：审批注入**已由运行时审批桥实现**，A2 剩余价值 = `dsh web` 的流式输出 / 连续会话（免每轮冷启动、重发历史）/ 工具事件回传（实时进度而非等终态）。web 模式的审批通道（回环 WS `/api/events.mux` 订阅 `approval/requested` 帧，经 `POST /api/respond` 注入 `{rpcId, approvalId, outcome:'allowed-once'|'rejected'}`；无认证、仅回环可达、只有一次性授权）作为插件桥的**备选路径**保留记录，不再阻塞路线图。
-  - 代价：A2 从“薄桥 CLI”变成“常驻 DSH web + 语音↔HTTP 桥”，安全边界靠回环；DSH 仍在 rc 阶段，耦合越深、版本一变越痛。**先 A1 稳、后 A2 快，是权衡而非偷懒。**
+  - 代价：A2 从「薄桥 CLI」变成「常驻 DSH web + 语音↔HTTP 桥」，安全边界靠回环；DSH 仍在 rc 阶段，耦合越深、版本一变越痛（权衡取舍见 §7）。
 
 ## 9. 长任务与异步交互
 
@@ -146,7 +142,7 @@ DSH 的危险操作审批由 **`dsh-user-approval`** 服务承担（服务名 `c
 
 | # | 风险 | 应对 |
 |---|---|---|
-| 1 | ASR/TTS 非全离线（edge-tts 微软云、Paraformer 阿里云） | 属权衡非错误；本地 FunASR 已在 `config.yaml` 可切（重但存在）。若主打隐私需改口径 |
+| 1 | ASR/TTS 非全离线（edge-tts 微软云、阿里云 ASR） | 属权衡非错误；本地 FunASR 已在 `config.yaml` 可切（重但存在）。若主打隐私需改口径 |
 | 2 | A1 CLI 桥薄弱（stateless/非流式/冷启动/重发历史） | 提到最高优先级做 A2；锁版本 + 适配层隔离 |
 | 3 | 语音触发的高危操作无审批 | §8：A1 默认拦截，A2 做 `AWAIT_APPROVAL` 交互审批 |
 | 4 | 长任务的心智成本 | §9：后台化 + 完成通知，不强制干等 |
@@ -191,15 +187,9 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
 
 ## 12. 与开源方案对比（横向定位）
 
-| 维度 | 本设计 | Leon | OVOS | Rhasspy | Home Assistant | Khoj | Krisduo |
-|---|---|---|---|---|---|---|---|
-| 定位 | **语音控制 Agent 工作台** | 桌面技能助手 | 语音技能中枢 | 全离线语音 | 家居自动化中枢 | 文档问答 | Mac 桌面管家 |
-| 大脑 | **外包给 DSH**(agent+编程+多Agent+知识库) | 规则意图/技能 | 规则意图/技能 | 规则意图 | LLM 管线(可选) | RAG 检索 | LLM+function calling |
-| 自主改文件/跑命令 | ✅ 核心能力 | ❌(仅预定义脚本△) | ❌ | ❌ | △(shell_command/脚本) | ❌ | 部分 |
-| 多 Agent | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| 中文 | ✅ 一等公民(Paraformer+DeepSeek) | 一般 | 一般 | 一般 | 一般 | 一般 | 一等公民 |
+与 Leon / OVOS / Rhasspy / Home Assistant / Khoj 等开源方案的逐项对比表已从对外文档移除，避免双份维护与过时风险。
 
-**结论**：本设计填补真实空档——把「语音」接到一个能改文件、跑命令、调子 Agent 的通用 Agent 上。
+**一句话定位**：本设计填补真实空档——把「语音」接到一个能改文件、跑命令、调子 Agent 的通用 Agent 上。
 
 ## 13. 路线图（定版）
 

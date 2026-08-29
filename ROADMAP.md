@@ -19,7 +19,7 @@
 | 前端 | React + TypeScript + Three.js | Electron 壳 | 星云背景 + 对话界面 |
 | DSH 集成 | 薄插件（JS/TS，只做桥接） | 随 DSH | 不改 DSH 核心 |
 
-> **核心原则**：唤醒词本地（常驻、低延迟、离线必须）；其余一律 API 优先（用户已有 DeepSeek/千问/DashScope key，省去本地部署麻烦）。本地 FunASR / Ollama 作为备选已接（OpenAI 兼容端点）；LLM 另支持 MiniCPM-o 走本地 vLLM-omni（同 base_url+model+key 三件套）；播报加 Piper 本地离线作断网保底。多方案通过 `models[] + active` 切换。
+> **核心原则**：唤醒词本地（常驻、低延迟、离线必须）；其余一律 API 优先（免本地部署大模型，云服务 key 由使用者在 `.env` 自备）。本地 FunASR / Ollama 作为备选已接（OpenAI 兼容端点）；LLM 另支持 MiniCPM-o 走本地 vLLM-omni（同 base_url+model+key 三件套）；播报加 Piper 本地离线作断网保底。多方案通过 `models[] + active` 切换。
 
 ---
 
@@ -32,7 +32,7 @@
 | **Phase 0** | 唤醒词本地化：openWakeWord → **Sherpa-ONNX「小二」** | `wake.py` + 模型接入 + 灵敏度可配 | ✅ |
 | **Phase 1** | 云端主用链路定版：Paraformer ASR + DeepSeek/千问 LLM 全链路跑通 | config「云端主用 + 本地留口」 | ✅ |
 | **Phase 2** | UI 升级：Three.js 星云 + 三栏（左对话/中状态球/右输入）+ 打字机 | React 前端改造 | ✅ |
-| **Phase 3** | 配置面板：唤醒/语音/执行 + 底部日志 + 状态灯 | 配置面板 UI + 持久化 | ✅ 已升级为 schema 驱动 8 页（见下） |
+| **Phase 3** | 配置面板：唤醒/语音/执行 + 底部日志 + 状态灯 | 配置面板 UI + 持久化 | ✅ 已升级为 schema 驱动（8 页 = 6 组 + 音频/界面，见下） |
 | **Phase 4** | 路由双通道 + DSH 桥（A1）端到端 | 语音→路由→DSH→语音 全链路 | ✅ |
 | **Phase 5** | DSH 薄插件：语音桥 + 审批转发（XIAO_GRANT 环境变量） | 桥接跑通 | ✅ |
 | **Phase 6** | 语音审批：`AWAIT_APPROVAL` + 屏幕按钮/语音「允许/拒绝」 | 语音审批可用 | ✅ |
@@ -61,7 +61,7 @@
 | 项 | 说明 | 优先级 |
 |---|---|---|
 | **云 TTS 语速** | CosyVoice v3 / Qwen-Audio-TTS 已按砍云清单移除（`tts.rate` 当前仅对 edge-tts 生效）；Qwen 实时流式（qwen_rt）官方不支持 `speech_rate`，原生调速走不通，仅可换 `qwen3-tts-instruct-flash-realtime` 以指令近似 | 中 |
-| 端到端集成测试 + 打包分发 | Electron 安装包，README 安装步骤核对「第三使用者视角」 | 高 |
+| 双击安装包端到端实测 | 打包链路已通（内置 Python 运行时，安装包构建 + 内置后端冒烟通过）；剩真实桌面双击 exe 实测（沙箱禁 GUI 进程，见 Phase 8） | 高 |
 | MiniCPM-o 本地 vLLM 三角色实测 | 唤醒/识别/播报三角色一体化，端口预设 `localhost:8000` | 中 |
 | `docs/screenshot.png` 界面截图更新 | 声线动画 + 星云重做后的界面快照 | 低 |
 | 中文音色名官方化核对 | 当前部分为拼音音译（如长音色名） | 低 |
@@ -78,7 +78,7 @@
 | DSH | ✅ 已装 | 本机 `0.1.1-rc.2`；薄插件随 DSH 升级迭代 |
 | Electron 环境 | ✅ 已有 | `desktop/` |
 
-> **🔒 安全红线（A2 审批）**：`POST /api/respond`（审批注入端点）**永远只绑回环**（127.0.0.1），`trustedHosts` 不得外放（不可配成 0.0.0.0/局域网）。「无认证」仅对「本机单用户」成立；开源分发时此条写进 SECURITY.md。
+> **🔒 安全红线（A2 审批）**：`POST /api/respond`（审批注入端点）**永远只绑回环**（127.0.0.1），`trustedHosts` 不得外放（不可配成 0.0.0.0/局域网）。「无认证」仅对「本机单用户」成立；此条需补进 SECURITY.md（仓库已开源，该文件待建）。
 
 ---
 

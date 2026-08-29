@@ -10,8 +10,6 @@ An always-on Chinese voice assistant for Windows: wake it with「小二」(Xiao 
 
 **Multi-provider**: wake / ASR / TTS / LLM each support multiple providers (card list + create/edit modal + one-click switch; model names are free-form, follow official docs). Dangerous actions (network / writing outside workspace / delete / install / system changes) require voice approval; DSH headless mode is fail-closed. Long tasks can run in the background with completion notification.
 
-Stack: Python (FastAPI + WebSocket) backend + React (Vite + TypeScript + Three.js) frontend + Electron tray shell; depends on DeepSeek Harness as the brain.
-
 ## About DeepSeek Harness
 
 Xiao is not a voice brain built from scratch — it is a **voice frontend for DeepSeek Harness (DSH)**.
@@ -36,8 +34,7 @@ Xiao is not a voice brain built from scratch — it is a **voice frontend for De
 - **DSH execution**: routes to DeepSeek Harness for real tasks (read/write files, run commands, multi-step agent loops), with multi-turn context, voice approval, background long tasks
 - **TTS**: 4 providers — Qwen realtime streaming (default, ~0.4s first audio, syncs with subtitles) / edge-tts free cloud / Piper offline / MiniCPM-o (local vLLM)
 - **Live voice line**: real microphone RMS level pushed over WebSocket, rendered as a live waveform (not a fake animation)
-- **Two-stage reply**: plan → execute → result
-- **Pluggable tools**: web search, open app/URL, weather, reminders; Huawei smart-home reserved
+- **Pluggable tools**: web search, open app/URL, weather, reminders
 - **UI**: React + Vite + Three.js, three-column layout (conversation / nebula status orb + live transcript / input) + glassmorphism
 
 ## Architecture
@@ -46,7 +43,7 @@ Xiao is not a voice brain built from scratch — it is a **voice frontend for De
 [Python backend]                              [Web frontend]
   mic (sounddevice) → wake (Sherpa-ONNX)        3 columns: chat + nebula orb
      → VAD (Silero)                              + live transcript + input
-     → streaming ASR (cloud Paraformer / local FunASR) ──WS──► realtime text
+     → streaming ASR (cloud qwen-audio / local FunASR) ──WS──► realtime text
      → router → chat (DeepSeek direct) or dsh (DSH)
      → tools / DSH bridge
      → TTS (Qwen realtime / edge-tts / Piper / MiniCPM-o) ──► speech
@@ -72,7 +69,7 @@ backend/
   llm/              cloud DeepSeek/Qwen/OpenAI/GLM/Kimi / local Ollama / MiniCPM-o (local vLLM)
   tts/              Qwen realtime / edge-tts / Piper / MiniCPM-o
   tools/            search / open / weather / reminders (registry)
-  devices/          device adapter abstraction (Huawei smart-home reserved)
+  devices/          device adapter abstraction (reserved for extension)
   session/state.py  state machine + thread-safe event bus
 frontend/           React app
 desktop/            Electron tray shell
