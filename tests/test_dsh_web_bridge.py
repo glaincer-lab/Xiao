@@ -29,10 +29,11 @@ class _FakeRpcError(Exception):
 class _FakeDsh:
     """单端口假 DSH web：RPC 走信封应答，事件流按 frames 脚本逐条推送。"""
 
-    def __init__(self, frames=None, *, nested: bool = True) -> None:
+    def __init__(self, frames=None, *, nested: bool = True, frames_by_sid=None) -> None:
         self.handlers: dict = {}
         self.requests: list = []
         self.frames = frames or []
+        self.frames_by_sid = frames_by_sid or {}
         self.nested = nested
         self.subscribed = threading.Event()
         self.ready = threading.Event()
@@ -70,11 +71,18 @@ class _FakeDsh:
         async def events(ws: fastapi.WebSocket):
             await ws.accept()
             try:
-                await ws.receive_json()
+                sub = await ws.receive_json()
             except Exception:
                 return
             self.subscribed.set()
-            for frame in self.frames:
+            sid = ""
+            sub_payload = sub.get("payload")
+            if isinstance(sub_payload, dict):
+                sid = str(sub_payload.get("sessionId") or "")
+            for frame in self.frames_by_sid.get(sid, self.frames):
+                if isinstance(frame, tuple) and frame and frame[0] == "sleep":
+                    await asyncio.sleep(float(frame[1]))
+                    continue
                 payload = {"event": frame} if self.nested else frame
                 await ws.send_json({
                     "type": "server-request",
@@ -132,8 +140,8 @@ class _Base(unittest.TestCase):
         return b
 
     def make_rpc(self, *, frames=None, nested: bool = True, created=None,
-                 prompt_fail_first: bool = False) -> _FakeDsh:
-        rpc = _FakeDsh(frames, nested=nested)
+                 prompt_fail_first: bool = False, frames_by_sid=None) -> _FakeDsh:
+        rpc = _FakeDsh(frames, nested=nested, frames_by_sid=frames_by_sid)
         self.addCleanup(rpc.close)
         sids = created or ["s1"]
         state = {"creates": 0, "prompts": 0}
@@ -203,7 +211,7 @@ class StreamTests(_Base):
         b = self.make_bridge(rpc, events)
         out = asyncio.run(b.run("列一下目录"))
         self.assertEqual(out, "你好，世界")
-        self.assertEqual(b._session_id, "s1")
+        self.assertEqual(b._idle_sessions, ["s1"])
         self.assertTrue(rpc.subscribed.wait(5))
         self.assertEqual([k for k, _ in events], ["work_step", "dsh_chunk", "dsh_chunk", "work_step"])
         self.assertEqual(events[0][1], {"name": "bash", "status": "start", "summary": "command=ls tmp"})
@@ -238,7 +246,7 @@ class StreamTests(_Base):
         b = self.make_bridge(rpc, [])
         out = asyncio.run(b.run("干活"))
         self.assertEqual(out, "搞定")
-        self.assertEqual(b._session_id, "s2")
+        self.assertEqual(b._idle_sessions, ["s2"])
         self.assertEqual(rpc.state["creates"], 2)
 
     def test_error_turn_raises_human_message(self) -> None:
@@ -350,9 +358,9 @@ class WiringTests(unittest.TestCase):
 
     def test_web_reset_context_drops_session(self) -> None:
         b = DSHWebBridge()
-        b._session_id = "s9"
+        b._idle_sessions.append("s9")
         b.reset_context()
-        self.assertIsNone(b._session_id)
+        self.assertEqual(b._idle_sessions, [])
 
     def test_build_bridge_modes(self) -> None:
         with mock.patch("backend.bridge.config") as cfg:
@@ -366,6 +374,75 @@ class WiringTests(unittest.TestCase):
             b = build_bridge()
             self.assertIsInstance(b, DSHWebBridge)
             self.assertFalse(b._fallback)
+
+
+class ConcurrentTests(_Base):
+    FRAMES_DONE = [
+        {"type": "assistant/chunk", "data": {"text": "你好，世界"}},
+        {"type": "turn/end", "data": {"reason": {"kind": "completed"}}},
+    ]
+
+    def test_serial_runs_reuse_session(self) -> None:
+        rpc = self.make_rpc(frames=self.FRAMES_DONE)
+        b = self.make_bridge(rpc, [])
+        out1 = asyncio.run(b.run("任务一"))
+        out2 = asyncio.run(b.run("任务二"))
+        self.assertEqual(out1, "你好，世界")
+        self.assertEqual(out2, "你好，世界")
+        self.assertEqual(rpc.state["creates"], 1)
+        prompts = [r for r in rpc.requests if r["path"] == "/api/session.prompt"]
+        self.assertEqual(prompts[0]["payload"]["sessionId"], "s1")
+        self.assertEqual(prompts[1]["payload"]["sessionId"], "s1")
+        self.assertEqual(b._idle_sessions, ["s1"])
+
+    def test_concurrent_runs_isolated(self) -> None:
+        rpc = self.make_rpc(frames=self.FRAMES_DONE, created=["s1", "s2"])
+        b = self.make_bridge(rpc, [])
+
+        async def scene() -> tuple[str, str]:
+            return await asyncio.gather(b.run("任务A"), b.run("任务B"))
+
+        out_a, out_b = asyncio.run(scene())
+        self.assertEqual(out_a, "你好，世界")
+        self.assertEqual(out_b, "你好，世界")
+        self.assertEqual(rpc.state["creates"], 2)
+        self.assertEqual(sorted(b._idle_sessions), ["s1", "s2"])
+
+    def test_cancel_targets_only_own_session(self) -> None:
+        rpc = self.make_rpc(
+            frames_by_sid={
+                "s1": [("sleep", 5.0)],
+                "s2": [
+                    ("sleep", 0.5),
+                    {"type": "assistant/chunk", "data": {"text": "B-done"}},
+                    {"type": "turn/end", "data": {"reason": {"kind": "completed"}}},
+                ],
+            },
+            created=["s1", "s2"],
+        )
+        b = self.make_bridge(rpc, [])
+
+        async def scene() -> None:
+            ta = asyncio.create_task(b.run("任务A"))
+            tb = asyncio.create_task(b.run("任务B"))
+            for _ in range(100):
+                if rpc.state["prompts"] >= 2:
+                    break
+                await asyncio.sleep(0.05)
+            ta.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await ta
+            self.assertEqual(await asyncio.wait_for(tb, 15), "B-done")
+
+        asyncio.run(scene())
+        self.assertEqual(sorted(b._idle_sessions), ["s2"])
+        cancels = [r for r in rpc.requests if r["path"] == "/api/session.cancel"]
+        deadline = time.time() + 5
+        while not cancels and time.time() < deadline:
+            time.sleep(0.05)
+            cancels = [r for r in rpc.requests if r["path"] == "/api/session.cancel"]
+        self.assertEqual(len(cancels), 1)
+        self.assertEqual(cancels[0]["payload"], {"sessionId": "s1"})
 
 
 if __name__ == "__main__":

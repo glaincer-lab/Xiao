@@ -18,6 +18,8 @@ class DSHCancelled(Exception):
 
 
 class DSHBridge:
+    supports_concurrent = False
+
     def __init__(self) -> None:
         self._workspace = str(config.get("agent.workspace", ".") or ".")
         self._timeout = float(config.get("bridge.timeout_sec", 600))
