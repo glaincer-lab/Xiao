@@ -26,6 +26,9 @@ Thumbs.db
 # 运行日志（含语音转写原文，勿提交）
 logs/
 
+# 截图工具运行时产物（B1，勿提交）
+screenshots/
+
 # 模型权重（运行时下载，勿提交）
 *.tflite
 models/

@@ -9,19 +9,47 @@ from typing import Callable
 
 from backend.config import config
 from backend.tools.base import ToolRegistry, registry
+from backend.tools.clipboard import ClipboardTool
+from backend.tools.clock import RateTool, TimeTool
+from backend.tools.media import MediaTool
 from backend.tools.open_app import OpenAppTool
 from backend.tools.reminder import ReminderTool
+from backend.tools.system_control import LockScreenTool, ScreenshotTool, SleepTool, VolumeTool
 from backend.tools.weather import WeatherTool
 from backend.tools.web_search import WebSearchTool
 
 
 def register_builtin_tools(on_reminder_fire: Callable[[str], None] | None = None) -> ToolRegistry:
-    enabled = config.get("tools.enabled", ["web_search", "open_app", "weather", "reminder"])
+    enabled = config.get(
+        "tools.enabled",
+        [
+            "web_search",
+            "open_app",
+            "weather",
+            "reminder",
+            "volume",
+            "screenshot",
+            "lock_screen",
+            "sleep_pc",
+            "media",
+            "clipboard",
+            "time_now",
+            "exchange_rate",
+        ],
+    )
     factories = {
         "web_search": WebSearchTool,
         "open_app": OpenAppTool,
         "weather": WeatherTool,
         "reminder": lambda: ReminderTool(on_fire=on_reminder_fire),
+        "volume": VolumeTool,
+        "screenshot": ScreenshotTool,
+        "lock_screen": LockScreenTool,
+        "sleep_pc": SleepTool,
+        "media": MediaTool,
+        "clipboard": ClipboardTool,
+        "time_now": TimeTool,
+        "exchange_rate": RateTool,
     }
     for name in enabled:
         factory = factories.get(name)

@@ -17,7 +17,9 @@ from backend.audio.wake import build_wake_word
 from backend.config import config
 from backend.bridge.dsh_bridge import DSHCancelled
 from backend.errors import reason_from_text
+from backend.rules import RuleEngine
 from backend.session.state import State, emit
+from backend.tools.base import registry as tool_registry
 
 
 class Pipeline:
@@ -60,6 +62,7 @@ class Pipeline:
         self._approval_action = None
         self._perms = None
         self._tasks = None
+        self._rules = RuleEngine()
 
         # 麦克风电平（RMS）：供前端画真实声线动画
         self._mic_level_acc = 0.0
@@ -335,6 +338,10 @@ class Pipeline:
         if self._is_shutdown(text):
             self._on_shutdown()
             return
+        hit = self._rules.match(text)
+        if hit is not None:
+            self._on_rule_hit(hit)
+            return
         channel = self._router.route(text) if self._router is not None else "chat"
         if channel == "dsh" and self._bridge is not None and self._loop is not None:
             self._on_dsh_task(text)
@@ -361,6 +368,32 @@ class Pipeline:
 
     def _is_shutdown(self, text: str) -> bool:
         return self._shutdown_enabled and self._matches(text, self._shutdown_phrases)
+
+    # ---- L0 规则指令：触发词直接执行内置工具（无 LLM / 无 key 可用，B1）----
+    def _on_rule_hit(self, hit: dict) -> None:
+        self._in_utterance = False
+        self._pre_roll.clear()
+        self._last_active = time.time()
+        self.set_state(State.SPEAKING)
+        if self._loop is not None:
+            asyncio.run_coroutine_threadsafe(self._run_rule(hit), self._loop)
+
+    async def _run_rule(self, hit: dict) -> None:
+        if hit.get("speak_first"):
+            # 锁屏/睡眠这类动作会打断播报：先把话说完再执行
+            text = str(hit.get("reply") or "好的。")
+            emit("assistant_result", text=text)
+            if self._tts is not None:
+                await self._speak(text)
+            await tool_registry.call(hit["tool"], **(hit.get("kwargs") or {}))
+        else:
+            result = await tool_registry.call(hit["tool"], **(hit.get("kwargs") or {}))
+            text = str(hit.get("reply") or result)
+            emit("assistant_result", text=text)
+            if self._tts is not None:
+                await self._speak(text)
+        self._last_active = time.time()
+        self.set_state(State.LISTENING)
 
     # ---- 退下：回待机 + 清空历史 ----
     def _on_dismiss(self) -> None:

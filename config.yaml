@@ -241,12 +241,45 @@ router:
   - 别做了
   - 算了
   - 不用做了
+  # L0 规则指令（无 LLM / 无 key 也可用）：触发词 → 内置工具
+  # enabled: false 可整体关闭；keywords 按规则覆盖默认词表
+  rules:
+    enabled: true
+    keywords:
+      open_app: [打开, 启动]
+      volume_up: [音量调大, 调大音量, 音量大点, 大点声]
+      volume_down: [音量调小, 调小音量, 音量小点, 小点声]
+      volume_mute: [取消静音, 解除静音, 静音]
+      screenshot: [截个图, 截图, 截屏]
+      lock_screen: [锁屏, 锁定电脑]
+      sleep_pc: [睡眠模式, 休眠, 睡眠]
+      media_toggle: [暂停播放, 继续播放, 播放音乐, 暂停]
+      media_stop: [停止播放]
+      media_next: [下一首]
+      media_prev: [上一首]
+      clipboard_read: [朗读剪贴板, 念一下剪贴板, 读一下剪贴板]
+      clipboard_paste: [粘贴]
+      clipboard_copy: [复制到剪贴板, 复制一下, 复制]
+      time_now: [几点, 现在时间, 今天几号, 几号, 今天日期, 星期几, 今天星期]
+      weather: [天气]
+      exchange_rate: [汇率, 兑换]
+      reminder: [提醒我, 倒计时, 定时]
 tools:
   enabled:
   - web_search
   - open_app
   - weather
   - reminder
+  - volume
+  - screenshot
+  - lock_screen
+  - sleep_pc
+  - media
+  - clipboard
+  - time_now
+  - exchange_rate
+  # 天气不指定城市时的默认城市（留空则按 IP 自动定位）
+  default_city: ''
   web_search:
     provider: duckduckgo
 devices:
