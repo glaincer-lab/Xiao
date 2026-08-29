@@ -177,6 +177,9 @@ const EXTRA_TABS: Group[] = [
   { key: 'ui', label: '界面' },
 ]
 
+// E4 健康状态灯：GET /api/health/probe 返回的单行结果
+type ProbeItem = { key: string; label: string; scheme: string; ok: boolean; msg: string; latency_ms: number }
+
 function getPath(obj: Record<string, any>, path: string): any {
   return path.split('.').reduce((o: any, k) => (o == null ? undefined : o[k]), obj)
 }
@@ -245,6 +248,39 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       .then((j) => (j.ok ? setInputs(j.inputs || []) : null))
       .catch(() => null)
   }, [])
+
+  // E4 健康状态灯：进入「状态」页自动探测一次，之后靠「重新探测」按钮手动刷新
+  const [probeItems, setProbeItems] = useState<ProbeItem[] | null>(null)
+  const [probeBusy, setProbeBusy] = useState(false)
+  const [probeMsg, setProbeMsg] = useState('')
+  const probeAutoRef = useRef(false)
+  useEffect(() => {
+    if (tab === 'status' && !probeAutoRef.current) {
+      probeAutoRef.current = true
+      runProbe()
+    }
+  }, [tab])
+
+  const runProbe = async () => {
+    setProbeBusy(true)
+    setProbeMsg('正在逐项探测（ASR / LLM / TTS / agent）…首次约需几秒')
+    try {
+      const r = await fetch(`${API_BASE}/api/health/probe`)
+      const j = await r.json()
+      if (j.ok) {
+        const items: ProbeItem[] = j.items || []
+        setProbeItems(items)
+        const bad = items.filter((x) => !x.ok).length
+        setProbeMsg(bad ? `有 ${bad} 个环节未连通，照红灯项的提示处理后可重新探测。` : '全部环节连通正常。')
+      } else {
+        setProbeMsg('探测失败：' + (j.msg || ''))
+      }
+    } catch {
+      setProbeMsg('探测失败（网络错误，后端未启动？）')
+    } finally {
+      setProbeBusy(false)
+    }
+  }
 
   const fieldsByGroup = useMemo(() => {
     const m: Record<string, Field[]> = {}
@@ -1470,7 +1506,8 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     )
   }
 
-  const allTabs = [...groups, ...EXTRA_TABS]
+  // 「状态」固定排第一位：进设置先看各环节连通情况（E4）
+  const allTabs: Group[] = [{ key: 'status', label: '状态' }, ...groups, ...EXTRA_TABS]
   const currentInput = config ? getPath(config, 'audio.input_device') : undefined
 
   return (
@@ -1491,7 +1528,36 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           </div>
 
           <div className="settings-body">
-          {!config ? (
+          {tab === 'status' ? (
+            <div className="settings-fields">
+              <div className="health-bar">
+                <span className="settings-msg">{probeMsg || '检查语音识别 / 大脑 / 语音合成 / 执行 agent 四个环节是否连通。'}</span>
+                <button className="btn" disabled={probeBusy} onClick={runProbe}>
+                  {probeBusy ? '探测中…' : '↻ 重新探测'}
+                </button>
+              </div>
+              {(probeItems || []).map((it) => (
+                <div key={it.key} className="health-item">
+                  <span className={`health-dot${probeBusy ? '' : it.ok ? ' health-dot--ok' : ' health-dot--bad'}`} />
+                  <div className="health-main">
+                    <div className="health-line">
+                      <span className="health-name">{it.label}</span>
+                      <span className="health-scheme">
+                        {it.scheme}
+                        {typeof it.latency_ms === 'number' && it.latency_ms > 0 ? ` · ${it.latency_ms}ms` : ''}
+                      </span>
+                    </div>
+                    <div className={`health-msg${it.ok ? '' : ' health-msg--bad'}`}>{it.msg}</div>
+                  </div>
+                </div>
+              ))}
+              {!probeItems && !probeBusy && <p className="settings-msg">还没有探测结果，点上面按钮开始。</p>}
+              <p className="settings-msg">
+                探测会对 LLM / ASR / TTS 的当前激活方案发最小请求（消耗极少 Token）；执行 agent 只检查本机 dsh 命令。
+                要换方案请到对应标签页修改并保存，再回来重新探测。
+              </p>
+            </div>
+          ) : !config ? (
             <p className="settings-msg">{msg || '读取中…'}</p>
           ) : tab === 'ui' ? (
             <div className="settings-fields">

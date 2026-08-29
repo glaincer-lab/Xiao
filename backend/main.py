@@ -314,6 +314,26 @@ async def provider_test(payload: dict) -> dict:
     return await test_provider(payload.get("target"), payload.get("model"))
 
 
+@app.get("/api/health/probe")
+async def health_probe() -> dict:
+    """健康状态灯（E4）：逐项探测 ASR / LLM / TTS / agent（DSH）连通状态。
+
+    ASR/LLM/TTS 按当前激活方案复用 E2b 的 test_provider 发最小请求（并行，几秒内齐）；
+    agent（DSH）只查本机能否找到 dsh 命令（is_available，不实际拉起，秒回）。
+    返回 items: [{key, label, scheme, ok, msg, latency_ms}] —— msg 永远是人话，
+    红灯项照着 msg 处理即可（缺 Key/超额/超时各有一句话）。
+    """
+    from backend.provider_test import agent_item, probe_component, resolve_active
+
+    async def _one(key: str) -> dict:
+        m, scheme = resolve_active(config.get_all(), key)
+        return await probe_component(key, m, scheme)
+
+    asr, llm, tts = await asyncio.gather(_one("asr"), _one("llm"), _one("tts"))
+    agent_ok = bool(bridge.is_available()) if bridge is not None else False
+    return {"ok": True, "items": [asr, llm, tts, agent_item(agent_ok)]}
+
+
 @app.post("/api/memory/clear")
 async def clear_memory() -> dict:
     """一键清空当前对话记忆（Agent 历史）。"""

@@ -190,3 +190,51 @@ async def test_provider(target: str, model: dict) -> dict:
         r = {"ok": False, "msg": "未知测试对象：target 须为 llm / asr / tts 之一"}
     r.setdefault("latency_ms", int((time.perf_counter() - t0) * 1000))
     return r
+
+
+# ---- E4 健康状态灯：按当前激活方案逐项探测，供 GET /api/health/probe 复用 ----
+
+_HEALTH_LABELS = {
+    "asr": "语音识别（ASR）",
+    "llm": "大脑（LLM）",
+    "tts": "语音合成（TTS）",
+}
+
+
+def resolve_active(cfg: dict, key: str) -> tuple[dict, str]:
+    """从 config 的 {key}.models[] 里挑出 active 方案；找不到就返回空 dict（按默认配置探测）。"""
+    block = cfg.get(key) if isinstance(cfg.get(key), dict) else {}
+    active_id = block.get("active")
+    for m in block.get("models") or []:
+        if isinstance(m, dict) and m.get("id") == active_id:
+            return m, str(m.get("name") or active_id or "")
+    return {}, ""
+
+
+async def probe_component(key: str, model: dict, scheme: str = "") -> dict:
+    """探测单环节并补齐状态灯字段（label/scheme）；msg 沿用 test_provider 的人话。"""
+    r = await test_provider(key, model)
+    return {
+        "key": key,
+        "label": _HEALTH_LABELS.get(key, key),
+        "scheme": scheme or "默认方案",
+        "ok": bool(r.get("ok")),
+        "msg": str(r.get("msg") or ""),
+        "latency_ms": r.get("latency_ms"),
+    }
+
+
+def agent_item(available: bool) -> dict:
+    """agent（DSH）环节的状态灯项：只查本机能否找到 dsh 命令，不实际拉起（秒回）。"""
+    return {
+        "key": "agent",
+        "label": "执行 agent（DSH）",
+        "scheme": "本机 dsh 命令",
+        "ok": bool(available),
+        "msg": (
+            "本机已找到 dsh 命令，可以正常执行"
+            if available
+            else "本机没找到 dsh 命令：请先安装 DSH 并确认在 PATH 里，再重启小二（见 README「安装」）"
+        ),
+        "latency_ms": 0,
+    }
