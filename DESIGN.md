@@ -92,6 +92,8 @@ LISTENING ──说「关闭」──► CONFIRM_SHUTDOWN（两步确认）─�
 - **手动强制**：前端顶栏「自动/聊天/DSH」三档开关，实时下发 `router_mode`。
 - **L0 规则层（B1，优先于路由）**：`backend/rules.py` 在路由之前先匹配触发词——音量/静音、截图、锁屏/睡眠、播放/暂停/上下曲、剪贴板复制/粘贴/朗读、查时间、查天气、查汇率、定时提醒、打开应用/网址——命中直接执行内置工具并播报，**无 LLM、无 key 也能用**；提取不到必要参数（如「提醒我」没说多久、单说「打开」）自动回落对话/DSH 不硬拦截。词表在 `config.yaml` 的 `router.rules.keywords`（可按规则覆盖默认口令，`router.rules.enabled: false` 一键关）。锁屏/睡眠为「先说完再做」型，避免动作打断播报。
 
+- **图片输入强制走聊天通道（已落地）**：消息带图时绕过路由与 DSH（DSH 协议不传图），直接进聊天 agent；`llm.cloud.image_input` 关闭时语音引导开启（默认关——DeepSeek 无视觉，需 qwen-vl-max / glm-4v 等支持视觉的模型）。
+
 设计意图：解决「闲聊要快、干活要慢」的语义错配——agent 任务动辄几十秒到几分钟，不能每句都走 DSH。
 
 ## 6. 语音控制指令
@@ -189,6 +191,7 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
   - `restart`：引擎类，保存后提示需重启后端——换 ASR/LLM/TTS 方案/模型/音色、唤醒词/阈值、麦克风设备等。
 - **配套接口**：`/api/audio/devices`（sounddevice 枚举）、`/api/tts/preview`（试听）、`/api/memory/clear`（一键清空 Agent 历史 + DSH 上下文）、`/api/provider/test`（服务商连通性测试：按环节发最小请求，无效 Key/超额/超时各回一句人话，不抛堆栈）、`/api/health/probe`（健康状态灯：并行探测 ASR/LLM/TTS 当前激活方案 + 检查本机 dsh 命令，返回各环节绿/红 + 延迟 + 一句人话原因）。
 - **统一报错映射**：`backend/errors.py`（`human_reason` / `reason_from_text`）——管线任何环节的异常（对话、长任务、试听、设备枚举）都转成一句可播报的人话：401 = Key 失效、429 = 额度/限流、超时 = 网络；原始错误只进后端日志与前端日志面板，不抛堆栈给用户。
+- **多模态图片输入（已落地）**：输入框「贴图/截屏」（截屏走 getDisplayMedia）生成 data URL，随 `{type:'text'}` 消息下发；`ChatMessage.images` 仅收 data:image/ 前缀、单条 ≤4 张（`sanitize_images` 双处清洗），在 `to_dict()` 单点转 OpenAI vision parts（text + image_url），openai_compat 零改动透传。
 - **首次启动向导**（`OnboardingWizard.tsx`，复用设置面板样式）：选语言 → 领 Key（DeepSeek / 通义百炼直达领取页 + 图文步骤）→ 连通测试（`/api/provider/test`，✅/❌ 含人话原因）→ 选大脑（`router.mode` 三选一 + DSH 可用性检测）→ 测麦克风（`/api/mic/echo`）。任何一步可跳过进 L0；「已完成」标记存本机 localStorage（`xiao_onboarded`），保存失败不写标记、下次仍会弹。
 - **LLM 高级参数**（新增/编辑模型弹窗内）：模型名自填 + 引导（如「填 deepseek-chat / qwen-plus」，不内置下拉）；上下文窗口（输入/输出）、工具调用轮数（默认 500）、思考模式、图片输入、采样 Top P / Top K。`top_p` / `max_tokens` 透传各家，`top_k` 仅对兼容 extra_body 的供应商透传（DeepSeek/OpenAI/Kimi 仅保存不发送，避免 400）；弹窗内置「连通测试」按钮并提示「连通性测试会消耗少量 Token」。Agent 侧配套**有界多轮工具循环**：按「工具调用轮数」反复执行-回传-续推，超限时强制模型文本收尾，不再一轮就停。
 
