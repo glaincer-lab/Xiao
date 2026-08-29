@@ -70,6 +70,7 @@ class TaskManager:
                 if task.get("status") != "cancelled":
                     task["status"] = "failed"
                     task["error"] = str(e)
+                    print(f"[tasks] 任务执行失败: {type(e).__name__}: {e}")
             task["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         self._save()
         self._emit_task(task)

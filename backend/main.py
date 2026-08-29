@@ -16,6 +16,7 @@ from backend.bridge.dsh_bridge import DSHBridge
 from backend.config import ROOT, config
 from backend.core import Pipeline
 from backend.llm.factory import build_llm
+from backend.errors import human_reason
 from backend.perms import CATEGORIES, Perms
 from backend.provider_test import test_provider
 from backend.router import Router
@@ -212,7 +213,8 @@ async def audio_devices() -> dict:
                 outputs.append(entry)
         return {"ok": True, "inputs": inputs, "outputs": outputs, "hostapis": len(hostapis)}
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "msg": f"枚举音频设备失败: {e}"}
+        print(f"[audio/devices] 枚举失败: {type(e).__name__}: {e}")
+        return {"ok": False, "msg": f"枚举音频设备失败：{human_reason(e, default='请检查音频设备连接与驱动后重试')}"}
 
 
 PREVIEW_TEXT = (
@@ -278,7 +280,8 @@ async def tts_preview(payload: dict) -> dict:
         engine.stop()  # to_thread 无法取消，靠 stop/close 让合成线程退出
         return {"ok": False, "msg": "试听超时/连接失败：请检查该方案的 API Key 与网络后重试"}
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "msg": f"试听失败: {e}"}
+        print(f"[tts/preview] 合成失败: {type(e).__name__}: {e}")
+        return {"ok": False, "msg": f"试听失败：{human_reason(e, default='请检查该方案的 Key、模型名与网络后重试')}"}
     finally:
         if engine is not None:
             release = getattr(engine, "close", None) or getattr(engine, "stop", None)
@@ -349,7 +352,8 @@ async def mic_echo(payload: dict) -> dict:
     try:
         peak = await asyncio.to_thread(_record_and_play)
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "msg": f"回声测试失败: {e}"}
+        print(f"[audio/echo] 测试失败: {type(e).__name__}: {e}")
+        return {"ok": False, "msg": f"回声测试失败：{human_reason(e, default='请检查麦克风是否被其他程序占用后重试')}"}
     return {"ok": True, "duration": dur, "peak": round(peak, 1)}
 
 

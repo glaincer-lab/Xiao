@@ -6,7 +6,7 @@
 - TTS：复用试听工厂构建一次性引擎，先 preflight 自检（缺 Key/缺声库给人话），
   再合成一个字验证真实连通；本地方案不联网只自检。
 原则：最小开销、不产生业务调用；任何失败都转成一句人话，不向前端抛堆栈
-（异常 → 人话的映射在 _human_reason，E2c 会抽到 backend/errors.py 全局复用）。
+（异常 → 人话的映射统一在 backend/errors.py，管线各处复用）。
 """
 from __future__ import annotations
 
@@ -47,25 +47,10 @@ _TTS_LABELS = {
 
 
 def _human_reason(e: Exception) -> str:
-    """异常 → 一句人话（面向第三使用者，不出现堆栈与英文报错原文）。"""
-    import openai
+    """异常 → 一句人话；映射统一收在 backend/errors.py，管线各处复用（E2c）。"""
+    from backend.errors import human_reason
 
-    if isinstance(e, asyncio.TimeoutError):
-        return "连接超时：网络不通或服务地址填错了，请检查后重试"
-    if isinstance(e, openai.APIConnectionError):
-        return "无法连接服务：请检查网络是否可用，以及服务地址（Base URL）是否填对"
-    status = getattr(e, "status_code", None)
-    if status in (401, 403):
-        return "密钥无效或没有权限（401/403）：请重新粘贴完整且未过期的 API Key"
-    if status == 404:
-        return "接口或模型不存在（404）：请检查服务地址与模型名是否填对"
-    if status == 429:
-        return "额度不足或请求太频繁（429）：请到服务商控制台确认余额与限流，稍后再试"
-    if status == 400:
-        return "请求被拒绝（400）：通常是模型名填错，请核对模型名后重试"
-    if isinstance(status, int) and status >= 500:
-        return "服务商服务端开小差（5xx）：请稍后再试"
-    return f"测试失败：{e}"
+    return human_reason(e, default=f"测试失败：{e}")
 
 
 async def _probe_openai_compat(base_url: str, model: str, api_key: str | None) -> None:

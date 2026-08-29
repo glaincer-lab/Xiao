@@ -16,6 +16,7 @@ from backend.audio.vad import VADSegmenter
 from backend.audio.wake import build_wake_word
 from backend.config import config
 from backend.bridge.dsh_bridge import DSHCancelled
+from backend.errors import reason_from_text
 from backend.session.state import State, emit
 
 
@@ -642,7 +643,8 @@ class Pipeline:
             if result and len(result) <= 120:
                 speak = f"「{text}」完成了：{result}"
         elif status == "failed":
-            speak = f"「{text}」失败了：{task.get('error') or '未知错误'}"
+            # 原始错误文本可能含英文堆栈，映射成一句人话再播报；原文在 tasks.py 落日志（E2c）
+            speak = f"「{text}」失败了：{reason_from_text(task.get('error'))}"
             emit("assistant_result", text=speak)
         else:
             return

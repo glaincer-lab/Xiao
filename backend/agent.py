@@ -10,6 +10,7 @@ import json
 from typing import Callable
 
 from backend.config import config
+from backend.errors import human_reason
 from backend.llm.base import ChatMessage, LLMClient
 from backend.session.state import State, emit
 from backend.tools.base import ToolRegistry
@@ -78,10 +79,11 @@ class Agent:
             except Exception:  # noqa: BLE001
                 pass
         except Exception as e:  # noqa: BLE001
-            # 兜底：LLM/工具异常也要把状态机放回 IDLE，并给用户一句可感知的反馈
+            # 兜底：LLM/工具异常也要把状态机放回 IDLE；原始错误只进日志，用户只听人话（E2c）
             print(f"[agent] 处理失败: {e}")
+            emit("log", level="error", message=f"处理失败: {type(e).__name__}: {e}")
             try:
-                fallback = "抱歉，我出了点问题，请再说一次。"
+                fallback = f"抱歉，{human_reason(e, default='我出了点问题，请稍后再试')}。"
                 emit("assistant_result", text=fallback)
                 await self._speak(fallback)
                 self._history.append(ChatMessage(role="assistant", content=fallback))
