@@ -182,7 +182,7 @@ tts.provider        → edge（免费云）| cloud（付费·预留）| piper（
 - **实时生效分档**（字段的 `reload` 属性）：
   - `soft`：保存即热加载（`core.reload_soft()`）——可打断、审批词表、DSH 关键词、系统提示词、记忆轮数、路由模式等。
   - `restart`：引擎类，保存后提示需重启后端——换 ASR/LLM/TTS 方案/模型/音色、唤醒词/阈值、麦克风设备等。
-- **配套接口**：`/api/audio/devices`（sounddevice 枚举）、`/api/tts/preview`（试听）、`/api/memory/clear`（一键清空 Agent 历史 + DSH 上下文）。
+- **配套接口**：`/api/audio/devices`（sounddevice 枚举）、`/api/tts/preview`（试听）、`/api/memory/clear`（一键清空 Agent 历史 + DSH 上下文）、`/api/provider/test`（服务商连通性测试：按环节发最小请求，无效 Key/超额/超时各回一句人话，不抛堆栈）。
 
 ## 12. 与开源方案对比（横向定位）
 

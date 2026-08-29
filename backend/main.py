@@ -17,6 +17,7 @@ from backend.config import ROOT, config
 from backend.core import Pipeline
 from backend.llm.factory import build_llm
 from backend.perms import CATEGORIES, Perms
+from backend.provider_test import test_provider
 from backend.router import Router
 from backend.session.state import State, bus, emit
 from backend.tasks import TaskManager
@@ -298,6 +299,16 @@ async def tts_preview_audio(fname: str):
         raise HTTPException(status_code=404, detail="not found")
     media = "audio/mpeg" if path.suffix == ".mp3" else "audio/wav"
     return FileResponse(path, media_type=media)
+
+
+@app.post("/api/provider/test")
+async def provider_test(payload: dict) -> dict:
+    """连通性测试：按环节（llm/asr/tts）+ 方案字段发最小请求，秒级返回 ok 与人话原因。
+
+    body: {target: "llm"|"asr"|"tts", model: {provider, model, baseUrl, apiKey, ...}}
+    返回: {ok, msg, latency_ms} —— msg 永远是人能看懂的提示（Key 无效/超额/超时各有一句话）。
+    """
+    return await test_provider(payload.get("target"), payload.get("model"))
 
 
 @app.post("/api/memory/clear")
