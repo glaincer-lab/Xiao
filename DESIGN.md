@@ -94,6 +94,7 @@ LISTENING ──说「关闭」──► CONFIRM_SHUTDOWN（两步确认）─�
 - 关键词在 `config.yaml` 的 `router.dsh_keywords`（初期保守，按日志调优）。
 - **路由日志** `logs/routes.jsonl`：每次决策写一行 JSON（时间/模式/判定/原文），可度量、可调优。
 - **手动强制**：前端顶栏「自动/聊天/DSH」三档开关，实时下发 `router_mode`。
+- **L0 规则层（B1，优先于路由）**：`backend/rules.py` 在路由之前先匹配触发词——音量/静音、截图、锁屏/睡眠、播放/暂停/上下曲、剪贴板复制/粘贴/朗读、查时间、查天气、查汇率、定时提醒、打开应用/网址——命中直接执行内置工具并播报，**无 LLM、无 key 也能用**；提取不到必要参数（如「提醒我」没说多久、单说「打开」）自动回落对话/DSH 不硬拦截。词表在 `config.yaml` 的 `router.rules.keywords`（可按规则覆盖默认口令，`router.rules.enabled: false` 一键关）。锁屏/睡眠为「先说完再做」型，避免动作打断播报。
 
 设计意图：解决“闲聊要快、干活要慢”的语义错配——agent 任务动辄几十秒到几分钟，不能每句都走 DSH。
 
@@ -161,6 +162,7 @@ bridge.timeout_sec  → 600
 router.mode         → auto | chat | dsh
 router.log_path     → logs/routes.jsonl
 router.dsh_keywords / working_status_phrases / working_cancel_phrases
+router.rules        → L0 规则指令开关与词表（keywords 按规则覆盖，B1）
 
 # 多方案管理（四环节）：models[] 存方案，active 指向当前方案
 wake_word.engine    → sherpa（本地）| cloud（方言·预留）| omni（一体化·预留）
