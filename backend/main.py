@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.agent import Agent
+from backend.audit import build_auditor
+from backend.authorization import AUTHORIZATION_ITEMS, AuthorizationCenter
 from backend.bridge import DSHBridge, build_bridge
 from backend.config import ROOT, config
 from backend.core import Pipeline
@@ -66,19 +68,31 @@ pipeline: Pipeline | None = None
 tts = None
 bridge: DSHBridge | None = None
 perms: Perms | None = None
+authorizations: AuthorizationCenter | None = None
 tasks: TaskManager | None = None
+auditor = None  # type: ignore[assignment]  # T8 可审计回放订阅方（startup 构建）
 
 
 @app.on_event("startup")
 async def startup() -> None:
-    global pipeline, tts, bridge, perms, tasks
+    global pipeline, tts, bridge, perms, authorizations, tasks, auditor
     loop = asyncio.get_running_loop()
 
     llm = build_llm()
     tts = build_tts()
     router = Router()
-    bridge = build_bridge(event_sink=lambda kind, payload: emit(kind, **payload))
+    auditor = build_auditor()
+
+    # T8 可审计回放：bridge 的 event_sink 事件追加式记录为 run 级 fact plane。
+    # 前端上屏 event（work_step/dsh_chunk）保持原样，原始事件另喂 auditor 只读追加。
+    def _bridge_sink(kind: str, payload: dict) -> None:
+        if kind in ("work_step", "dsh_chunk"):
+            emit(kind, **payload)
+        auditor.handle_event(kind, payload)
+
+    bridge = build_bridge(event_sink=_bridge_sink)
     perms = Perms()
+    authorizations = AuthorizationCenter()
     tasks = TaskManager(bridge)
     pipeline = Pipeline()
 
@@ -521,6 +535,67 @@ async def decide_deferred(item_id: str, payload: dict) -> dict:
         if pipeline is not None and item.get("text"):
             pipeline.submit_text(str(item["text"]))
     return {"ok": True, "deferred": perms.list_deferred()}
+
+
+@app.get("/api/authorizations")
+async def get_authorizations() -> dict:
+    """授权中心：授权项视图（统一收口，可查看）。
+
+    与 /api/perms 同级保护：仅本机可访问；授权项**不能**经 /api/config 改写
+    （config_guard 因未在 settings_schema 登记而拒绝），写入走 /api/authorizations/set。
+    """
+    return {
+        "ok": True,
+        "authorizations": authorizations.get() if authorizations else {},
+        "items": [
+            {"key": i["key"], "type": i["type"], "label": i["label"],
+             "default": i["default"], "desc": i.get("desc", "")}
+            for i in AUTHORIZATION_ITEMS
+        ],
+    }
+
+
+@app.post("/api/authorizations/set")
+async def set_authorization(payload: dict) -> dict:
+    """授权项设值（提权操作，走专用端点；非法取值拒绝）。
+
+    body: {key, value}。per_feature 亦可传完整 {key -> bool} 映射；
+    单项授权用 /api/authorizations/set_feature。
+    """
+    if authorizations is None:
+        return {"ok": False, "msg": "未初始化"}
+    key = str(payload.get("key", ""))
+    value = payload.get("value")
+    try:
+        state = authorizations.set(key, value)
+    except ValueError as e:
+        return {"ok": False, "msg": str(e)}
+    return {"ok": True, "authorizations": state}
+
+
+@app.post("/api/authorizations/set_feature")
+async def set_feature(payload: dict) -> dict:
+    """细项授权单项开/关（写入 per_feature）。body: {feature, granted}。"""
+    if authorizations is None:
+        return {"ok": False, "msg": "未初始化"}
+    feature = str(payload.get("feature", ""))
+    if not feature:
+        return {"ok": False, "msg": "缺少 feature"}
+    state = authorizations.set_feature(feature, bool(payload.get("granted", False)))
+    return {"ok": True, "authorizations": state}
+
+
+@app.post("/api/authorizations/revoke")
+async def revoke_authorization(payload: dict) -> dict:
+    """授权项撤回（恢复出厂默认全关）。body: {key}。"""
+    if authorizations is None:
+        return {"ok": False, "msg": "未初始化"}
+    key = str(payload.get("key", ""))
+    try:
+        state = authorizations.revoke(key)
+    except ValueError as e:
+        return {"ok": False, "msg": str(e)}
+    return {"ok": True, "authorizations": state}
 
 
 # 生产模式：托管前端构建产物（如已构建 frontend/dist）
