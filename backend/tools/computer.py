@@ -14,6 +14,7 @@ import sys
 import time
 from typing import Any, Awaitable, Callable
 
+from backend.attention import guard_blacklisted_window
 from backend.config import ROOT, config
 from backend.tools.base import Tool
 
@@ -135,6 +136,9 @@ class ComputerMouseTool(Tool):
         gate = _master_gate()
         if gate:
             return gate
+        blocked = guard_blacklisted_window()
+        if blocked:
+            return blocked
         action = str(kwargs.get("action") or "click").lower()
         pos = _parse_pos(kwargs)
         if action in ("click", "double", "right", "move") and pos is None:
@@ -423,6 +427,9 @@ class ScreenLookTool(Tool):
         gate = _master_gate()
         if gate:
             return gate
+        blocked = guard_blacklisted_window()
+        if blocked:
+            return blocked
         try:
             rel, data_url = await asyncio.to_thread(self._capture)
         except Exception as e:  # noqa: BLE001

@@ -5,6 +5,7 @@ import asyncio
 import os
 import sys
 
+from backend.attention import guard_blacklisted_window
 from backend.config import ROOT
 from backend.tools.base import Tool
 
@@ -68,6 +69,9 @@ class ScreenshotTool(Tool):
     async def run(self) -> str:
         if sys.platform != "win32":
             return _unsupported()
+        blocked = guard_blacklisted_window()
+        if blocked:
+            return blocked
         return await asyncio.to_thread(self._capture)
 
     def _capture(self) -> str:
