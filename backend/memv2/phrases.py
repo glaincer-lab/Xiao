@@ -121,6 +121,36 @@ def all_ban_words(phrases: Iterable[dict[str, Any]] | None = None) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
+# T9a：应对攻击/脏话/侮辱（三类场景按 id 前缀 select；走影子日志，不直接上线）。
+# --------------------------------------------------------------------------- #
+#: 场景 → id 前缀
+_ATTACK_ID_PREFIX = {
+    "verbal": "defend_verbal_",
+    "profanity": "defend_profanity_",
+    "discrimination": "defend_discrim_",
+}
+
+
+def pick_attack(scene: str, intimacy: float, phrases: Iterable[dict[str, Any]] | None = None) -> str:
+    """按攻击场景类目选一条应对话术模板（影子日志先记录，人工校准后真路由）。
+
+    - ``scene`` ：``verbal``（言语攻击）| ``profanity``（脏话）| ``discrimination``（歧视/侮辱）。
+    - ``intimacy``：0-100，命中条目 ``intimacy_range`` 区间。
+    - 命中多条时优先情绪精确匹配，否则取首个（确定性）；无命中返回 ``DEFAULT_PHRASE``。
+
+    与 ``pick`` 同契约：只返回模板字符串，**绝不切换姿态**（姿态切换由上层影子日志把关）。
+    """
+    prefix = _ATTACK_ID_PREFIX.get((scene or "").strip().lower())
+    if prefix is None:
+        return DEFAULT_PHRASE
+    pool = phrases if phrases is not None else load_phrases()
+    cand = [p for p in pool if str(p.get("id", "")).startswith(prefix) and _in_intimacy(p, intimacy)]
+    if not cand:
+        return DEFAULT_PHRASE
+    return str(cand[0]["template"])
+
+
+# --------------------------------------------------------------------------- #
 # 选变体
 # --------------------------------------------------------------------------- #
 def pick(stance: str, emotion: str, intimacy: float, phrases: Iterable[dict[str, Any]] | None = None) -> str:

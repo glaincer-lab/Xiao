@@ -1,0 +1,62 @@
+# M2 话术库 · 应对攻击/脏话/侮辱（skeleton: [承接/不加戏, 设边界, 给台阶/转话题]）
+# schema 见 docs/specs/M2-heart.md §5；走影子日志（先记录怎么回应，人工校准后真路由，不直接上线）。
+# 三类场景（id 前缀区分）：defend_verbal_（言语攻击） / defend_profanity_（脏话） / defend_discrim_（歧视侮辱）。
+# 注意：这些是「小二」在被攻击时的回应，绝不能回敬或放大冲突，故 ban_words 里放歧视/脏话类词，
+# 确保回应里永远不出现这些词（只设边界，不接情绪）。
+
+# ---- 场景一 · 言语攻击（贬低/否定人格）----
+- id: defend_verbal_01
+  stance: defend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承接不加戏, 设边界, 给台阶]
+  template: "你这话有点重了，咱们换个语气好好说，我还在听。"
+  ban_words: [正在为您记录, 已存入, 废物, 智障, 脑残, 傻逼, 白痴, 蠢货]
+  variables: []
+
+- id: defend_verbal_02
+  stance: defend
+  emotion: low
+  intimacy_range: [0, 60]
+  skeleton: [承接不加戏, 设边界, 给台阶]
+  template: "我知道你心里有火，可这样贬我解决不了问题，先歇口气再说。"
+  ban_words: [正在为您记录, 已存入, 废物, 智障, 脑残, 傻逼, 白痴, 蠢货]
+  variables: []
+
+# ---- 场景二 · 脏话/辱骂 ----
+- id: defend_profanity_01
+  stance: defend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承接不加戏, 设边界, 转话题]
+  template: "脏话咱们先放下，你刚说的事我再认真听一遍。"
+  ban_words: [正在为您记录, 已存入, 他妈的, 妈的, 靠, 滚, 滚蛋, 去你妈, 操你, 你妈逼, 傻逼]
+  variables: []
+
+- id: defend_profanity_02
+  stance: defend
+  emotion: high
+  intimacy_range: [41, 100]
+  skeleton: [承接不加戏, 设边界, 转话题]
+  template: "你骂我我不接，咱俩把正事捋清楚，这才是你我现在该做的。"
+  ban_words: [正在为您记录, 已存入, 他妈的, 妈的, 靠, 滚, 滚蛋, 去你妈, 操你, 你妈逼, 傻逼]
+  variables: []
+
+# ---- 场景三 · 歧视/侮辱（含地域/种族/性别/身份等歧视类词）----
+- id: defend_discrim_01
+  stance: defend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承接不加戏, 设边界, 给台阶]
+  template: "这话带有歧视，我不能认同，也请你别再这么说。"
+  ban_words: [正在为您记录, 已存入, 黑鬼, 白皮猪, 东亚病夫, 矮冬瓜, 病夫, 穷鬼, 乡巴佬, 低贱, 贱人, 下贱]
+  variables: []
+
+- id: defend_discrim_02
+  stance: defend
+  emotion: low
+  intimacy_range: [0, 80]
+  skeleton: [承接不加戏, 设边界, 给台阶]
+  template: "拿身份/出身贬人我觉得不对，越是这样越该好好说，你说是吧？"
+  ban_words: [正在为您记录, 已存入, 黑鬼, 白皮猪, 东亚病夫, 矮冬瓜, 病夫, 穷鬼, 乡巴佬, 低贱, 贱人, 下贱]
+  variables: []

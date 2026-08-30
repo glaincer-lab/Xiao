@@ -36,12 +36,15 @@ MEDICAL = "medical"
 EMERGENCY = "emergency"
 CELEBRATE = "celebrate"
 METADIALOGUE = "metadialogue"
+# T9a：应对攻击/脏话/侮辱（走影子日志，默认不自动判定，见 DEFEND）
+DEFEND = "defend"
 
 #: 首版自动参与判定的核心四态（扫描顺序=安全优先：应急/医护 → 同乐 → 陪伴）
 ACTIVE_CORE = (EMERGENCY, MEDICAL, CELEBRATE, COMPANION)
 
 #: 留接口（卡已注册，默认不自动判定，可经 activate 加入 active）
-RESERVED = (ADVISOR, METADIALOGUE)
+# T9a：DEFEND 为影子日志硬门——卡已注册，但默认永不自动判定（人工校准后才能真路由）。
+RESERVED = (ADVISOR, METADIALOGUE, DEFEND)
 
 
 # --------------------------------------------------------------------------- #
@@ -75,6 +78,21 @@ POSITIVE_PATTERNS = (
 DECISION_QUESTIONS = (
     "怎么办", "怎么选", "选哪个", "该不该", "要不要", "如何选", "怎么办好",
     "帮我选", "帮我看", "哪个好",
+)
+
+# 关系张力（T9a）：攻击/脏话/侮辱 → 应对类目。仅用于「识别并走影子日志」，不直接切换姿态。
+# 三类场景各一张词表（进 extract_signals 的关系张力信号 + detect_attack_scene）。
+VERBAL_ATTACK_WORDS = (
+    "废物", "智障", "脑残", "傻逼", "白痴", "蠢货", "蠢蛋",
+    "没用", "垃圾", "废柴", "蠢死了", "脑子有病", "脑子进水", "神经病",
+)
+PROFANITY_WORDS = (
+    "他妈的", "妈的", "操你", "去你妈", "你妈逼", "滚蛋", "滚", "傻逼",
+    "操", "草泥马", "卧槽", "恶心", "放屁",
+)
+DISCRIMINATION_WORDS = (
+    "黑鬼", "白皮猪", "东亚病夫", "矮冬瓜", "穷鬼", "乡巴佬", "低贱", "贱人",
+    "下贱", "土包子", "山炮", "病毒",
 )
 
 #: 深夜时段窗口：>=LATE_NIGHT_HOUR 或 <EARLY_MORNING_HOUR
@@ -138,6 +156,8 @@ def extract_signals(text: str, context: dict[str, Any]) -> dict[str, Any]:
         "positive_pattern": _contains_any(text, POSITIVE_PATTERNS),
         # 顾问态
         "decision_question": _contains_any(text, DECISION_QUESTIONS),
+        # 关系张力（T9a）：攻击/脏话/侮辱 → True；仅用于识别，不直接切换姿态。
+        "relation_tension": bool(detect_attack_scene(text)),
         # 全局
         "user_denied": bool(context.get("user_denied")),
     }
@@ -288,6 +308,14 @@ class PostureClassifier:
                 exit_check=_metadialogue_exit,
                 fallback_posture=FRIEND,
             ),
+            # T9a：应对姿态卡（影子日志硬门：weight 仅在检测到关系张力时得分，
+            # 但因 DEFEND 不在 ACTIVE_CORE，classify() 永不返回它——只识别、不切换）。
+            DEFEND: PostureCard(
+                DEFEND,
+                threshold=0.6,
+                weight={"relation_tension": 0.8},
+                fallback_posture=FRIEND,
+            ),
             # 默认兜底卡：threshold<=0，永不主动进入（friend 是 fallback）
             FRIEND: PostureCard(FRIEND, threshold=0.0, weight={}, fallback_posture=FRIEND),
         }
@@ -350,6 +378,33 @@ class PostureClassifier:
     def suppressed(self) -> set[str]:
         """当前被否认抑制（不二次试探）的姿态集。"""
         return set(self._suppressed)
+
+
+# --------------------------------------------------------------------------- #
+# T9a：关系张力场景识别（attack / profanity / discrimination；无命中返回 None）
+# --------------------------------------------------------------------------- #
+ATTACK_SCENES: dict[str, tuple[str, ...]] = {
+    "verbal": VERBAL_ATTACK_WORDS,
+    "profanity": PROFANITY_WORDS,
+    "discrimination": DISCRIMINATION_WORDS,
+}
+
+
+def detect_attack_scene(text: str) -> str | None:
+    """识别攻击/脏话/侮辱所属场景类目。
+
+    - ``"verbal"``         ：言语攻击/贬低（如『你个废物』）
+    - ``"profanity"``      ：脏话/辱骂（如『他妈的』『滚』）
+    - ``"discrimination"`` ：歧视/侮辱（如『东亚病夫』『穷鬼』）
+    - ``None``             ：无关系张力
+
+    优先级为 discrimination > profanity > verbal（歧视/脏话通常烈度更高，优先归目）。
+    """
+    text = text or ""
+    for scene in ("discrimination", "profanity", "verbal"):
+        if _contains_any(text, ATTACK_SCENES[scene]):
+            return scene
+    return None
 
 
 # --------------------------------------------------------------------------- #
