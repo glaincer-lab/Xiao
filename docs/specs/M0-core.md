@@ -3,7 +3,7 @@
 ```yaml
 module: M0-core
 version: v4.1.1        # 对应 ROADMAP v4.1；本版新增「跨模块事件总线」落地 + 按代码现状校准
-status: partial        # 部分实现：出网网关/事件总线已落地；宏观四态/授权中心/注意力传感器为设计态待实现
+status: partial        # 部分实现：出网网关/事件总线/宏观四态（T5）/授权中心（T6）已落地；注意力传感器为设计态待实现
 depends_on: []         # 全系统地基，无前置模块；依赖现有底座见 §2（其中事件总线已新增）
 paradigm: C/E 混合     # 后台守护（注意力/巩固调度）+ 物理安全层（网关）
 owner_notes: 迁自 ROADMAP §4.M0 + §M0.1/2/3 + §7 资源策略
@@ -54,13 +54,13 @@ revision_notes: |
 ## 3. 数据结构
 
 ```yaml
-# 宏观状态（内存单例，持久化最后状态供回归判定）
+# 宏观状态（内存单例，持久化最后状态供回归判定）【已实现 · backend/macro_state.py，T5】
 macro_state:
   state: ACTIVE | IDLE | DORMANT | RETURNING
   last_interaction: datetime          # 最后一次任意交互时间
   dormant_since: datetime | null
 
-# 授权中心（config.yaml + 运行时覆盖，统一登记）
+# 授权中心（config.yaml + 运行时覆盖，统一登记）【已实现 · backend/authorization.py，T6】
 authorizations:
   camera_enabled: bool                # 默认 false
   screen_awareness: bool              # 默认 false
@@ -77,7 +77,7 @@ performance_profile:
 
 ## 4. 状态机 / 流程
 
-### 4.1 宏观四态（顶层）
+### 4.1 宏观四态（顶层）【已实现 · backend/macro_state.py，T5】
 
 ```
 ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─任意交互─►RETURNING ─新交互─►ACTIVE
@@ -150,13 +150,15 @@ ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─
 
 ## 7. 验收断言
 
-- 单元级（已实现）：`tests/test_event_bus.py` 7 项全绿——按类型收发、取消订阅、payload 缺省、未知事件名 fail-fast、单 handler 异常不扩散、`EVENT_TYPES` 覆盖注册表关键事件
+- 单元级（已实现）：`tests/test_event_bus.py` 11 项全绿——按类型收发、取消订阅、payload 缺省、未知事件名 fail-fast、单 handler 异常不扩散、`EVENT_TYPES` 覆盖注册表关键事件、事件持久化/有界队列/崩溃重放
+- 单元级（已实现）：`tests/test_macro_state.py` **22 项全绿**——三纪律（①DORMANT 主动事件总线零消息 ②零归因 ③托付后台任务照办但不推送）+ ACTIVE/IDLE/DORMANT/RETURNING 四态转换 + `macro.state_changed`{前态,后态,时长} payload + RETURNING 三档模板（≤3天/≤2周/≥2个月）+ 三源简报 + 持久化回环
+- 单元级（已实现）：`tests/test_authorization.py` **23 项全绿**——授权项集中登记与默认全关、get/validate/set/revoke/set_feature、is_granted/is_feature_granted、非法值抛 ValueError、整段替换写回（提权段保护）
 - 模块级：跨模块通信一律走 `bus`（grep 断言无「跨模块直调对方模块模块函数」的 `import`）；黑词命中时网络层断言出网调用数=0；DORMANT 期间主动事件总线零消息；CPU<1% 断言（交互空闲态）；RETRUNING 三档模板与时长匹配
 - ROADMAP §6 总表相关项：网关 100% 覆盖、DORMANT 零归因、无常驻钩子
 
 ## 8. 开放问题
 
-1. RETURNING 判定用"任意交互"（含后台任务完成通知的点击）还是"主动对话"？待灰度数据定。
+1. RETURNING 判定用"任意交互"（含后台任务完成通知的点击）还是"主动对话"？**已定（决策 4.3）**：RETURNING 只由「用户主动发起对话」触发，通知点击/后台完成不算（实现 `backend/macro_state.py` 的 `on_user_dialogue` / `on_non_dialogue_interaction`）。遗留：DORMANT 判定阈值（无交互 7 天）是否随长期灰度数据调整待定。
 2. 出网网关的黑词误拦截（用户正常提到"密码学"）如何平衡？当前策略：命中即拦截+澄清话术，灰度观察误拦率再调。
 
 ## 9. 变更记录
@@ -165,3 +167,4 @@ ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─
 |---|---|---|---|
 | 2026-08 | v4.1.0 | 自 ROADMAP §4.M0 迁出成书；并入出网网关/叹气三阶段/进程黑名单/RETURNING 三源 | 六轮研讨 |
 | 2026-08 | v4.1.1 | 新增 §3.0 跨模块事件总线（backend/event_bus.py，已实现）；按代码现状校准 status/配置文件名/网关依赖；修正「全模块解耦唯一通道」表述 | 代码现状对齐；讨论定稿 |
+| 2026-08 | v4.1.2 | 实现宏观四态状态机（backend/macro_state.py，T5）：ACTIVE/IDLE/DORMANT/RETURNING + `macro.state_changed` 事件 + 决策 4.3（RETURNING 仅用户主动对话触发）/4.5（DORMANT 情感衰减暂停钩子）+ RETURNING 分层问候；先写 test_macro_state.py 锁三纪律（22 项全绿） | T5 落地；MVP 四条硬基线之宏观四态闭合 |

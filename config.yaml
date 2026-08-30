@@ -178,6 +178,9 @@ bridge:
 tasks:
   max_concurrent: 2
   log_path: logs/tasks.json
+audit:
+  enabled: true
+  log_dir: logs/audit
 router:
   mode: auto
   log_path: logs/routes.jsonl

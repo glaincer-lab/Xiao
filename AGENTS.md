@@ -120,8 +120,20 @@ Thumbs.db
 4. **忽略确认**：`.vscode/`/`.idea/`/`.DS_Store` 已全局忽略，项目内无需重复处理或提醒；`.env.example` 提交、真实 `.env` 不提交。
 5. **开发前阅读**：写/改模块代码前先读 `docs/specs/` 对应设计书。
 
+## 六、开源借鉴说明
+
+**只借鉴设计思想，不复制对方代码**（与第一节「GPL/AGPL 只借鉴思路、小二保持 MIT」一致）：
+
+| 模块 | 借鉴来源 | 说明 |
+|---|---|---|
+| `backend/orchestrator/`（T7 任务编排层） | [xiaotianfotos/homerail](https://github.com/xiaotianfotos/homerail)（MIT） | 借鉴其「智慧大脑 + 高效工人」分层与 per-node 独立 context 思想；小二为自研 Python 实现，数据结构/命名/事件机制自有，不使用 HomeRail 代码。详见 `docs/specs/T7-orchestrator.md` |
+| `backend/audit/`（T8 可审计回放层） | [xiaotianfotos/homerail](https://github.com/xiaotianfotos/homerail)（MIT） | 借鉴其「append-only Activity fact plane + replay + scorecard + run 级工作区隔离」思想；小二为自研实现，命名全套 `backend/audit/` + `xiao_` 前缀，不与 HomeRail 代码混淆。详见 `docs/specs/T8-audit.md` |
+
+> 约束：本项目的 HomeRail 借鉴仅限设计层面，**不引入其代码/依赖**（HomeRail 为 MIT，可合法参考；本项目为 MIT 商业友好）。
+
 ## 附录：变更记录
 
 | 日期 | 版本 | 变更 |
 |---|---|---|
 | 2026-08-30 | v1.0 | 合并设计原则、引擎分层、文档体系、Git 规范、AI 协作指引；轻简版（保留全部约束） |
+| 2026-08-30 | v1.0 | 补充「开源借鉴说明」：T7 编排层 / T8 审计层 受 [HomeRail](https://github.com/xiaotianfotos/homerail)（MIT）启发 |

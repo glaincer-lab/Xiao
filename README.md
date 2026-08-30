@@ -29,11 +29,25 @@
 - **离线兜底**：全链路可切本地（识别 FunASR / 大脑 Ollama / 播报 Piper），断网可用；「离线就绪」灯一眼可查
 - **开箱即用**：首次启动向导（领 Key → 连通测试 → 零配置进入基础功能）；安装包内置 Python 运行时，使用者无需装任何环境
 
+## 核心后端模块一览
+
+| 模块 | 里程碑/任务包 | 作用 | 设计书 |
+|---|---|---|---|
+| 跨模块事件总线 | M0 | 模块间语义化解耦（唯一通信信道） | [EVENT_REGISTRY](docs/specs/EVENT_REGISTRY.md) |
+| 宏观四态状态机 | M0 · T5 | ACTIVE/IDLE/DORMANT/RETURNING；DORMANT 冻结主动、零归因 | — |
+| 授权中心 | M0 · T6 | 敏感能力授权统一收口（摄像头/屏幕/主动度/紧急穿透/细项），默认全关 | — |
+| 出网安全网关 | M0 | 所有云调用前置：黑词本机拦截、人名占位混淆出云、还原校验 | — |
+| 任务编排层 | T7 | 贵模型规划 + 廉价模型执行的 DAG 节点流转（复杂任务提质降本） | [T7-orchestrator](docs/specs/T7-orchestrator.md) |
+| 可审计回放层 | T8 | 桥事件 append-only 落盘，按 run 回放时间线 + tool/result 质量打点 | [T8-audit](docs/specs/T8-audit.md) |
+| 数据备份 | T4 | 每日快照 logs/ 数据目录（SHA-256 校验、保留 7 天） | `scripts/backup.py` |
+
+> T7 任务编排层与 T8 可审计回放层的设计思想受 [xiaotianfotos/homerail](https://github.com/xiaotianfotos/homerail)（MIT）启发，为小二自研实现（不复制其代码）。
+
 ## 路线图一览
 
 | 里程碑 | 一句话 |
 |---|---|
-| M0 横切基建 | 跨模块事件总线（已实现）、宏观状态机（在场/离场）、**出网安全网关**（已实现，黑词本机拦截+人名混淆出云）、注意力传感器 |
+| M0 横切基建 | 跨模块事件总线（已实现）、宏观四态状态机（已实现 T5）、授权中心（已实现 T6）、**出网安全网关**（已实现，黑词本机拦截+人名混淆出云）、注意力传感器（设计态） |
 | M1 记住 | 记忆工程：分层记忆+冲突协议+人设世界观+**亲友人物卡**（业界空白） |
 | M2 有心 | 情感状态机+八种沟通姿态+建设性冲突（会温和地说"不"） |
 | M3 会主动 | 主动引擎：每日预算制心跳+事件触发+总闸门滑块 |
@@ -55,6 +69,21 @@ copy .env.example .env   # 填一个 DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY
 python run.py            # 后端 http://127.0.0.1:8123
 
 cd frontend && npm install && npm run dev   # 前端 http://localhost:5173
+```
+
+### 测试与验证
+
+```powershell
+# 单测（M0-M2 主线，352 项全绿）
+python -m unittest tests.test_event_bus tests.test_macro_state tests.test_authorization tests.test_gateway tests.test_blocklist tests.test_obfuscate tests.test_semantic_filter tests.test_session_manifest  # M0: 121
+python -m unittest tests.test_memv4 tests.test_memv1_conflict tests.test_memv1_consolidate tests.test_memv1_mishearing tests.test_memv1_retrieval tests.test_memv1_persona  # M1: 116
+python -m unittest tests.test_memv2_posture tests.test_memv2_affect tests.test_memv2_phrases tests.test_memv2_shadow tests.test_memv2_bridge tests.test_memv2_attack  # M2: 115
+
+# 任务包补强：模块边界 / T7 编排 / T8 审计 / T4 备份
+python scripts/audit_module_boundaries.py                  # T0: 模块边界纪律，期望 PASS
+python -m unittest tests.test_orchestrator                 # T7: 任务编排层（18 项）
+python -m unittest tests.test_xiao_audit                   # T8: 可审计回放层（20 项）
+python -m unittest tests.test_backup                       # T4: 备份脚本（SHA-256/保留 7 天）
 ```
 
 对麦克风说「小二」唤醒；或右栏打字（Ctrl+回车）绕过语音测全链路。

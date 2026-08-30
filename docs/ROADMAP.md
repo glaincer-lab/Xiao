@@ -124,14 +124,33 @@ router 之后的第二层路由：一次对话一个主姿态，不确定时默�
 
 ### 当前实现进度（v1.0，2026-08-30）
 
-> M0-M2 **合计 284 项单测全绿**（M0 72 / M1 116 / M2 96）。逐项可核验基线（含真实文件 + 测试计数 + 未做清单 + 复核命令）见 **`progress/M0-M2-progress.md`**。
+> M0-M2 **合计 352 项单测全绿**（M0 121 / M1 116 / M2 115）。逐项可核验基线（含真实文件 + 测试计数 + 未做清单 + 复核命令）见 **`progress/M0-M2-progress.md`**。
 
 | 里程碑 | 状态 | 核心落地 |
 |---|---|---|
-| M0 | 部分实现 | 跨模块事件总线✅ + 出网安全网关✅；宏观四态/授权中心/注意力传感器⬜（设计态） |
+| M0 | 部分实现 | 跨模块事件总线✅ + 出网安全网关✅ + 宏观四态✅（T5）+ 授权中心✅（T6）；注意力传感器⬜（设计态） |
 | M1 | 已实现 | 五要素 schema + 数据轨 + 冲突协议 + 巩固调度 + 听错分级 + 检索注入 + 人设内容资产 + 接入对话主链路 |
-| M2 | 后端已实现 | 情感状态机 + 八态判定卡 + 话术库 + 影子日志 + 事件接入；星云前端映射⬜（后置） |
+| M2 | 后端已实现 | 情感状态机 + 八态判定卡 + 话术库（含 attack 防御话术组 T9a）+ 影子日志 + 事件接入；星云前端映射⬜（后置） |
 | M3-M6 | 后置增强 | 规格已定稿，依赖 M0-M2 就绪 |
+
+### 任务包落地记录（T0-T9，2026-08-30）
+
+除 M0-M2 主线外，本轮质量与结构补强任务包 T0-T9 已落地（《_audit/执行方案-2026-08-30.md》）：
+
+| 任务包 | 内容 | 落地模块 | 状态 |
+|---|---|---|---|
+| T0 | 模块边界纪律 + 事件总线 S1 冻结 | `scripts/audit_module_boundaries.py` | 已实现 |
+| T1 | 全链路超时兜底（C4/C5） | `tests/test_tts_timeout.py` | 已实现 |
+| T2 | 配置提权防护（perms 同源） | `backend/perms.py` | 已实现 |
+| T3 | 工具白名单（open_app） | `backend/tools/open_app.py` | 已实现 |
+| T4 | 事件持久化 + 有界队列 + 备份脚本 | `backend/event_bus.py` + `scripts/backup.py` | 已实现 |
+| T5 | 宏观四态状态机（M0） | `backend/macro_state.py` | 已实现 |
+| T6 | 授权中心（M0） | `backend/authorization.py` | 已实现 |
+| T7 | 任务编排层（智慧大脑+高效工人） | `backend/orchestrator/` | 已实现 |
+| T8 | 可审计回放层 | `backend/audit/` | 已实现 |
+| T9 | 审计 R1 限频缓冲 / R2 本地脱敏 / R3 简报熔断 + T9a M2 attack 防御话术组 | `backend/audit/` + `prompts/attack.yaml` | 已实现 |
+
+> T7/T8 设计思想受 [xiaotianfotos/homerail](https://github.com/xiaotianfotos/homerail)（MIT）启发，为小二自研实现（不复制其代码）。详见 `docs/specs/T7-orchestrator.md` / `docs/specs/T8-audit.md`。
 
 ### MVP 边界（v4.1 写死）
 

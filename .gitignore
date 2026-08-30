@@ -43,3 +43,6 @@ dev/
 # 临时合并件 / 任务卡（过程产物，勿提交）
 docs/specs/M0-6.md
 _M0-tasks/
+_M1-tasks/
+_M2-tasks/
+_audit/
