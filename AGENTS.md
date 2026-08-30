@@ -27,3 +27,10 @@
 ## 文档体系
 
 产品愿景与设计哲学见 `docs/PRODUCT.md`（入口与文档地图）；里程碑全量设计（M0-M6）见 `docs/ROADMAP.md`；技术架构见 `docs/DESIGN.md`；对话级验收标准见 `docs/specs/EVAL.md`；模块设计书位于 `docs/specs/`（模板 `TEMPLATE.md`）。写代码前先读对应模块设计书。
+
+## Git 提交与仓库管理铁律（强制）
+
+1. **提交前自检**：严禁 `git add .` / `git add -A`，只 `git add <具体文件>` 或 `git add -p`。暂存区若含 `.env*`、`*.pem`、`*.key`、`secrets/`、`node_modules/`、`dist/`、`.DS_Store`、`.idea/`、`.vscode/`，立即中断并警告。
+2. **Commit Message（Conventional Commits）**：格式 `<type>(<scope>): <subject>`，subject 首字母小写、≤50 字符。type ∈ `feat|fix|docs|style|refactor|perf|test|chore|revert`。
+3. **原子性**：一次提交只解决一个问题；关联度不高的改动分次提交。提交前先说明文件清单 + 改动目的。
+4. **密钥保护**：含密钥字符串（`password = `、`api_key = `、`secret = `）的变更，须先替换为 `os.getenv("VAR")` 才可提交。
