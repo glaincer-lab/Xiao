@@ -51,11 +51,19 @@
 - **设计定位**：授权项**不在** `settings_schema.SCHEMA` 登记——config_guard 的 `allowed_config_paths()` 会把 `authorizations.*` 判为未知路径，天然拒绝经 `/api/config` 改写（提权段保护，与 T2 perms 同源）；写入只走专用 `/api/authorizations/*` 端点；本模块是 config.yaml `authorizations` 段的**唯一写者**（整段替换写回，避免深合并对空 dict 无法清空的语义问题）
 - **测试**：`tests/test_authorization.py`（23 项全绿）
 
+#### 注意力传感器（新增 · 已实现 · M3-M0）
+- **文件**：`backend/attention.py`
+- **信号**：键鼠空闲（GetLastInputInfo，60s 采样，只读 `is_idle()`/`idle_seconds()`）、全屏检测（前台窗口样式 → `attention.fullscreen{on/off,进程名}`）、前台进程名（GetForegroundWindow 查询即用零留存）、系统负载（`system_load()`/`load_tier()` 只读）、叹气启发式（`classify_sigh` 三阶段：硬门 → 键鼠二元校准 → 30s 平滑）
+- **进程黑名单硬阻断**：`guard_blacklisted_window()` 挂载工具分发层（`tools/computer.py` 鼠标/看屏 + `tools/system_control.py` 截图），游戏/网银/支付前台 → 拒绝话术「这个窗口我不看也不动，放心。」（fail-closed，**不门控**，只查进程名元数据零留存）
+- **隐私门控**：`screen_awareness`（默认 false）总闸门，关闭时 `sample_window/emit_fullscreen/emit_sigh/tick` 均不采集不发布（fail-closed）；`SighCollector` 只聚合统计、零留存原始音频/键值
+- **事件**：`attention.fullscreen` / `attention.sigh`（EVENT_REGISTRY 已预登记，本模块仅发布）——**未新增事件、未改白名单**
+- **测试**：`tests/test_attention.py`（22 项全绿）；复核 `python -m unittest discover -s tests -p test_attention.py -v`
+
 ### 2.2 待实现（⬜，设计态，规格在 `docs/specs/M0-core.md`）
 
 | 子模块 | 状态 | 说明 |
 |---|---|---|
-| 注意力传感器 | 设计态 | 键鼠空闲/全屏检测/进程黑名单/叹气启发式（三阶段硬门） |
+| （无待实现项） | ✅ | 注意力传感器已随 M3-M0 实现，见 §2.1 |
 
 ---
 
@@ -105,7 +113,7 @@
 
 | 项 | 里程碑 | 优先级 | 类型 |
 |---|---|---|---|
-| M0 注意力传感器 | M0 | P1 | 后置 |
+| M0 注意力传感器 | M0 | P1 | ✅ M3-M0 已实现（`backend/attention.py`），见 §2.1 |
 | M1 画像层持久化完善 | M1 | P1 | 增强 |
 | M2-E 星云前端映射 | M2 | P1 | 后置增强 |
 | M2 建设性冲突三层周期完整实现 | M2 | P2 | 后置（完整规格） |
@@ -120,6 +128,7 @@ cd 项目根
 python -m unittest tests.test_event_bus tests.test_macro_state tests.test_authorization tests.test_gateway tests.test_blocklist tests.test_obfuscate tests.test_semantic_filter tests.test_session_manifest  # M0: 121
 python -m unittest tests.test_memv4 tests.test_memv1_conflict tests.test_memv1_consolidate tests.test_memv1_mishearing tests.test_memv1_retrieval tests.test_memv1_persona  # M1: 116
 python -m unittest tests.test_memv2_posture tests.test_memv2_affect tests.test_memv2_phrases tests.test_memv2_shadow tests.test_memv2_bridge tests.test_memv2_attack  # M2: 115
+python -m unittest tests.test_attention tests.test_m3_budget  # M3-M0/M3-M1 增量: 22+25
 python scripts/audit_module_boundaries.py   # T0: 模块边界纪律断言（S6），期望 PASS 0告警；--strict 可把待复核视为违规
 python -m unittest tests.test_tts_timeout              # T1: 全链路超时兜底（C4/C5），期望 OK
 python -m unittest tests.test_audit_remediation         # T2/T3+R1/R2/R3: 配置提权/open_app白名单/审计限频脱敏/简报熔断，期望 OK
