@@ -2,29 +2,54 @@
 
 ```yaml
 module: M0-core
-version: v4.1.0        # 对应 ROADMAP v4.1
-status: approved       # 规格已定稿，待实现
-depends_on: []         # 全系统地基，无前置模块；依赖现有底座见 §2
+version: v4.1.1        # 对应 ROADMAP v4.1；本版新增「跨模块事件总线」落地 + 按代码现状校准
+status: partial        # 部分实现：出网网关/事件总线已落地；宏观四态/授权中心/注意力传感器为设计态待实现
+depends_on: []         # 全系统地基，无前置模块；依赖现有底座见 §2（其中事件总线已新增）
 paradigm: C/E 混合     # 后台守护（注意力/巩固调度）+ 物理安全层（网关）
 owner_notes: 迁自 ROADMAP §4.M0 + §M0.1/2/3 + §7 资源策略
+revision_notes: |
+  v4.1.1（本版）：
+    - 新增 §3.0 跨模块事件总线（backend/event_bus.py）——与前端用的 session/state.py 解耦，
+      为全系统唯一「模块间通信」信道；EVENT_REGISTRY 是其唯一事实源。
+    - 按代码现状校准：出网网关状态 approved→已实现；配置文件名 compliance_config.yaml→compliance.yaml；
+      网关依赖不再「零第三方库」（语义消歧用 onnxruntime+numpy）；「全模块解耦唯一通道」修正为「事件总线」。
+    - status: approved→partial（区分已实现与设计态），后续 M1-M6 对齐。
 ```
 
 ## 1. 目的与范围
 
-为全部模块提供公共地基：宏观在场状态机、会话栈、授权中心、偏好学习引擎、注意力传感器、失败礼仪、**出网安全网关**。任何模块实现前，本模块的对应能力必须先行。
+为全部模块提供公共地基：**跨模块事件总线**、宏观在场状态机、会话栈、授权中心、偏好学习引擎、注意力传感器、失败礼仪、**出网安全网关**。任何模块实现前，本模块的对应能力必须先行。**
+
+**模块间通信（写死）**：一切跨模块通信只走本模块 §3.0 事件总线（发布事件+订阅事件+只读快照），**禁止跨模块直接调用对方核心函数**。EVENT_REGISTRY.md 是唯一事实源。
 
 **明确不做**：全局键盘钩子/击键动力学（杀软误报+隐私嫌疑+低收益，三重否决，永不重试）；业务功能（记忆/情感/主动等各自在 M1-M6）。
 
-## 2. 前置依赖（现有底座）
+## 2. 前置依赖（现有底座 + 新增）
 
 | 底座 | 位置 | 复用点 |
 |---|---|---|
-| 线程安全事件总线 | `backend/session/state.py` | 全模块解耦的唯一通道 |
+| **跨模块事件总线（新增，已实现）** | `backend/event_bus.py` | **全模块间通信的唯一信道**（模块间禁止直调） |
+| 前端会话状态事件流 | `backend/session/state.py` | 只给前端 WebSocket 显示状态（与事件总线解耦，勿混淆） |
 | 配置注册表 | `backend/settings_schema.py` | 资源档位、授权项、传感器开关 |
 | 后台任务 | `backend/tasks.py` | 巩固/心跳调度的执行容器 |
 | 健康探测 | 现有四环节状态灯 | 服务可用性探测复用同一机制 |
+| 出网安全网关（新增，已实现） | `backend/gateway/` | 见 §4.3；对外 `guard_outbound/guard_inbound/get_session_context` |
 
-外部依赖：无新增（出网网关为纯本地正则+替换，零第三方库）。
+外部依赖：出网网关**非零第三方库**——`semantic_filter` 用 `onnxruntime`+`numpy`（requirements 已含）；黑词/混淆/编排为纯本地正则+替换。
+
+## 3.0 跨模块事件总线（新增 · 已实现 · 全系统唯一通信信道）
+
+- **职责**：模块间发布/订阅语义化事件（`module.event` 点分命名）。M1 发 `memory.profile_updated` → M2 收；M2 发 `posture.changed` → M1 收；如此类推。两个模块无需互相认识、无需直调。
+- **实现**：`backend/event_bus.py`。
+  - `EVENT_TYPES`：事件名白名单（frozenset），**单一来源 = `EVENT_REGISTRY.md` §一**；新增事件须先登记注册表再补进白名单，否则发布/订阅立刻 fail-fast（ValueError）。
+  - `bus = EventBus()`（模块级单例，线程安全）：`on(event_type, handler)` 返回取消订阅函数；`emit(event_type, payload)` 广播；payload 缺省为 `{}`；单 handler 异常不影响其它 subscriber（与 state.py 同模式）。
+- **与 `session/state.py` 的分工（写死）**：
+  | 信道 | 用途 | 订阅者 |
+  |---|---|---|
+  | `backend/event_bus.py` | 跨模块语义化事件（M1→M2 等） | 各模块 |
+  | `backend/session/state.py` | 前端会话状态事件流（state/assistant_result） | 前端 WebSocket |
+  两者**独立**，禁止混用——前端状态流不得承载跨模块事件，反之亦然。
+- **MVP 边界**：本模块只做「基础设施 + 事件名注册表 + 按类型过滤订阅」；**不做 payload schema 校验**（交给各订阅模块自行校验），避免 M0 大而全拖慢 MVP。
 
 ## 3. 数据结构
 
@@ -74,7 +99,11 @@ ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─
 
 **进程黑名单硬阻断（写死）**：游戏/网银/支付类进程前台时，VLM 截屏与鼠标模拟在**工具分发层直接拒绝授权**（防反外挂误判封号+防网银截屏）。拒绝话术："这个窗口我不看也不动，放心。"
 
-### 4.3 出网安全网关（生命线，所有云调用前强制层）
+### 4.3 出网安全网关（生命线，所有云调用前强制层）【已实现】
+
+> **实现状态**：已落地于 `backend/gateway/`（blocklist / obfuscate / load_config / semantic_filter / session_manifest / gateway.py）。对外三个入口（契约，见 `_M0-tasks/A5-gateway-orchestration.md`）：`guard_outbound(text, session_id)` → `("blocked"|"cloud_safe", processed)`；`guard_inbound(returned_text, session_id)` → `str`；`get_session_context(session_id)` → `SessionContext`。
+>
+> **配置契约**：文件 `backend/gateway/compliance.yaml`（顶层键 `compliance_gateway`），字段 `enabled` / `local_only_keywords` / `obfuscation_mapping` / `suggested_entities_max` / `debug_log`。**注意：文档旧稿写 `compliance_config.yaml` 为笔误，实际以 `compliance.yaml` 为准。**
 
 ```
 [待出网文本] → 黑词表命中？ ─是→ 本机保留（规则摘要或"仅本机存档"提示，零云调用）
@@ -86,7 +115,10 @@ ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─
                                     回程比对；不一致 → 结构化日志+降级处理
 ```
 
-- `compliance_config.yaml`：`local_only_keywords`（身份证/密码/密钥/**自伤类**——自伤类衔接 M2 红线：本机处理+引导专业帮助，绝不出网）+ `obfuscation_mapping`（"我妈"→`User_Kinship_Mother` 等）
+- `compliance.yaml`：`local_only_keywords`（身份证/密码/密钥/**自伤类**——自伤类衔接 M2 红线：本机处理+引导专业帮助，绝不出网）+ `obfuscation_mapping`（"我妈"→`User_Kinship_Mother` 等）
+- **还原校验层（v4.1.1 会话绑定，替代全局单例）**：Obfuscation Manifest（混淆清单）**挂载当前会话的 SessionContext 字典**，绑定 `session_id + salt_nonce`；流式 Chunk 出网或多任务并发时，校验按 session 隔离，**禁止全局内存单例**（否则网络序异步交错 race 会高频误报降级）。还原失败可观测（结构化日志：原始占位符列表/返回文本/还原结果），不静默降级
+- **实体回收闭环**：M1.2 巩固 Prompt 的 `suggested_entities` → 周配额澄清 → 用户确认 → 双入册（M1.5 人物卡 + 本节混淆表）。**高危干预期间 defer（v4.1.1）**：系统级高危干预为**特权断路器，独立于常规会话栈**——触发即清空当轮常规候选队列，长尾实体回收/记忆澄清**无条件 defer 到下一个 ACTIVE 常规会话**，禁止在干预流内挂起常规锁（否则占位符无限期阻塞，长尾映射大面积瘫痪）
+- **诚实声明**：手工映射只护高频实体，长尾明文出网（个人自用豁免），设置页显式说明
 - **还原校验层（v4.1.1 会话绑定，替代全局单例）**：Obfuscation Manifest（混淆清单）**挂载当前会话的 SessionContext 字典**，绑定 `session_id + salt_nonce`；流式 Chunk 出网或多任务并发时，校验按 session 隔离，**禁止全局内存单例**（否则网络序异步交错 race 会高频误报降级）。还原失败可观测（结构化日志：原始占位符列表/返回文本/还原结果），不静默降级
 - **实体回收闭环**：M1.2 巩固 Prompt 的 `suggested_entities` → 周配额澄清 → 用户确认 → 双入册（M1.5 人物卡 + 本节混淆表）。**高危干预期间 defer（v4.1.1）**：系统级高危干预为**特权断路器，独立于常规会话栈**——触发即清空当轮常规候选队列，长尾实体回收/记忆澄清**无条件 defer 到下一个 ACTIVE 常规会话**，禁止在干预流内挂起常规锁（否则占位符无限期阻塞，长尾映射大面积瘫痪）
 - **诚实声明**：手工映射只护高频实体，长尾明文出网（个人自用豁免），设置页显式说明
@@ -98,12 +130,15 @@ ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─
 ## 5. 规则与话术
 
 - 失败礼仪全仓规范：一切报错 = 人话原因 + 下一步建议（"缺看图方案，去设置配一个，或装本地 MiniCPM-o"），禁止裸异常堆栈
+- **事件总线使用规范（写死）**：跨模块一律走 `backend/event_bus.py` 的 `bus.on/emit`，**禁止跨模块直调核心函数**；事件名必须已在 `EVENT_TYPES` 白名单内（对应 EVENT_REGISTRY §一），发布端写错名 → 立即 ValueError（fail-fast，不静默断链）；payload 不做全局校验，由各订阅模块自行校验
 - **同轮单一询问原则（v4.1.1，会话层仲裁，写死）**：主动类询问（记忆澄清/册封/邀约印证/元对话）**同一轮对话只出现一个**；优先级：**高危干预 > 记忆澄清（M1）> 关系类询问（M6 册封 / M2 邀约印证）**——M1 有待澄清条目时先处理记忆确认，M6 册封顺延下轮；防止同轮被问两次（体验灾难）。实施于会话栈
 - **全局周询问预算（v4.1.1）**：除轮内规则外，**周内跨模块询问总量 ≤5 次/周**（`inquiry_budget.weekly_max` 可配置），各模块按优先级竞争消耗——详见 `EVENT_REGISTRY.md` §5（高危干预即时不占额；记忆澄清>关系类，冲突时高优先级顶替、低优先级顺延下周）
 - CPU 硬指标：用户在场交互空闲态 <1%（巩固窗口与空闲增量单列脚注）
 - 注意力传感器数据只做二元/计数判断，**禁止存储原始输入内容**（音频原文/键值序列零留存）
 
 ## 6. 模块间接口（事件总线契约表）
+
+> 下表仅列 **M0 作为发布者/订阅者** 的事件；全系统事件总表与预算规则见 `EVENT_REGISTRY.md`。事件名须已登记进 `backend/event_bus.py` 的 `EVENT_TYPES` 白名单。
 
 | 事件名 | payload | 发布者 | 订阅者 | 备注 |
 |---|---|---|---|---|
@@ -115,8 +150,8 @@ ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─
 
 ## 7. 验收断言
 
-- EVAL.md：场景二断言 2（黑词内容零云调用）、二批"出网网关黑词直测"
-- 模块级：黑词命中时网络层断言出网调用数=0；DORMANT 期间主动事件总线零消息；CPU<1% 断言（交互空闲态）；RETRUNING 三档模板与时长匹配
+- 单元级（已实现）：`tests/test_event_bus.py` 7 项全绿——按类型收发、取消订阅、payload 缺省、未知事件名 fail-fast、单 handler 异常不扩散、`EVENT_TYPES` 覆盖注册表关键事件
+- 模块级：跨模块通信一律走 `bus`（grep 断言无「跨模块直调对方模块模块函数」的 `import`）；黑词命中时网络层断言出网调用数=0；DORMANT 期间主动事件总线零消息；CPU<1% 断言（交互空闲态）；RETRUNING 三档模板与时长匹配
 - ROADMAP §6 总表相关项：网关 100% 覆盖、DORMANT 零归因、无常驻钩子
 
 ## 8. 开放问题
@@ -129,3 +164,4 @@ ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─
 | 日期 | 版本 | 变更 | 依据 |
 |---|---|---|---|
 | 2026-08 | v4.1.0 | 自 ROADMAP §4.M0 迁出成书；并入出网网关/叹气三阶段/进程黑名单/RETURNING 三源 | 六轮研讨 |
+| 2026-08 | v4.1.1 | 新增 §3.0 跨模块事件总线（backend/event_bus.py，已实现）；按代码现状校准 status/配置文件名/网关依赖；修正「全模块解耦唯一通道」表述 | 代码现状对齐；讨论定稿 |

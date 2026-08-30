@@ -103,6 +103,23 @@ def _validate(cfg: object, source: str) -> dict:
 请检查该字段填的值。{hint}"""
             )
 
+    # L1 增强：obfuscation_mapping 必须是「字符串真名 -> 字符串占位符」，且占位符唯一；
+    # 否则 obfuscate/restore 会因非 str 值或占位符重复而崩溃/还原错乱。
+    obf_mapping = gw.get("obfuscation_mapping")
+    if isinstance(obf_mapping, dict):
+        for mkey, mval in obf_mapping.items():
+            if not isinstance(mkey, str) or not isinstance(mval, str):
+                raise ComplianceConfigError(
+                    f"配置文件 {source} 的字段 'compliance_gateway.obfuscation_mapping' 中存在非字符串映射：{mkey!r}: {mval!r}。"
+                    "该字段约定为「真名: 占位符」，两者都必须是字符串。请检查该项。"
+                )
+        placeholders = [v for v in obf_mapping.values() if isinstance(v, str)]
+        if len(placeholders) != len(set(placeholders)):
+            raise ComplianceConfigError(
+                f"配置文件 {source} 的字段 'compliance_gateway.obfuscation_mapping' 中出现了重复的占位符。"
+                "每个占位符只能对应一个真名，否则还原会错乱。请改为唯一占位符。"
+            )
+
     return cfg
 
 

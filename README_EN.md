@@ -2,7 +2,9 @@
 
 [简体中文](README.md) | English
 
-A Chinese-voice assistant that lives on your Windows desktop — but it aims to be more than an assistant.
+A Windows desktop, Chinese-voice **companion** — and it aims to be more than an assistant.
+
+**It is a voice-first desktop companion agent**: voice is the most natural entry point, but its real value is that it **remembers, has feelings, takes initiative, and can act**.
 
 **Long-term vision**: Assistant, friend, companion. It gets work done, but it also remembers how you've grown, sits with you on bad nights, and speaks first when the moment is right — a companion built from software, not another obedient tool.
 
@@ -23,6 +25,7 @@ Full design thinking is public: [Product Spec](docs/PRODUCT.md) (Chinese) ｜ [R
 - **Voice-controlled PC** — six tools (mouse / typing / hotkeys / windows / screenshot-look / UIA), off by default, per-action voice approval
 - **No-key daily commands** — open apps, volume, weather, timers, clipboard — 14 command families work with zero API keys
 - **Long-term memory (v1)** — "remember that…" persists across sessions
+- **Egress safety gateway** — a mandatory layer on every cloud call: sensitive words stay local, names are placeholders in transit, verified on return
 - **Offline fallback** — the whole chain can switch to local engines (FunASR / Ollama / Piper); an "offline ready" lamp shows at a glance
 - **Runs out of the box** — first-run wizard, zero-config basic mode, installer bundles the Python runtime (no environment setup for end users)
 
@@ -30,7 +33,7 @@ Full design thinking is public: [Product Spec](docs/PRODUCT.md) (Chinese) ｜ [R
 
 | Milestone | One line |
 |---|---|
-| M0 Core infra | Macro state machine (active/away), **egress safety gateway** (local blocklist + name obfuscation), attention sensors |
+| M0 Core infra | Cross-module event bus (shipped), macro state machine (active/away), **egress safety gateway** (shipped: local blocklist + name obfuscation), attention sensors |
 | M1 Remember | Memory engineering: layered memory, conflict protocol, persona & lorebook, **kinship cards** (an industry blank) |
 | M2 A heart | Affect state machine, eight dialogue stances, constructive conflict (it can disagree — gently) |
 | M3 Initiative | Proactive engine: daily-budgeted heartbeat, event triggers, one master slider |
@@ -67,7 +70,7 @@ Produces `desktop/release/Xiao-Setup-*.exe`: no-admin install, bundled Python ru
 
 ## Architecture in One Sentence
 
-Python audio pipeline (wake → VAD → streaming ASR) + router (chat via cloud LLMs / real work via DSH) + TTS; React + Three.js nebula UI; Electron tray shell. Technical details in [DESIGN.md](docs/DESIGN.md).
+Python audio pipeline (wake → VAD → streaming ASR) + cross-module event bus (module decoupling) + router (chat via cloud LLMs / real work via DSH) + TTS; React + Three.js nebula UI; Electron tray shell. Technical details in [DESIGN.md](docs/DESIGN.md).
 
 ## Known Limitations
 

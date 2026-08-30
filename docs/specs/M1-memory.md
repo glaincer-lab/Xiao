@@ -17,7 +17,7 @@ owner_notes: 迁自 ROADMAP §4.M1；现有底座 memory.py/logs/memory.json 为
 
 ## 2. 前置依赖
 
-- M0.2 出网网关（巩固摘要出云必经）｜M0 宏观状态机（IDLE 触发增量巩固）｜M0.4 事件总线
+- M0.2 出网网关（已实现，巩固摘要出云必经）｜M0 宏观状态机（IDLE 触发增量巩固）｜**跨模块事件总线 `backend/event_bus.py`（已实现，M0 §3.0，全系统唯一通信信道）**——M1 发布/订阅一律走 `bus.on/emit`，事件名见 `EVENT_REGISTRY.md`
 - 现有底座：`memory.py` 单例+`logs/memory.json`（FIFO 100）+`GET /api/memory/list`（只读清单→本版扩展编辑/删除）
 - 外部：巩固摘要走云 LLM API（经网关）；memobase（Apache-2.0）仅作画像组织方式参考
 

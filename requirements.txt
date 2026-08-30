@@ -3,6 +3,7 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 python-dotenv>=1.0
 PyYAML>=6.0
+tokenizers>=0.19  # 可选增强：网关语义消歧（semantic_filter），未装则自动降级为规则
 numpy>=1.26
 sounddevice>=0.4.6
 webrtcvad-wheels>=2.0.10

@@ -35,3 +35,15 @@ compliance_gateway:
 
   # 4. 调试日志：true 时输出占位符还原校验明细；日常 false 关闭。
   debug_log: false
+
+  # 5. 语义消歧（可选增强，详见 docs/specs/gateway-semantic.md）。
+  #    黑词命中后用本地小模型判断「技术语境 vs 真实敏感数据/自伤」，
+  #    避免「密码学/密钥管理」这类正常词被误拦。
+  #    模型文件缺失或推理失败时自动回退到规则（allow_words）判断，
+  #    绝不影响开箱即用（fail-closed）。
+  semantic:
+    enabled: true               # 模型在则参与消歧；模型缺失自动走规则兜底
+    backend: "onnx"             # 推理后端（当前支持 onnxruntime）
+    model_dir: "models/gateway-semantic"   # 相对项目根
+    model_name: "bge-small-zh-v1.5"        # 预装默认；可换 bge-large / reranker
+    threshold: 0.72             # 技术语境相似度阈值，>= 判定 safe（按真实语料校准，0.72 可分开技术>=0.75 与真实<=0.66）
