@@ -128,7 +128,7 @@ cd 项目根
 python -m unittest tests.test_event_bus tests.test_macro_state tests.test_authorization tests.test_gateway tests.test_blocklist tests.test_obfuscate tests.test_semantic_filter tests.test_session_manifest  # M0: 121
 python -m unittest tests.test_memv4 tests.test_memv1_conflict tests.test_memv1_consolidate tests.test_memv1_mishearing tests.test_memv1_retrieval tests.test_memv1_persona  # M1: 116
 python -m unittest tests.test_memv2_posture tests.test_memv2_affect tests.test_memv2_phrases tests.test_memv2_shadow tests.test_memv2_bridge tests.test_memv2_attack  # M2: 115
-python -m unittest tests.test_attention tests.test_m3_budget tests.test_m3_heartbeat  # M3-M0/M3-M1/M3-M2 增量: 22+25+20
+python -m unittest tests.test_attention tests.test_m3_budget tests.test_m3_heartbeat tests.test_m3_aggregate tests.test_m3_event_trigger  # M3-M0..M3-M3 增量: 22+25+20+24
 python scripts/audit_module_boundaries.py   # T0: 模块边界纪律断言（S6），期望 PASS 0告警；--strict 可把待复核视为违规
 python -m unittest tests.test_tts_timeout              # T1: 全链路超时兜底（C4/C5），期望 OK
 python -m unittest tests.test_audit_remediation         # T2/T3+R1/R2/R3: 配置提权/open_app白名单/审计限频脱敏/简报熔断，期望 OK
