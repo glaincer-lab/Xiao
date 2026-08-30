@@ -31,22 +31,29 @@ class OmniASREngine(ASREngine):
     def stop(self) -> str:
         if not self._buf:
             return ""
-        wav = self._pcm_to_wav(bytes(self._buf))
-        b64 = base64.b64encode(wav).decode()
-        resp = self._client.chat.completions.create(
-            model=self._model,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "请把这段音频转写成文字。"},
-                    {"type": "audio_url", "audio_url": {"url": f"data:audio/wav;base64,{b64}"}},
-                ],
-            }],
-        )
-        text = (resp.choices[0].message.content or "").strip()
-        if text:
-            self.on_result(True, text)
-        return text
+        try:
+            wav = self._pcm_to_wav(bytes(self._buf))
+            b64 = base64.b64encode(wav).decode()
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "请把这段音频转写成文字。"},
+                        {"type": "audio_url", "audio_url": {"url": f"data:audio/wav;base64,{b64}"}},
+                    ],
+                }],
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            if text:
+                self.on_result(True, text)
+            return text
+        except Exception as exc:  # noqa: BLE001
+            # C4：识别失败/超时放弃本次识别并记日志，上层主循环不崩不永久阻塞。
+            import logging
+
+            logging.getLogger(__name__).warning("omni ASR stop failed: %s", exc)
+            return ""
 
     @staticmethod
     def _pcm_to_wav(pcm: bytes, sample_rate: int = 16000) -> bytes:

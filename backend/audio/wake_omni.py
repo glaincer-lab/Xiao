@@ -23,10 +23,18 @@ class OmniWakeDetector:
     def feed(self, pcm: bytes) -> bool:
         self._buf += pcm
         if len(self._buf) >= self._window:
-            self._asr.start()
-            self._asr.feed(bytes(self._buf))
-            self._asr.stop()
-            self._buf = bytearray()
+            # 超时/异常兜底（C4）：omni 服务挂或转写失败时，放弃本次唤醒并记日志，
+            # 主循环不崩、不永久阻塞（不引入跨引擎切换，见结构规划 §5）。
+            try:
+                self._asr.start()
+                self._asr.feed(bytes(self._buf))
+                self._asr.stop()
+            except Exception as exc:  # noqa: BLE001
+                import logging
+
+                logging.getLogger(__name__).warning("wake-omni recognition failed: %s", exc)
+            finally:
+                self._buf = bytearray()
             if self._hit:
                 self._hit = False
                 return True

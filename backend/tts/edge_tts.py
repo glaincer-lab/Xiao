@@ -17,6 +17,7 @@ from backend.tts.base import TTSEngine
 logger = logging.getLogger(__name__)
 
 MIN_CHUNK = 20  # 每个播报片段的最短字数（首句越小，开播越快）
+SYNTHESIS_TIMEOUT = 10.0  # C5：单句合成超时（秒），edge-tts 云端抖动在 timeout 内抛错，主流程不挂死
 
 
 class EdgeTTS(TTSEngine):
@@ -89,9 +90,15 @@ class EdgeTTS(TTSEngine):
 
         communicate = edge_tts.Communicate(text, self._voice, rate=self._rate)
         buf = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
+
+        # C5：词合成侧超时兜底——edge-tts 云端抖动/断流时，wait_for 保证在 timeout 内
+        # 抛 TimeoutError，由上层 speak() 的 try/except 捕获并记日志，主对话流水线不堵死。
+        async def _stream_into() -> None:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    buf.write(chunk["data"])
+
+        await asyncio.wait_for(_stream_into(), timeout=SYNTHESIS_TIMEOUT)
         return buf.getvalue()
 
     async def _synthesize_all(self, chunks: list[str]) -> list[bytes]:
