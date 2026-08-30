@@ -65,6 +65,8 @@ class _RunCtx:
         self.call_names: dict[str, str] = {}
         self.chunks: list[str] = []
         self.last_message = ""
+        # run（任务轮）唯一标识，与 backend/tasks.py 的 task_id 同为 8 位 hex，供 audit 事实平面按 run 隔离。
+        self.run_id: str = uuid.uuid4().hex[:8]
 
 
 class DSHWebBridge(DSHBridge):
@@ -310,6 +312,17 @@ class DSHWebBridge(DSHBridge):
         except Exception:
             pass
 
+    def _emit_raw(self, etype: str, data: dict, ctx: _RunCtx) -> None:
+        """把桥解析出的原始事件（tool/call、tool/result、assistant/chunk、
+        assistant/message、turn/end）连同 run_id 转发给 event_sink，
+        供 backend/audit 的 append-only fact plane 订阅记录。
+
+        仅做「追加式上抛」，不改任何事件解析逻辑（call_names/chunks/last_message 维持原样）。
+        """
+        payload = dict(data or {})
+        payload["run_id"] = ctx.run_id
+        self._emit(etype, **payload)
+
     def _on_event(self, ev: dict, ctx: _RunCtx) -> None:
         etype = str(ev.get("type") or "")
         data = ev.get("data") if isinstance(ev.get("data"), dict) else {}
@@ -318,6 +331,7 @@ class DSHWebBridge(DSHBridge):
             name = str(data.get("name") or "tool")
             if call_id:
                 ctx.call_names[call_id] = name
+            self._emit_raw(etype, data, ctx)  # append-only fact plane 订阅原始事件
             self._emit(
                 "work_step", name=name, status="start",
                 summary=self._summarize_args(data.get("arguments")),
@@ -327,11 +341,13 @@ class DSHWebBridge(DSHBridge):
             name = ctx.call_names.get(str(msg.get("callId") or ""), "tool")
             content = msg.get("content")
             summary = " ".join(str(content).split())[:120] if content is not None else ""
+            self._emit_raw(etype, data, ctx)  # append-only fact plane 订阅原始事件
             self._emit(
                 "work_step", name=name,
                 status="error" if msg.get("isError") else "done", summary=summary,
             )
         elif etype == "assistant/chunk":
+            self._emit_raw(etype, data, ctx)  # append-only fact plane 订阅原始事件
             piece = self._data_text(data)
             if piece:
                 ctx.chunks.append(piece)
@@ -339,10 +355,12 @@ class DSHWebBridge(DSHBridge):
                     ctx.chunks = ctx.chunks[-200:]
                 self._emit("dsh_chunk", text=self._live_text(ctx))
         elif etype == "assistant/message":
+            self._emit_raw(etype, data, ctx)  # append-only fact plane 订阅原始事件
             text = self._data_text(data)
             if text:
                 ctx.last_message = text
         elif etype == "turn/end":
+            self._emit_raw(etype, data, ctx)  # append-only fact plane 订阅原始事件
             self._finish(data, ctx)
 
     @staticmethod

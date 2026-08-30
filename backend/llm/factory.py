@@ -149,3 +149,17 @@ def build_llm() -> LLMClient:
             cfg.get("max_tokens"),
         ),
     )
+
+
+def build_llm_by_id(scheme_id: str) -> LLMClient:
+    """按 ``llm.models[]`` 中某方案的 ``id`` 构建客户端（复用多方案可切能力）。
+
+    供 backend/orchestrator/ 按「规划(planner)/执行(worker)」角色定向选模型（贵/廉价）。
+    未命中时抛 ``ValueError``（调用方自行回退），不改动现有 ``build_llm`` 行为。
+    """
+    models = config.get("llm.models", None)
+    if models:
+        m = next((x for x in models if x.get("id") == scheme_id), None)
+        if m:
+            return _build_scheme(m)
+    raise ValueError(f"llm.models 中未找到方案 id={scheme_id!r}")
