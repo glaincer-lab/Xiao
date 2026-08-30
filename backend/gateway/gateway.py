@@ -111,11 +111,15 @@ def _get_or_create_context(session_id: str) -> SessionContext:
         return ctx
 
 
+# 【已冻结 · T0/S4】出网安全网关三入口之一：会话上下文获取。契约见 compliance.yaml；
+# 接口签名与行为已锁定（S4 生命线），禁止改动签名/返回语义。
 def get_session_context(session_id: str) -> SessionContext:
     """会话级懒加载：每个 session 一次，返回同一个 SessionContext（勿共享单例）。"""
     return _get_or_create_context(session_id)
 
 
+# 【已冻结 · T0/S4】出网安全网关三入口之一：出网拦截+混淆编排。契约见 compliance.yaml；
+# 返回 (处置,文本) 语义已锁定，禁止改动签名/返回语义。
 def guard_outbound(text: str, session_id: str) -> tuple[str, str]:
     """出网拦截 + 混淆编排。返回 (处置, 处理后的文本)。
 
@@ -161,6 +165,8 @@ def guard_outbound(text: str, session_id: str) -> tuple[str, str]:
     return _rule_gate(text, keywords, allow_words, mapping, ctx)
 
 
+# 【已冻结 · T0/S4】出网安全网关三入口之一：回程还原+校验。契约见 compliance.yaml；
+# 接口签名与行为已锁定，禁止改动。
 def guard_inbound(returned_text: str, session_id: str) -> str:
     """回程还原 + 校验。返回尽力还原后的文本。
 

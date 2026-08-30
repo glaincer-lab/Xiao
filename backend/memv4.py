@@ -54,6 +54,8 @@ DATA_TRACK_KINDS: frozenset[str] = frozenset({
 PROFILE_MAX_ENTRIES = 500
 
 
+# 【已冻结 · T0/S3】五要素 schema（MemEntry 字段集）为一次性写入、只增不改的非破坏结构。
+# 字段一旦变更会导致历史数据不可读；本结构已按 M1-core §3 锁定，禁止改动既有字段名/增删核心字段。
 @dataclass
 class MemEntry:
     """五要素记忆条目 dataclass（字段名与 M1-memory.md §3 完全一致）。
@@ -105,6 +107,8 @@ def evict_low_confidence(
     return sorted(kept, key=lambda e: e.id), sorted(removed, key=lambda e: e.id)
 
 
+# 【已冻结 · T0/S3】DataTrack 三层职责（session_logs/raw_frames_meta/context_snapshots）为只增不改的
+# 非破坏存储结构；变更 kind 或职责会破坏「原始层零丢失」断言与历史可读性。
 class DataTrack:
     """数据轨三层存储：只增不删、原子落盘、线程安全。
 

@@ -1,10 +1,14 @@
 # 事件总线全局注册表（Event Registry）
 
 > **唯一事实源**：事件总线解耦是全系统接口契约（见 `TEMPLATE.md` §6 与 `M0-core.md` §3.0）。**所有跨模块事件必须在本文件登记**；未登记的事件上线视为架构违例。payload 统一以**发布者**版本为准（模块书间若不一致，先改本表，再同步发布者）。
-> 更新日期：2026-08-29 ｜ 状态：**集中登记 v1**（26 条事件 + 2 条命令通道）
+> 更新日期：2026-08-30 ｜ 状态：**集中登记 v1 + T7 编排**（32 条事件 + 2 条命令通道）
 > 全局询问预算与优先级仲裁见文末 §5。
 >
 > **实现状态（v4.1.1）**：跨模块语义化事件总线已落地 `backend/event_bus.py`，本表是其唯一事实源；事件名清单已同步进该文件 `EVENT_TYPES` 白名单。**新增事件 = 本表登记 + `EVENT_TYPES` 白名单同步补入**，缺一不可（发布端写错名会 fail-fast，不静默断链）。与 `backend/session/state.py`（前端会话状态事件流）解耦，二者不混用。
+
+> **【已冻结 · T0/S1】** 本文件是 S1「跨模块事件契约」的唯一事实源（见 _audit/结构规划-2026-08-30.md S1）。
+>
+> 事件名与 payload 一经发布即冻结：**新增事件必须先在本表登记，再同步补入 `backend/event_bus.py` 的 `EVENT_TYPES` 白名单**（缺一不可）；**禁止对已发布事件改名或改载荷**。
 
 ## 一、事件总表（按事件名）
 
@@ -36,6 +40,12 @@
 | `vision.conclusion` | `{场景, 文字结论}` | M4 | M1 | M4 §6 | 入记忆（唯一持久化） |
 | `vision.feedback` | `{三态}` | M4 | M0 偏好引擎 | M4 §6 | 反馈闭环 |
 | `vision.session_state` | `{session_id, state}` | M4 | 前端/星云 | M4 §6 | 视线对齐渲染 |
+| `task.completed` | `{task_id, result, node_count, failed_count}` | 编排层 | M6/M1/M3 | T7 §6 | 整任务完成（智慧大脑+高效工人） |
+| `task.node_completed` | `{task_id, node_id, seq, kind, output}` | 编排层 | 下游节点/M6 | T7 §6 | 执行节点完成，output 为产物 |
+| `task.node_data` | `{task_id, source_node, target_node, key, value}` | 编排层 | 下游节点 | T7 §6 | 节点间数据经总线传递 |
+| `task.node_failed` | `{task_id, node_id, seq, kind, error}` | 编排层 | 可观测 | T7 §6 | 执行节点失败 |
+| `task.node_planned` | `{task_id, node_id, seq, kind, summary, depends_on}` | 编排层 | 可观测/下游 | T7 §6 | 规划器为每个节点广播一次 |
+| `task.node_started` | `{task_id, node_id, seq, kind, role}` | 编排层 | 可观测 | T7 §6 | 执行节点开始执行 |
 
 ## 二、命令通道（非总线事件，登记备案）
 
@@ -63,6 +73,7 @@
 | M4 | vision.* / gateway.obfuscate | — | M1 条目 |
 | M5 | device.* / plan.landed / env.anomaly(转) | gateway.restore | — |
 | M6 | growth.* / micro_request / memory.export_requested | growth.candidate / plan.landed | — |
+| 编排层(T7) | task.node_* / task.completed | —（拉取式调用） | llm 方案快照 |
 
 ## 五、全局周询问预算（v4.1.1）
 
