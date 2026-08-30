@@ -27,6 +27,13 @@ _APP_WHITELIST: dict[str, tuple[str, ...]] = {
     "mspaint": ("mspaint.exe",),
 }
 
+# 文件打开时拒绝可执行/脚本扩展名：os.startfile 对这类会启动程序/执行脚本，
+# 等于绕过白名单裸执行。fail-closed：不在允许集合一律不开。
+_EXEC_SUFFIXES: tuple[str, ...] = (
+    ".exe", ".com", ".bat", ".cmd", ".ps1", ".vbs", ".vbe",
+    ".js", ".jse", ".wsf", ".wsh", ".scr", ".lnk", ".msi", ".reg", ".cpl",
+)
+
 # 仅放行 http(s)，其余协议（file:// 等）一律拒绝
 _URL_RE = re.compile(r"^https?://[\w.-]+(:\d+)?(/[\w./?%&=-]*)?$")
 
@@ -97,8 +104,11 @@ class OpenAppTool(Tool):
                 webbrowser.open("https://" + t)
                 return f"已打开网址 {t}"
 
-        # 文件：路径确实存在才打开（经审批后）
+        # 文件：路径确实存在才打开（经审批后）；可执行/脚本扩展名一律拒绝（fail-closed）
         if os.path.exists(t):
+            ext = os.path.splitext(t)[1].lower()
+            if ext in _EXEC_SUFFIXES:
+                return f"出于安全考虑，{ext or '该文件类型'} 不允许直接打开。"
             os.startfile(t)  # Windows
             return f"已打开 {t}"
 
@@ -107,5 +117,6 @@ class OpenAppTool(Tool):
         exe = _APP_WHITELIST.get(name)
         if not exe:
             return f"未授权应用，仅允许：{', '.join(_APP_WHITELIST)}"
-        subprocess.Popen(exe, shell=False)
+        # 仅启动白名单映射的首选可执行；argv-list 不走 shell
+        subprocess.Popen([exe[0]], shell=False)
         return f"已启动 {exe[0]}"
