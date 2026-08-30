@@ -13,9 +13,13 @@ from backend.config import config
 from backend.errors import human_reason
 from backend.llm.base import ChatMessage, LLMClient
 from backend.memory import MemoryStore, memory_store
+from backend.memv1.retrieval import build_injection, set_entry_provider
 from backend.session.state import State, emit
 from backend.tools.base import ToolRegistry
 from backend.tts.base import TTSEngine
+
+# M1-A 数据轨（首版用 DataTrack 读会话日志作为 M1 记忆源；读失败时 provider 为空→回退 v3）
+_M1_DATATRACK = None  # 惰性初始化，避免导入即创建目录/读盘
 
 DEFAULT_SYSTEM_PROMPT = (
     "你是「小二」，运行在 Windows 上的中文语音工作助手。\n"
@@ -81,6 +85,32 @@ class Agent:
         self._on_done = on_done
         self._memory = memory if memory is not None else memory_store
         self._history: list[ChatMessage] = []
+        self._setup_m1_provider()
+
+    def _setup_m1_provider(self) -> None:
+        """接入 M1 记忆源（`memv4.DataTrack` 会话日志轨），作为 `build_injection` 的 provider。
+
+        容错设计：任何读取失败（数据轨未初始化/文件缺失/损坏）都返回空 provider，
+        此时 `_messages` 会回退到 v3 `context_text`，现有功能不受影响。
+        """
+        global _M1_DATATRACK
+        if _M1_DATATRACK is None:
+            try:
+                from backend.memv4 import DataTrack
+                _M1_DATATRACK = DataTrack()
+            except Exception:  # noqa: BLE001
+                _M1_DATATRACK = None
+        if _M1_DATATRACK is None:
+            return
+
+        def _provider() -> list:
+            try:
+                # 会话日志轨记录为 [{id, ts, content?, ...}...]，原样交付给 M1-E 读取层
+                return list(_M1_DATATRACK.items("session_logs"))
+            except Exception:  # noqa: BLE001
+                return []
+
+        set_entry_provider(_provider)
 
     async def handle(self, text: str, images: list[str] | None = None) -> None:
         self._set_state(State.PROCESSING)
@@ -192,9 +222,27 @@ class Agent:
         await self._tts.speak(text)
 
     def _messages(self) -> list[ChatMessage]:
-        """构建消息：系统提示词（并入长期记忆上下文）+ 对话历史。"""
+        """构建消息：系统提示词（并入长期记忆上下文）+ 对话历史。
+
+        记忆注入策略（v4.1.1 接线）：
+        - 优先用 M1 的 `build_injection`（跨会话记忆，双轨/任务态/180 天滤镜都在其内）；
+        - 若 M1 无可用记忆（build_injection 返回空串）或未接 provider，则回退 v3
+          `context_text`（显式「记住…」记忆），确保现有功能不丢。
+        """
         sys = system_prompt()
-        mem_ctx = self._memory.context_text()
+        mem_ctx = ""
+        try:
+            # 已设 M1 provider：传入最后一条用户消息作为请求分类依据
+            user_req = ""
+            for m in reversed(self._history):
+                if m.role == "user":
+                    user_req = m.content or ""
+                    break
+            mem_ctx = build_injection(user_req) or ""
+        except Exception:  # noqa: BLE001
+            mem_ctx = ""
+        if not mem_ctx:
+            mem_ctx = self._memory.context_text()
         if mem_ctx:
             sys = f"{sys}\n\n{mem_ctx}"
         return [ChatMessage(role="system", content=sys)] + list(self._history)
