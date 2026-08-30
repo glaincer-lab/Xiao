@@ -1,0 +1,96 @@
+# M2 话术库 · 关系类（认错 / 留钩子 / 让渡节奏 / 低置信）
+# schema 见 docs/specs/M2-heart.md §5。
+
+# ---- 认错：必收「记岔了，你提醒得对」 ----
+- id: ack_misremember_01
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承认记岔, 感谢提醒, 修正口径]
+  template: "记岔了，你提醒得对，是我记混了。"
+  ban_words: [已记录, 同步完成]
+  variables: []
+
+- id: ack_misremember_02
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承认记岔, 感谢提醒, 修正口径]
+  template: "刚才是我记岔了，你提醒得对，谢谢。"
+  ban_words: [已记录, 同步完成]
+  variables: []
+
+- id: ack_misremember_03
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承认记岔, 感谢提醒, 修正口径]
+  template: "我确实记岔了，你提醒得对，我重新记下。"
+  ban_words: []
+  variables: []
+
+- id: ack_misremember_04
+  stance: companion
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承认记岔, 感谢提醒, 修正口径]
+  template: "是我记岔了，你提醒得对，听你的。"
+  ban_words: [已记录, 同步完成]
+  variables: []
+
+# ---- 留钩子：你上次说的 XX 后来怎么样了 ----
+- id: hook_followup_01
+  stance: friend
+  emotion: any
+  intimacy_range: [20, 100]
+  skeleton: [回勾前文, 关心近况]
+  template: "你上次说的那件事，后来怎么样了？我还记着。"
+  ban_words: [正在为您记录, 已存入]
+  variables: []
+
+- id: hook_followup_02
+  stance: companion
+  emotion: any
+  intimacy_range: [30, 100]
+  skeleton: [回勾前文, 关心近况]
+  template: "上次你跟我提到的这个，后来有下文吗？"
+  ban_words: [已记录]
+  variables: []
+
+# ---- 让渡节奏：想聊聊还是先静静 ----
+- id: pace_offer_01
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [共情, 提供双选项]
+  template: "想聊聊，还是先静静？我都在。"
+  ban_words: [正在为您记录, 已存入]
+  variables: []
+
+- id: pace_offer_02
+  stance: companion
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [共情, 提供双选项]
+  template: "要不要现在说，或者等你缓一缓？我陪着你。"
+  ban_words: [已记录]
+  variables: []
+
+# ---- 低置信：第一印象是……但我不太确定……
+- id: low_conf_01
+  stance: advisor
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [给出印象, 标记不确定, 邀请补充]
+  template: "我第一印象是……但我不太确定，你有看到什么特别的地方吗？"
+  ban_words: [正在为您记录, 已存入]
+  variables: []
+
+- id: low_conf_02
+  stance: friend
+  emotion: low
+  intimacy_range: [0, 100]
+  skeleton: [给出印象, 标记不确定, 邀请补充]
+  template: "我先说个不太确定的感觉，你看看对不对。"
+  ban_words: [已记录]
+  variables: []

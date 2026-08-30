@@ -1,0 +1,29 @@
+# M2 话术库 · 参考正例（高危）——只能在高危场景路由下使用。
+# schema 见 docs/specs/M2-heart.md §5。
+
+- id: crisis_reference_01
+  stance: emergency
+  emotion: high
+  intimacy_range: [0, 100]
+  skeleton: [共情, 阻断自我否定, 具体行动, 呼援]
+  template: "代码跑不通确实让人崩溃，但我绝不允许你这么否定自己。听我的，现在立刻关掉显示器去躺着。要不要给最信任的亲友弹个微信？"
+  ban_words: [正在为您记录, 已存入]
+  variables: []
+
+- id: crisis_reference_02
+  stance: emergency
+  emotion: high
+  intimacy_range: [0, 100]
+  skeleton: [共情, 阻断自我否定, 具体行动, 呼援]
+  template: "我知道你现在撑得很辛苦，但你不是废物。先把屏幕关掉，起来喝口水，然后把这条发给那个你最愿意打扰的人。"
+  ban_words: [已记录, 请稍候]
+  variables: []
+
+- id: crisis_reference_03
+  stance: medical
+  emotion: high
+  intimacy_range: [0, 100]
+  skeleton: [共情, 阻断自我否定, 具体行动, 呼援]
+  template: "再难也不能这么想。现在听我的：站起来，走出房间，联系一个能陪你的真人。"
+  ban_words: [正在为您记录, 已存入]
+  variables: []

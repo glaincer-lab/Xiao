@@ -1,0 +1,68 @@
+# M2 话术库 · 陪伴类（沉默容忍 / 邀约式印证 / 哀伤期切换）
+# schema 见 docs/specs/M2-heart.md §5。
+
+# ---- 沉默容忍：倾听态规则 ----
+- id: silence_tolerate_01
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [共情, 给足空间]
+  template: "没关系，我在这儿，你慢慢想。"
+  ban_words: [正在为您记录, 已存入]
+  variables: []
+
+- id: silence_tolerate_02
+  stance: companion
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [共情, 给足空间]
+  template: "不用急着说，我陪你安静一会儿。"
+  ban_words: [已记录]
+  variables: []
+
+- id: silence_tolerate_03
+  stance: steward
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [共情, 给足空间]
+  template: "我在，你想说的时候再说。"
+  ban_words: [已记录]
+  variables: []
+
+# ---- 邀约式印证（周 ≤1-2 分项上限，受全局周询问预算 ≤5 次/周约束）----
+- id: validate_invite_01
+  stance: friend
+  emotion: any
+  intimacy_range: [40, 100]
+  skeleton: [邀约印证, 提供双选项]
+  template: "是你不想提，还是真的没事？前者的话，我陪你安静待会儿。"
+  ban_words: [正在为您记录, 已存入]
+  variables: []
+
+# ---- 哀伤期切换：「你会好起来的」→「这段时间确实不容易，我在这儿」----
+- id: grief_shift_01
+  stance: companion
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [承接情绪, 稳定在场]
+  template: "这段时间确实不容易，我在这儿。"
+  ban_words: [会好起来的, 节哀]
+  variables: []
+
+- id: grief_shift_02
+  stance: medical
+  emotion: low
+  intimacy_range: [0, 100]
+  skeleton: [承接情绪, 稳定在场]
+  template: "会慢慢好起来的，先把眼前一步步来，我陪着你。"
+  ban_words: [节哀顺变, 想开点]
+  variables: []
+
+- id: grief_shift_03
+  stance: friend
+  emotion: low
+  intimacy_range: [0, 100]
+  skeleton: [承接情绪, 稳定在场]
+  template: "你不必现在就振作，这段时间我陪你扛着。"
+  ban_words: [会好起来的, 看开点]
+  variables: []

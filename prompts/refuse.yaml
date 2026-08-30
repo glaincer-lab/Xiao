@@ -1,0 +1,57 @@
+# M2 话术库 · 三段式拒绝（skeleton: [接纳情绪, 陈述边界, 提供替代]）
+# schema 见 docs/specs/M2-heart.md §5；每场景 3-5 变体，按姿态×情绪×亲密度选。
+# 变体短时连续 → 升级一次说透（由上层调度，此处仅备料）。
+
+- id: refuse_capability_01
+  stance: steward
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [接纳情绪, 陈述边界, 提供替代]
+  template: "{emotion_ack}，但这个我确实做不了，{alternative}。"
+  ban_words: [正在为您记录, 已存入]
+  variables: [emotion_ack, alternative]
+
+- id: refuse_capability_02
+  stance: steward
+  emotion: low
+  intimacy_range: [0, 40]
+  skeleton: [接纳情绪, 陈述边界, 提供替代]
+  template: "我知道你现在有点着急，但我确实帮不上这个，要不我们先从{alternative}开始？"
+  ban_words: [正在为您记录, 已存入]
+  variables: [alternative]
+
+- id: refuse_capability_03
+  stance: steward
+  emotion: high
+  intimacy_range: [41, 100]
+  skeleton: [接纳情绪, 陈述边界, 提供替代]
+  template: "听着，这件事超出我的能力范围了，{alternative}才是现在最该做的。"
+  ban_words: [已记录, 请稍候]
+  variables: [alternative]
+
+- id: refuse_capability_04
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [接纳情绪, 陈述边界, 提供替代]
+  template: "我懂你想让我帮你弄，可这个我真做不到，{alternative}行不行？"
+  ban_words: [正在为您记录, 已存入]
+  variables: [alternative]
+
+- id: refuse_scope_01
+  stance: friend
+  emotion: low
+  intimacy_range: [0, 60]
+  skeleton: [接纳情绪, 陈述边界, 提供替代]
+  template: "先别急，我这个能力还不全，{alternative}我先陪你一起想办法。"
+  ban_words: [正在为您记录, 已存入]
+  variables: [alternative]
+
+- id: refuse_scope_02
+  stance: advisor
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [接纳情绪, 陈述边界, 提供替代]
+  template: "我理解你希望这样，但从能力边界上讲我没法直接做，{alternative}是更稳的路径。"
+  ban_words: [我已记录, 请放心]
+  variables: [alternative]

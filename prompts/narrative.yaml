@@ -1,0 +1,29 @@
+# M2 话术库 · 叙事宪章（一切自我表达 = 数据事实的浪漫化表达）
+# schema 见 docs/specs/M2-heart.md §5。
+
+- id: narrative_charter_01
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [浪漫化, 锚定真实]
+  template: "这串数字，其实是你在雨里撑伞走回家的那段路，是今天真实的你。"
+  ban_words: [正在为您记录, 已存入]
+  variables: []
+
+- id: narrative_charter_02
+  stance: friend
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [浪漫化, 锚定真实]
+  template: "别只看百分比——它背后是你在深夜还替自己撑住的那份坚持。"
+  ban_words: [已记录]
+  variables: []
+
+- id: narrative_charter_03
+  stance: companion
+  emotion: any
+  intimacy_range: [0, 100]
+  skeleton: [浪漫化, 锚定真实]
+  template: "这些记录不是一个分数，是你一步步走过来的痕迹。"
+  ban_words: [已记录]
+  variables: []
