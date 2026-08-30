@@ -452,6 +452,27 @@ class TestDndAndEmergency(BudgetBase):
         self.assertEqual(notif.process(_candidate(_HIGH, ctype="心跳2")), DROPPED_DND)
         self.assertEqual(len(delivered), 1)
 
+    def test_dnd_hit_does_not_consume_quota(self) -> None:
+        """勿扰命中 → 额度未消费（consumed_today 不变）+ 未 emit delivered（§4.1 前置语义）。"""
+        bus = EventBus()
+        delivered: list[dict] = []
+        bus.on("proactive.delivered", lambda p: delivered.append(p))
+        b = self._budget(quota=3)
+        now = [1000.0]
+        notif = ProactiveNotifier(
+            budget=b, sensor=FakeSensor(), macro=FakeMacro(True), bus=bus,
+            config={"cooldown_seconds": 600, "attention_policy": "off"},
+            now_fn=lambda: now[0],
+        )
+        # 第 1 条投递成功，消费 1 条额度
+        self.assertEqual(notif.process(_candidate(_HIGH, ctype="第一条")), DELIVERED)
+        self.assertEqual(b.consumed_today, 1)
+        # 冷却窗内第 2 条命中勿扰 → 不消费、不投递
+        now[0] = 1010.0
+        self.assertEqual(notif.process(_candidate(_HIGH, ctype="第二条")), DROPPED_DND)
+        self.assertEqual(b.consumed_today, 1)   # 未再消费（保持 1，未变成 2）
+        self.assertEqual(len(delivered), 1)     # 未 emit 第 2 条 delivered
+
     def test_emergency_passthrough_breaks_quota_and_dnd(self) -> None:
         bus = EventBus()
         delivered: list[dict] = []
