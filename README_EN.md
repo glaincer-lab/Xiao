@@ -16,7 +16,7 @@ Every design decision in Xiao traces back to these:
 2. **Proactive, but restrained** — initiative without memory is harassment; initiative with memory is what makes it a companion. Every proactive utterance passes one master gate. Silence beats small talk.
 3. **Sense before acting, verify after** — check device state before control, read it back after. Proactive means suggest; touching anything real requires approval.
 
-Full design thinking is public: [Product Spec](docs/PRODUCT.md) (Chinese) ｜ [Roadmap M0–M6](docs/ROADMAP.md) ｜ [Conversation Eval Suite](docs/specs/EVAL.md)
+Full design thinking is public: [Product Spec](docs/PRODUCT.md) (Chinese) ｜ [Roadmap M0–M6](docs/ROADMAP.md)
 
 ## Current Capabilities (v1, shipped)
 
@@ -82,9 +82,7 @@ Python audio pipeline (wake → VAD → streaming ASR) + cross-module event bus 
 ## Documentation
 
 - [Product Spec](docs/PRODUCT.md) — vision, philosophies, document map (Chinese)
-- [Roadmap](docs/ROADMAP.md) — full M0–M6 design and acceptance gates (Chinese)
-- [DESIGN.md](docs/DESIGN.md) — technical architecture (state machines / routing / bridge / approvals)
-- [AGENTS.md](AGENTS.md) — project rules (third-user perspective + engine layering)
+- [Roadmap](docs/ROADMAP.md) — full M0–M6 design and current progress (Chinese)
 
 ## License
 
