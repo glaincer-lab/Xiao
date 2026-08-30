@@ -3,7 +3,7 @@
 实现 M3-proactive.md §4.1 候选消费流程：
     候选生成 → 四维打分排名
       → [关系价值单项爆表（生日/纪念日）→ 豁免穿透，不占额度]
-      → 总分 >0.6 → 消费 1 条额度 → 勿扰检查（时段/冷却/注意力）→ 开口
+      → 总分 >0.6 → 勿扰检查（时段/冷却/注意力）→ 消费 1 条额度 → 开口
       → 总分 ≤0.6 → 静默丢弃（记日志供调参）
 
 硬护栏（§5）：勿扰时段 + 全局冷却 + 每日额度上限；紧急穿透例外（用户可配清单）。
@@ -46,7 +46,7 @@ def _default_bus():
 
 
 class ProactiveNotifier:
-    """M3 主动候选消费器：打分 → 豁免 → 消费 → 勿扰 → 开口，全程走 event_bus 事件。
+    """M3 主动候选消费器：打分 → 豁免 → 勿扰 → 消费 → 开口，全程走 event_bus 事件。
 
     依赖均可用关键字注入（便于测试替身；缺省懒加载真实单例）：
         budget  ProactiveBudget（默认新建）
@@ -119,17 +119,17 @@ class ProactiveNotifier:
             "内容草案": draft,
         })
 
-        # ⑥ 消费 1 条额度（关系爆表豁免 / 紧急穿透 不占额度）
+        # ⑥ 勿扰检查（前置：勿扰命中不消费额度、不投递）；紧急穿透例外（§5）
+        if not is_emergency and self._dnd_blocks():
+            logger.info("[m3.notify] 勿扰拦截，候选丢弃（未消费额度）: %s", ctype)
+            return DROPPED_DND
+
+        # ⑦ 消费 1 条额度（关系爆表豁免 / 紧急穿透 不占额度）
         if not (exempt_quota or is_emergency):
             if not self._budget.can_consume(1):
                 logger.info("[m3.notify] 当日额度已满，候选丢弃: %s", ctype)
                 return DROPPED_QUOTA_EXCEEDED
             self._budget.consume(1)
-
-        # ⑦ 勿扰检查（时段/冷却/注意力）；紧急穿透例外（§5）
-        if not is_emergency and self._dnd_blocks():
-            logger.info("[m3.notify] 勿扰拦截，候选丢弃: %s", ctype)
-            return DROPPED_DND
 
         # ⑧ 开口：发布 proactive.delivered {id,用户响应}
         delivery_id = uuid.uuid4().hex[:12]
