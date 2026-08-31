@@ -312,4 +312,23 @@ def judge_context(text: str, hit_word: str, cfg: dict | None = None) -> str:
     return _get_engine(cfg).judge(text, hit_word)
 
 
-__all__ = ["judge_context", "is_semantic_available", "semantic_error"]
+def encode(text: str, cfg: dict | None = None) -> list[float]:
+    """文本 → 512 维 L2 归一化向量（list[float]）。
+
+    复用 bge-small-zh-v1.5 的 embedding 推理（`_Engine._embed` 已产出 L2 归一化向量），
+    供向量记忆层（M1-vector-memory）做语义检索。模型缺失 / 加载失败 / 推理失败 →
+    抛 `SemanticUnavailable`，调用方应降级（如回退全量注入）。
+    """
+    eng = _get_engine(cfg)
+    if not eng.is_available():
+        raise SemanticUnavailable(eng.error_reason() or "语义模型不可用")
+    try:
+        v = eng._embed(text or "")
+        return [float(x) for x in np.asarray(v, dtype=np.float32)]
+    except SemanticUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise SemanticUnavailable(f"embedding 推理失败：{exc}") from exc
+
+
+__all__ = ["judge_context", "is_semantic_available", "semantic_error", "encode", "SemanticUnavailable"]
