@@ -201,6 +201,15 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 pipeline.answer_approval(str(msg.get("decision", "")))
             elif t == "interrupt":
                 pipeline.interrupt()
+            elif t == "storage_action":
+                # 存储满弹窗：用户选「清理旧记忆」→ 后台容量清理（P0 永不失效）
+                if str(msg.get("action", "")) == "clean":
+                    try:
+                        from backend.memv1.maintenance import clean_now
+
+                        clean_now()
+                    except Exception:  # noqa: BLE001
+                        pass
             elif t == "ping":
                 await ws.send_json({"type": "pong"})
 

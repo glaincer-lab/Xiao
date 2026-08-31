@@ -25,6 +25,7 @@ DEFAULT_SWEEP_INTERVAL_SEC = 6 * 3600
 _lock = threading.Lock()
 _last_consolidation = 0.0
 _sweeper_started = False
+_last_threshold = "ok"  # 上次通知过的存储阈值状态（去重：只在变化时弹窗）
 
 
 def index_now(
@@ -97,6 +98,43 @@ def sweep_now(
     }
 
 
+def _sweep_and_notify() -> dict[str, Any]:
+    """sweep_now + 阈值状态变化时 emit storage_threshold 事件（去重，避免每轮都弹）。"""
+    global _last_threshold
+    try:
+        r = sweep_now()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[maintenance] 治理检查失败: {exc}")
+        return {"status": "error"}
+    level = str(r.get("threshold", "ok"))
+    with _lock:
+        changed = level != _last_threshold
+        _last_threshold = level
+    if changed and level in ("warn", "critical"):
+        try:
+            from backend.session.state import emit
+
+            emit(
+                "storage_threshold",
+                level=level,
+                used_mb=int(r.get("used_bytes", 0) // (1024 * 1024)),
+                budget_mb=int(r.get("budget_bytes", 0) // (1024 * 1024)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[maintenance] 存储满事件发送失败: {exc}")
+    return r
+
+
+def clean_now() -> dict[str, Any]:
+    """容量清理（用户确认后）：失效最旧的到回预算，最低保留最近 1 单元，P0 永不失效。"""
+    from backend.memv1.governance import enforce_capacity, resolve_budget_mb
+    from backend.memv1.vector_store import get_vector_store
+
+    store = get_vector_store()
+    budget = resolve_budget_mb()
+    return enforce_capacity(store, budget_bytes=budget * 1024 * 1024)
+
+
 def consolidate_if_idle(session_id: str = "xiao-main") -> dict[str, Any]:
     """空闲满 15 分钟才巩固（节流，调云 LLM）。返回 trigger_consolidation 的结果。"""
     if not _should_consolidate():
@@ -112,7 +150,7 @@ def consolidate_if_idle(session_id: str = "xiao-main") -> dict[str, Any]:
 def run_after_turn() -> None:
     """对话结束调用：daemon 线程异步跑 索引 → 治理 → 巩固（节流），不阻塞对话。"""
     def _job() -> None:
-        for fn in (index_now, sweep_now, consolidate_if_idle):
+        for fn in (index_now, _sweep_and_notify, consolidate_if_idle):
             try:
                 fn()
             except Exception as exc:  # noqa: BLE001
@@ -134,7 +172,7 @@ def start_sweeper(interval_sec: int | None = None) -> None:
         while True:
             time.sleep(interval)
             try:
-                sweep_now()
+                _sweep_and_notify()
             except Exception as exc:  # noqa: BLE001
                 print(f"[maintenance] 定时兜底失败: {exc}")
 
@@ -180,6 +218,7 @@ __all__ = [
     "index_now",
     "sweep_now",
     "consolidate_if_idle",
+    "clean_now",
     "run_after_turn",
     "start_sweeper",
 ]
