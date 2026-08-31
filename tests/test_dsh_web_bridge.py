@@ -213,11 +213,15 @@ class StreamTests(_Base):
         self.assertEqual(out, "你好，世界")
         self.assertEqual(b._idle_sessions, ["s1"])
         self.assertTrue(rpc.subscribed.wait(5))
-        self.assertEqual([k for k, _ in events], ["work_step", "dsh_chunk", "dsh_chunk", "work_step"])
-        self.assertEqual(events[0][1], {"name": "bash", "status": "start", "summary": "command=ls tmp"})
-        self.assertEqual(events[1][1], {"text": "你好"})
-        self.assertEqual(events[2][1], {"text": "你好，世界"})
-        done = events[3][1]
+        # event_sink 现为混合流：原始事件（tool/call、assistant/chunk、tool/result、turn/end）
+        # 供 audit fact plane 追加记录，派生态（work_step、dsh_chunk）供前端上屏；
+        # 前端工作台只取派生态，故先过滤再断言。
+        steps = [(k, p) for k, p in events if k in ("work_step", "dsh_chunk")]
+        self.assertEqual([k for k, _ in steps], ["work_step", "dsh_chunk", "dsh_chunk", "work_step"])
+        self.assertEqual(steps[0][1], {"name": "bash", "status": "start", "summary": "command=ls tmp"})
+        self.assertEqual(steps[1][1], {"text": "你好"})
+        self.assertEqual(steps[2][1], {"text": "你好，世界"})
+        done = steps[3][1]
         self.assertEqual(done["name"], "bash")
         self.assertEqual(done["status"], "done")
         self.assertIn("a.txt", done["summary"])
