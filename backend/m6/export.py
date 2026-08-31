@@ -1,19 +1,23 @@
 """M6-M0 记忆全量导出/迁移层（设计书 M6-growth.md §4.3）。
 
-一键打包四类资产（记忆/画像/人设/人物卡/成长记录）为单个 JSON，新设备导入
-实现「搬家不失忆」；按 id 选择性删除实现「忘掉那段」被遗忘权。导出内容属
-高密度隐私 → 返回 dict 自带 "提示加密": True，提示落盘前先加密。
+一键打包九类资产（记忆/画像/人设/人物卡/成长记录/世界观/哀伤标签/入册状态/
+纪念锚点）为单个 JSON，新设备导入实现「搬家不失忆」；按 id 选择性删除实现
+「忘掉那段」被遗忘权。导出内容属高密度隐私 → 返回 dict 自带 "提示加密": True，
+提示落盘前先加密。
 
 数据来源全部为各持久层公开只读接口（DataTrack.items / PersonaStore.load_persona
-/ habit_profile / list_kinship_cards / GrowthStore 三轨读取）；导入与删除为
-「快照恢复 / 条目移除」：直接写回与各持久层一致的落盘布局文件
-（memv4: {root}/{kind}.json；persona: {root}/persona/*.json；
-growth: {root}/growth.json），保证 id/ts/version 等字段保真，不经业务 API
-逐条重建（那会重新生成 id 破坏跨资产引用）。原子写（tmp + os.replace）。
+/ habit_profile / list_kinship_cards / lorebook_entries 目录读取 / grief_tags /
+GrowthStore 三轨读取）+ 直接读状态文件（canonizer_state.json / memorial.json）；
+导入与删除为「快照恢复 / 条目移除」：直接写回与各持久层一致的落盘布局文件
+（memv4: {root}/{kind}.json；persona: {root}/persona/*.json、
+{root}/persona/lorebook/*.json、{root}/persona/grief.json；
+growth: {root}/growth.json、{root}/canonizer_state.json、{root}/memorial.json），
+保证 id/ts/version 等字段保真，不经业务 API 逐条重建（那会重新生成 id 破坏
+跨资产引用）。原子写（tmp + os.replace）。
 
 用法：
     ex = MemoryExporter(store, persona_root=..., memv4_root=..., bus=bus)
-    data = ex.export()                 # {"version", "提示加密", "记忆", "画像", "人设", "人物卡", "成长记录"}
+    data = ex.export()   # {"version", "提示加密", "记忆", "画像", "人设", "人物卡", "成长记录", "世界观", "哀伤标签", "入册状态", "纪念锚点"}
     ex.import_data(data)               # 恢复到同一组 root
     ex.forget("session_logs", id)      # 选择性删除
 """
@@ -59,7 +63,7 @@ def _load_json(path: Path, default: Any) -> Any:
 
 
 class MemoryExporter:
-    """M6 §4.3 记忆全量导出/迁移：四类资产一键打包、导入恢复、选择性删除。
+    """M6 §4.3 记忆全量导出/迁移：九类资产一键打包、导入恢复、选择性删除。
 
     Args:
         store: GrowthStore 实例（导出源 / 导入目标，root 从其 _root 获取）。
@@ -87,7 +91,7 @@ class MemoryExporter:
     # ------------------------------------------------------------------ #
 
     def export(self) -> dict[str, Any]:
-        """打包四类资产为单个 dict（含 version 与 "提示加密": True）。
+        """打包九类资产为单个 dict（含 version 与 "提示加密": True）。
 
         发布 "memory.export_requested" 事件（bus 注入时），payload {"范围": "全量"}。
         """
@@ -100,6 +104,10 @@ class MemoryExporter:
             "人设": self._export_persona(),
             "人物卡": self._export_kinship(),
             "成长记录": self._export_growth(),
+            "世界观": self._export_lorebook(),
+            "哀伤标签": self._export_grief(),
+            "入册状态": self._export_canonizer_state(),
+            "纪念锚点": self._export_memorial(),
         }
         if self._bus is not None:
             self._bus.emit("memory.export_requested", {"范围": "全量"})
@@ -126,6 +134,36 @@ class MemoryExporter:
             "shared_memories": self._store.shared_memories(),
             "micro_cooling": self._store.micro_cooling(),
         }
+
+    def _export_lorebook(self) -> dict[str, list[Any]]:
+        """打包世界观：persona/lorebook/*.json 逐文件保留「文件名→内容」映射。
+
+        每个文件为 list[dict]（如 world.json / self.json）；空目录给 {}。
+        """
+        out: dict[str, list[Any]] = {}
+        lorebook_dir = self._persona_root / "persona" / "lorebook"
+        if not lorebook_dir.is_dir():
+            return out
+        for path in sorted(lorebook_dir.glob("*.json")):
+            data = _load_json(path, [])
+            out[path.name] = data if isinstance(data, list) else []
+        return out
+
+    def _export_grief(self) -> list[dict[str, Any]]:
+        """打包哀伤标签：persona/grief.json（list，缺失给 []）。"""
+        data = _load_json(self._persona_root / "persona" / "grief.json", [])
+        return data if isinstance(data, list) else []
+
+    def _export_canonizer_state(self) -> dict[str, Any]:
+        """打包入册状态：canonizer_state.json（缺失给 {"pending": [], "cooldowns": {}, "weekly": {}}）。"""
+        return _load_json(
+            self._growth_root / "canonizer_state.json",
+            {"pending": [], "cooldowns": {}, "weekly": {}},
+        )
+
+    def _export_memorial(self) -> dict[str, Any]:
+        """打包纪念锚点：memorial.json（缺失给 {"last_ask": {}}）。"""
+        return _load_json(self._growth_root / "memorial.json", {"last_ask": {}})
 
     # ------------------------------------------------------------------ #
     # 导入：从导出 dict 恢复到本实例持有的三个 root（快照写回，字段保真）
@@ -184,11 +222,39 @@ class MemoryExporter:
             _atomic_write_json(self._growth_root / "growth.json", out)
             self._refresh_store()
 
+        # 世界观（persona/lorebook/*.json：逐文件写回，保留「文件名→内容」映射）
+        lorebook = data.get("世界观")
+        if isinstance(lorebook, dict):
+            for name, entries in lorebook.items():
+                if not isinstance(entries, list):
+                    raise ValueError(
+                        f"世界观 {name!r} 必须是列表，收到 {type(entries).__name__}"
+                    )
+                if _unsafe_filename(name):
+                    raise ValueError(f"世界观文件名非法：{name!r}")
+                _atomic_write_json(self._persona_root / "persona" / "lorebook" / name, entries)
+
+        # 哀伤标签（persona/grief.json：list）
+        grief = data.get("哀伤标签")
+        if isinstance(grief, list):
+            _atomic_write_json(self._persona_root / "persona" / "grief.json", grief)
+
+        # 入册状态（canonizer_state.json：{pending, cooldowns, weekly}）
+        state = data.get("入册状态")
+        if isinstance(state, dict):
+            _atomic_write_json(self._growth_root / "canonizer_state.json", state)
+
+        # 纪念锚点（memorial.json：{last_ask}）
+        memorial = data.get("纪念锚点")
+        if isinstance(memorial, dict):
+            _atomic_write_json(self._growth_root / "memorial.json", memorial)
+
     @staticmethod
     def _as_list(value: Any, label: str) -> list[Any]:
         if not isinstance(value, list):
             raise ValueError(f"成长记录 {label} 必须是列表，收到 {type(value).__name__}")
         return value
+
 
     def _refresh_store(self) -> None:
         """导入/删除改动 growth.json 后，刷新传入 GrowthStore 的内存态（立即可见）。"""
@@ -268,6 +334,16 @@ class MemoryExporter:
     def _require_removed(kept: list[Any], before: int, label: str, record_id: str) -> None:
         if len(kept) == before:
             raise ValueError(f"{label} 中找不到 id={record_id!r} 的条目，未做任何删除")
+
+
+def _unsafe_filename(name: str) -> bool:
+    """世界观文件名必须是纯文件名（防目录穿越写入 persona 之外）。"""
+    return (
+        not name
+        or name in (".", "..")
+        or "/" in name
+        or "\\" in name
+    )
 
 
 __all__ = ["MemoryExporter", "EXPORT_VERSION"]
