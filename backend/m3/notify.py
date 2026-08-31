@@ -36,6 +36,7 @@ DROPPED_SCORE_LOW = "dropped_score_low"                # 总分 ≤0.6 静默丢
 DROPPED_QUOTA_EXCEEDED = "dropped_quota_exceeded"      # 额度用满
 DROPPED_DND = "dropped_dnd"                            # 勿扰拦截
 DELIVERED = "delivered"                                # 开口投递
+SHADOW_RECORDED = "shadow_recorded"              # 影子期只记录不真投（M3-M6）
 
 logger = logging.getLogger("m3.notify")
 
@@ -64,6 +65,8 @@ class ProactiveNotifier:
         bus: Any | None = None,
         config: Mapping[str, Any] | None = None,
         now_fn: Callable[[], float] | None = None,
+        shadow: bool = False,
+        shadow_recorder: Any | None = None,
     ) -> None:
         self._budget = budget if budget is not None else ProactiveBudget()
         self._sensor = sensor
@@ -77,6 +80,8 @@ class ProactiveNotifier:
         self._emergency_passthrough = list(cfg.get("emergency_passthrough", []))  # 用户可配紧急清单
         self._now_fn = now_fn or time.time
         self._last_delivered_at: float | None = None
+        self._shadow = bool(shadow)
+        self._shadow_recorder = shadow_recorder
 
     # ---- 主入口：执行一条候选的消费流程 ----
     def process(self, candidate: Mapping[str, Any]) -> str:
@@ -131,9 +136,22 @@ class ProactiveNotifier:
                 return DROPPED_QUOTA_EXCEEDED
             self._budget.consume(1)
 
-        # ⑧ 开口：发布 proactive.delivered {id,用户响应}
+        # ⑧ 开口（影子期：只记录不真投）
         delivery_id = uuid.uuid4().hex[:12]
         self._last_delivered_at = self._now_fn()
+        if self._shadow:
+            if self._shadow_recorder is not None:
+                self._shadow_recorder.record({
+                    "id": delivery_id,
+                    "类型": ctype,
+                    "四维分": four_dim,
+                    "内容草案": draft,
+                    "是否达阈": True,
+                    "将消费": 0 if (exempt_quota or is_emergency) else 1,
+                    "时间戳": self._now_fn(),
+                })
+            logger.info("[m3.notify] 影子期记录（不真投）: %s id=%s", ctype, delivery_id)
+            return SHADOW_RECORDED
         self._bus.emit("proactive.delivered", {
             "id": delivery_id,
             "用户响应": str(candidate.get("用户响应", "")),
