@@ -150,6 +150,56 @@ class Win32Provider:
         finally:
             kernel32.CloseHandle(h)
 
+    def active_process_names(self) -> list[str] | None:
+        """枚举系统活跃进程 exe 基名（小写）；失败返回 None（不可知，供 fail-closed）。
+
+        用 CreateToolhelp32Snapshot + Process32First/NextW 纯 win32 枚举，不引入 psutil。
+        """
+        import ctypes
+        kernel32 = self._k()
+
+        TH32CS_SNAPPROCESS = 0x00000002
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", ctypes.c_ulong),
+                ("cntUsage", ctypes.c_ulong),
+                ("th32ProcessID", ctypes.c_ulong),
+                ("th32DefaultHeapID", ctypes.c_void_p),
+                ("th32ModuleID", ctypes.c_ulong),
+                ("cntThreads", ctypes.c_ulong),
+                ("th32ParentProcessID", ctypes.c_ulong),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", ctypes.c_ulong),
+                ("szExeFile", ctypes.c_wchar * 260),
+            ]
+
+        kernel32.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+        kernel32.CreateToolhelp32Snapshot.argtypes = [ctypes.c_ulong, ctypes.c_ulong]
+        kernel32.Process32FirstW.restype = ctypes.c_int
+        kernel32.Process32FirstW.argtypes = [ctypes.c_void_p, ctypes.POINTER(PROCESSENTRY32W)]
+        kernel32.Process32NextW.restype = ctypes.c_int
+        kernel32.Process32NextW.argtypes = [ctypes.c_void_p, ctypes.POINTER(PROCESSENTRY32W)]
+        kernel32.CloseHandle.restype = ctypes.c_int
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+
+        snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        invalid = ctypes.c_void_p(-1).value  # INVALID_HANDLE_VALUE
+        if not snap or snap == invalid:
+            return None
+        names: list[str] = []
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            if kernel32.Process32FirstW(snap, ctypes.byref(entry)):
+                while True:
+                    names.append(entry.szExeFile.lower())
+                    if not kernel32.Process32NextW(snap, ctypes.byref(entry)):
+                        break
+        finally:
+            kernel32.CloseHandle(snap)
+        return names
+
     @staticmethod
     def _rect_type():
         import ctypes
@@ -375,6 +425,13 @@ class AttentionSensor:
         except Exception:  # noqa: BLE001
             return None
 
+    def active_process_names(self) -> list[str] | None:
+        """广度扫描系统活跃进程 exe 基名（小写）；失败返回 None（不可知，fail-closed 用）。"""
+        try:
+            return self._win32.active_process_names()
+        except Exception:  # noqa: BLE001
+            return None
+
     def is_fullscreen(self, hwnd: int | None = None) -> bool:
         """前台窗口是否全屏：窗口矩形覆盖所在监视器 ±2px 且无标题栏（WS_CAPTION 未置位）。"""
         if hwnd is None:
@@ -487,16 +544,24 @@ def _sensor() -> AttentionSensor:
 
 
 def guard_blacklisted_window() -> str | None:
-    """工具分发层守卫：前台窗口进程名命中黑名单 → 返回拒绝话术（fail-closed）。
+    """工具分发层守卫：前台命中 + 系统活跃进程广度扫描熔断（fail-closed）。
 
-    - 安全提权项：**不存储、不发布**过程名，仅在工具分发（VLM 截屏/鼠标模拟）入口拒绝授权，
-      符合 M0-core §5 零留存边界。
-    - 查询失败（非 win32 / 打开进程失败）→ 视为不可知，返回 None（不误拦）。
+    - 前台窗口进程名命中黑名单 → 拒绝（快速路径）。
+    - 广度扫描：任一活跃进程命中黑名单（如后台常驻反外挂游戏盾）→ 熔断拒绝，
+      物理模拟鼠标键盘在最底层驱动级句柄强制熔断（M0-core §4.2 安全提权项）。
+    - 广度扫描不可知（枚举失败）→ fail-closed：保守拒绝（宁可错拒，不误放）。
+    - 安全提权项：**不存储、不发布**过程名，仅在工具分发入口拒绝授权，符合 M0-core §5 零留存边界。
     - 返回非 None 时话术固定为 <block_message>。
     """
-    name = _sensor().foreground_process_name()
-    if is_blacklisted(name):
+    sensor = _sensor()
+    if is_blacklisted(sensor.foreground_process_name()):
         return _BLOCK_MSG
+    names = sensor.active_process_names()
+    if names is None:
+        return _BLOCK_MSG  # fail-closed 熔断：扫描不可知时保守拒绝
+    for n in names:
+        if is_blacklisted(n):
+            return _BLOCK_MSG
     return None
 
 

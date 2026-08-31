@@ -91,6 +91,31 @@ EVENT_TYPES: frozenset[str] = frozenset({
 _DEFAULT_EVENT_LOG_DIR = Path(__file__).resolve().parent.parent / "logs" / "events"
 
 
+# ---------------------------------------------------------------------------
+# 取消屏蔽（RS-01 防御）：线程本地的「已取消」标记。
+# 当某执行上下文（被取消的巩固/DSH 任务）已判定取消后，调用 mark_cancelled()
+# 打标，其后续 bus.emit(...) 一律静默丢弃，防止旧线程/旧任务发布事件污染其它
+# 模块缓存（如 M1 巩固取消后仍发布 memory.profile_updated 刷新 M2 快照 → 姿态倒置）。
+# 线程本地隔离：不同线程的取消标记互不影响。
+# ---------------------------------------------------------------------------
+_cancel_state = threading.local()
+
+
+def mark_cancelled() -> None:
+    """标记当前线程已取消；此后该线程的 emit 静默丢弃。"""
+    _cancel_state.cancelled = True
+
+
+def clear_cancelled() -> None:
+    """清除当前线程的取消标记，恢复 emit。"""
+    _cancel_state.cancelled = False
+
+
+def is_emit_suppressed() -> bool:
+    """当前线程的 emit 是否被屏蔽（诊断/测试用）。"""
+    return bool(getattr(_cancel_state, "cancelled", False))
+
+
 class EventBus:
     """线程安全的按事件名发布/订阅总线。
 
@@ -151,6 +176,11 @@ class EventBus:
         单个 handler 抛异常不影响其它 handler（与 state.py 一致）。
         """
         self._validate(event_type)
+        if is_emit_suppressed():
+            logging.getLogger(__name__).debug(
+                "当前线程已标记取消，静默丢弃事件: %s", event_type
+            )
+            return
         data: dict[str, Any] = payload if payload is not None else {}
         with self._lock:
             if self._persist:
@@ -286,4 +316,11 @@ class EventBus:
 bus = EventBus()
 
 
-__all__ = ["EventBus", "EVENT_TYPES", "bus"]
+__all__ = [
+    "EventBus",
+    "EVENT_TYPES",
+    "bus",
+    "mark_cancelled",
+    "clear_cancelled",
+    "is_emit_suppressed",
+]

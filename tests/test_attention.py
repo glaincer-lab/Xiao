@@ -88,6 +88,8 @@ class FakeWin32:
         style: int = 0,
         cpu: float = 5.0,
         mem: float = 40.0,
+        active_procs: list[str] | None = None,
+        scan_available: bool = True,
     ) -> None:
         self._idle = idle_seconds
         self._hwnd = hwnd
@@ -97,6 +99,8 @@ class FakeWin32:
         self._style = style
         self._cpu = cpu
         self._mem = mem
+        self._active_procs = list(active_procs) if active_procs is not None else []
+        self._scan_available = scan_available
 
     def last_input_seconds(self) -> float:
         return self._idle
@@ -106,6 +110,9 @@ class FakeWin32:
 
     def process_name_of(self, hwnd: int) -> str | None:
         return self._proc
+
+    def active_process_names(self) -> list[str] | None:
+        return self._active_procs if self._scan_available else None
 
     def window_rect(self, hwnd: int):
         return self._rect
@@ -150,11 +157,16 @@ class TestBlacklistGuard(unittest.TestCase):
         self.addCleanup(setattr, computer_mod, "config", self._old_computer_config)
         self.addCleanup(set_confirm_hook, None)
 
-    def _patch_sensor(self, proc: str | None) -> None:
+    def _patch_sensor(
+        self,
+        proc: str | None,
+        active_procs: list[str] | None = None,
+        scan_available: bool = True,
+    ) -> None:
         sensor = AttentionSensor(
             auth=AuthorizationCenter(_auth_data(True)),
             bus=EventBus(),
-            win32=FakeWin32(proc=proc),
+            win32=FakeWin32(proc=proc, active_procs=active_procs, scan_available=scan_available),
         )
         attention._default_sensor = sensor
 
@@ -196,6 +208,26 @@ class TestBlacklistGuard(unittest.TestCase):
         self.assertFalse(is_blacklisted("notepad.exe"))
         self.assertFalse(is_blacklisted(None))
         self.assertFalse(is_blacklisted(""))
+
+    def test_background_blacklisted_process_blocks(self):
+        # 前台正常，但后台活跃进程命中黑名单 → 广度扫描熔断拒绝
+        self._patch_sensor("notepad.exe", active_procs=["valorant.exe"])
+        out = asyncio.run(ComputerMouseTool().run(action="click", x=1, y=1))
+        self.assertEqual(out, BLOCK_MESSAGE)
+
+    def test_scan_unavailable_fails_closed(self):
+        # 广度扫描不可知 → fail-closed 熔断（宁可错拒不误放）
+        self._patch_sensor("notepad.exe", scan_available=False)
+        out = asyncio.run(ComputerMouseTool().run(action="click", x=1, y=1))
+        self.assertEqual(out, BLOCK_MESSAGE)
+
+    def test_no_blacklisted_process_allows(self):
+        # 前台正常 + 活跃进程正常 → 放行
+        self._patch_sensor("notepad.exe", active_procs=["chrome.exe"])
+        with mock.patch.object(ComputerMouseTool, "_execute") as ex:
+            out = asyncio.run(ComputerMouseTool().run(action="click", x=1, y=1))
+        self.assertNotEqual(out, BLOCK_MESSAGE)
+        self.assertTrue(ex.called)
 
 
 class TestFullscreenEvent(unittest.TestCase):

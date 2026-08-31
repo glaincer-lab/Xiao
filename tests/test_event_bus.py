@@ -25,7 +25,14 @@ def _tmpdir():
         shutil.rmtree(d, ignore_errors=True)
 
 
-from backend.event_bus import EVENT_TYPES, EventBus, bus
+from backend.event_bus import (
+    EVENT_TYPES,
+    EventBus,
+    bus,
+    mark_cancelled,
+    clear_cancelled,
+    is_emit_suppressed,
+)
 
 
 class EventBusTest(unittest.TestCase):
@@ -156,6 +163,44 @@ class EventBusTest(unittest.TestCase):
             bus.on("growth.canonized", lambda p: seen.append("ok"))
             bus.emit("growth.canonized", {"记录id": "x"})
             self.assertEqual(seen, ["ok"])
+
+class TestCancelledSuppression(unittest.TestCase):
+    """RS-01 防御：被取消线程的 emit 静默丢弃（不污染其它模块缓存 / 不落盘）。"""
+
+    def setUp(self) -> None:
+        self.bus = EventBus()
+        self.addCleanup(clear_cancelled)
+
+    def test_marked_cancelled_suppresses_emit(self) -> None:
+        seen: list[dict] = []
+        self.bus.on("memory.profile_updated", lambda p: seen.append(p))
+        mark_cancelled()
+        self.assertTrue(is_emit_suppressed())
+        self.bus.emit("memory.profile_updated", {"version": "v1"})
+        self.assertEqual(seen, [])  # 已取消 → 不投递任何订阅者
+
+    def test_clear_cancelled_restores_emit(self) -> None:
+        seen: list[dict] = []
+        self.bus.on("memory.profile_updated", lambda p: seen.append(p))
+        mark_cancelled()
+        self.bus.emit("memory.profile_updated", {"version": "v1"})
+        clear_cancelled()
+        self.assertFalse(is_emit_suppressed())
+        self.bus.emit("memory.profile_updated", {"version": "v2"})
+        self.assertEqual(seen, [{"version": "v2"}])  # 恢复后正常投递
+
+    def test_unknown_event_still_fails_fast_when_cancelled(self) -> None:
+        mark_cancelled()
+        with self.assertRaises(ValueError):
+            self.bus.emit("not.a.real.event", {})  # fail-fast 优先于取消屏蔽
+
+    def test_persist_also_suppressed_when_cancelled(self) -> None:
+        with _tmpdir() as d:
+            bus = EventBus(persist=True, log_dir=d)
+            mark_cancelled()
+            bus.emit("memory.profile_updated", {"version": "v1"})
+            self.assertEqual(bus.persisted_count(), 0)  # 取消 → 不落盘
+
 
 if __name__ == "__main__":
     unittest.main()
