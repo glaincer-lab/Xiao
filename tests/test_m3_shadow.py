@@ -1,5 +1,7 @@
 """M3-M6 影子期假投递验收测试。"""
+import tempfile
 import unittest
+from pathlib import Path
 
 from backend.m3.budget import ProactiveBudget
 from backend.m3.notify import ProactiveNotifier, SHADOW_RECORDED, DELIVERED
@@ -29,7 +31,7 @@ class TestShadowNoRealDelivery(unittest.TestCase):
     def test_shadow_no_delivered_event(self):
         bus = _Bus()
         rec = ShadowRecorder()
-        n = ProactiveNotifier(budget=ProactiveBudget(daily_quota=10), sensor=_Sensor(), macro=_Macro(), bus=bus, shadow=True, shadow_recorder=rec)
+        n = ProactiveNotifier(budget=ProactiveBudget(daily_quota=10, persist_path=Path(tempfile.mkdtemp()) / "b.json"), sensor=_Sensor(), macro=_Macro(), bus=bus, shadow=True, shadow_recorder=rec)
         status = n.process(_candidate())
         self.assertEqual(status, SHADOW_RECORDED)
         self.assertEqual(bus.count("proactive.delivered"), 0)
@@ -38,7 +40,7 @@ class TestShadowNoRealDelivery(unittest.TestCase):
     def test_shadow_records(self):
         bus = _Bus()
         rec = ShadowRecorder()
-        n = ProactiveNotifier(budget=ProactiveBudget(daily_quota=10), sensor=_Sensor(), macro=_Macro(), bus=bus, shadow=True, shadow_recorder=rec)
+        n = ProactiveNotifier(budget=ProactiveBudget(daily_quota=10, persist_path=Path(tempfile.mkdtemp()) / "b.json"), sensor=_Sensor(), macro=_Macro(), bus=bus, shadow=True, shadow_recorder=rec)
         n.process(_candidate())
         self.assertEqual(len(rec.records), 1)
         self.assertTrue(rec.records[0]["是否达阈"])
@@ -46,7 +48,7 @@ class TestShadowNoRealDelivery(unittest.TestCase):
 
     def test_real_mode_delivers(self):
         bus = _Bus()
-        n = ProactiveNotifier(budget=ProactiveBudget(daily_quota=10), sensor=_Sensor(), macro=_Macro(), bus=bus, shadow=False)
+        n = ProactiveNotifier(budget=ProactiveBudget(daily_quota=10, persist_path=Path(tempfile.mkdtemp()) / "b.json"), sensor=_Sensor(), macro=_Macro(), bus=bus, shadow=False)
         status = n.process(_candidate())
         self.assertEqual(status, DELIVERED)
         self.assertEqual(bus.count("proactive.delivered"), 1)

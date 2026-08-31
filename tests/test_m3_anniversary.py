@@ -19,7 +19,9 @@ TDD 契约：先写验收断言再实现，覆盖 docs/specs/M3-proactive.md：
 """
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from backend.event_bus import EVENT_TYPES, EventBus
@@ -125,7 +127,7 @@ class TestAnniversaryCandidate(unittest.TestCase):
 # =====================================================================
 class TestWitnessExemptQuota(unittest.TestCase):
     def test_boom_candidate_exempts_quota(self) -> None:
-        budget = ProactiveBudget(daily_quota=3)
+        budget = ProactiveBudget(daily_quota=3, persist_path=Path(tempfile.mkdtemp()) / "b.json")
         notifier = ProactiveNotifier(budget=budget)
         eng = AnniversaryEngine(bus=EventBus())
         cand = eng.build_candidate(_milestone_entry())
@@ -134,7 +136,7 @@ class TestWitnessExemptQuota(unittest.TestCase):
         self.assertEqual(budget.consumed_today, 0)  # 关系爆表豁免，不占额度
 
     def test_boom_candidate_still_respects_dormant_gate(self) -> None:
-        budget = ProactiveBudget(daily_quota=3)
+        budget = ProactiveBudget(daily_quota=3, persist_path=Path(tempfile.mkdtemp()) / "b.json")
         macro = mock.Mock()
         macro.is_proactive_allowed.return_value = False  # DORMANT
         notifier = ProactiveNotifier(budget=budget, macro=macro)
