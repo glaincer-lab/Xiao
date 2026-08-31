@@ -181,6 +181,17 @@ tasks:
 audit:
   enabled: true
   log_dir: logs/audit
+memory:
+  short_window_days: 730
+  long_window_days: 3650
+  storage_budget_mb: 300
+  storage_budget_custom_mb: 0
+  retrieval_top_k: 8
+  retrieval_weights:
+    semantic: 0.25
+    keyword: 0.25
+    recency: 0.25
+    importance: 0.25
 router:
   mode: auto
   log_path: logs/routes.jsonl

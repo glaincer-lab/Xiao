@@ -24,6 +24,7 @@ GROUPS = [
     {"key": "llm", "label": "大模型"},
     {"key": "exec", "label": "执行"},
     {"key": "perms", "label": "权限"},
+    {"key": "memory", "label": "存储"},
 ]
 
 # edge-tts 官方中文音色（Azure 标准 voice 名）
@@ -268,4 +269,22 @@ SCHEMA: list[dict] = [
     {"path": "perms.standing_grants", "label": "常驻授权", "type": "multiselect", "group": "perms", "reload": "restart",
      "options": PERM_CATEGORIES,
      "hint": "⚠ 按类别放行、粒度较粗：勾选「删除/安装/修改系统」后，DSH 的所有命令类操作（bash/pwsh）将自动放行（含 rm 级删除），请仅对可信任务开启"},
+
+    # ---- 存储 ----
+    {"path": "memory.storage_budget_mb", "label": "存储预算", "type": "select", "group": "memory", "reload": "soft",
+     "options": [
+          {"value": "100", "label": "轻量 100MB"},
+          {"value": "300", "label": "标准 300MB（默认）"},
+          {"value": "500", "label": "充裕 500MB"},
+          {"value": "2048", "label": "超大 2GB"},
+          {"value": "custom", "label": "自定义"},
+     ]},
+    {"path": "memory.storage_budget_custom_mb", "label": "自定义预算(MB)", "type": "number", "group": "memory", "reload": "soft",
+     "show_if": {"path": "memory.storage_budget_mb", "value": "custom"}},
+    {"path": "memory.short_window_days", "label": "短期全量窗口(天)", "type": "number", "group": "memory", "reload": "soft",
+     "hint": "原文保留天数，默认730(2年)"},
+    {"path": "memory.long_window_days", "label": "长期向量窗口(天)", "type": "number", "group": "memory", "reload": "soft",
+     "hint": "向量保留天数，默认3650(10年)"},
+    {"path": "memory.retrieval_top_k", "label": "向量召回 Top-K", "type": "number", "group": "memory", "reload": "soft",
+     "min": 1, "max": 64, "hint": "每次注入召回的记忆条数，默认8"},
 ]
