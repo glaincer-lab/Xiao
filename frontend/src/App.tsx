@@ -198,6 +198,7 @@ export default function App() {
   const [workSteps, setWorkSteps] = useState<WorkStep[]>([])
   const [dshLive, setDshLive] = useState('')
   const [approvalText, setApprovalText] = useState('')
+  const [storageAlert, setStorageAlert] = useState<null | { level: string; used_mb: number; budget_mb: number }>(null)
   const [clock, setClock] = useState('')
   const [shuttingDown, setShuttingDown] = useState(false) // 收到 app_shutdown 后置真：显示关机谢幕遮罩
   const [ui, setUi] = useState<UISettings>(() => {
@@ -264,6 +265,20 @@ export default function App() {
   const answerApproval = useCallback((decision: 'allow' | 'reject') => {
     wsRef.current?.send({ type: 'approval_answer', decision })
   }, [])
+
+  const dismissStorage = () => {
+    wsRef.current?.send({ type: 'storage_action', action: 'ignore' })
+    setStorageAlert(null)
+  }
+  const cleanStorage = () => {
+    wsRef.current?.send({ type: 'storage_action', action: 'clean' })
+    setStorageAlert(null)
+    pushLog('已发起记忆清理：失效最旧记忆释放空间（共同记忆与成长记录不受影响）', 'info')
+  }
+  const openStorageSettings = () => {
+    setStorageAlert(null)
+    setShowSettings(true)
+  }
 
   const handleEvent = (e: ServerEvent) => {
     const desc = describeEvent(e)
@@ -376,6 +391,10 @@ export default function App() {
         // 后端播报完结束语后退出：前端盖谢幕遮罩，等 Electron 主进程收尾
         setShuttingDown(true)
         break
+      case 'storage_threshold': {
+        setStorageAlert({ level: String(e.level ?? 'warn'), used_mb: Number(e.used_mb ?? 0), budget_mb: Number(e.budget_mb ?? 0) })
+        break
+      }
       default:
         break
     }
@@ -785,6 +804,30 @@ export default function App() {
             <div className="dlg-foot">
               <button className="pri" onClick={() => sendShutdownText('取消')}>取消</button>
               <button className="pri danger" onClick={() => sendShutdownText('确认关闭')}>确认关机</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 存储满弹窗：后端 sweep 检测到 80%/95% 阈值时推送 storage_threshold 事件 */}
+      {storageAlert && (
+        <div className="mask show" onClick={dismissStorage}>
+          <div className="dialog dialog--storage" onClick={(ev) => ev.stopPropagation()}>
+            <div className="dlg-head">
+              <h2>记忆存储将满</h2>
+            </div>
+            <div className="dlg-body">
+              <p className="dlg-text">
+                记忆存储已用 {storageAlert.used_mb} / {storageAlert.budget_mb} MB
+                {storageAlert.level === 'critical' ? '（已达 95%，建议尽快处理）' : '（已达 80%，可暂缓）'}
+                <br />
+                可选择清理旧记忆、提升空间，或暂不处理。
+              </p>
+            </div>
+            <div className="dlg-foot">
+              <button className="pri" onClick={dismissStorage}>暂不处理</button>
+              <button className="pri" onClick={openStorageSettings}>提升空间</button>
+              <button className="pri danger" onClick={cleanStorage}>清理旧记忆</button>
             </div>
           </div>
         </div>

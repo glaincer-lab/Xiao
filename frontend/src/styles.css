@@ -1737,6 +1737,9 @@ body {
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   animation: dlg-in 0.3s cubic-bezier(0.2, 0.9, 0.25, 1.15);
 }
+.dialog--storage {
+  width: min(520px, 92vw);
+}
 @keyframes dlg-in {
   from {
     transform: translateY(14px) scale(0.97);
