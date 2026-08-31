@@ -1,6 +1,7 @@
 # 小二（Xiao）· M0-M5 实现进度审计基线
 
 > **用途**：本文档是 M0-M5 的**可核验进度基线**，供第三方审计。所有状态以**真实文件 + 可复现测试**为准，非口头声明。
+> 当前唯一权威全量基线见 docs/progress/M1-vector-memory-progress.md（含 M0-M6 + 向量记忆，942 测试）；本文为 M0-M5 历史分册。
 > **审计日期**：2026-08-31 ｜ **版本**：v2.0 ｜ **里程碑范围**：M0-M5（M6 成长为设计态，未实现）。
 > **复核方式**：`cd 项目根 && python -m unittest discover -s tests`（.venv Python 3.12.13），以下计数均为本机实测。
 > **配套**：M0-M2 详细子模块说明见 `docs/progress/M0-M2-progress.md`；模块设计书见 `docs/specs/`；事件契约见 `docs/specs/EVENT_REGISTRY.md`。
@@ -134,6 +135,8 @@ python -m unittest tests.test_tts_timeout tests.test_audit_remediation tests.tes
 | M1 画像层持久化完善 | 待办 | 画像条目持久化接口待完善。 |
 | M2-E 星云前端映射 | 待办 | Nebula.tsx 未订阅 affect.updated。 |
 | M6 健康成长 | 未实现 | ROADMAP 设计态。 |
+
+> 注：M6 成长主线已于 2026-08-31 完成，见 docs/progress/M6-progress.md。
 
 ---
 

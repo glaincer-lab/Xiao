@@ -124,7 +124,7 @@ router 之后的第二层路由：一次对话一个主姿态，不确定时默�
 
 ### 当前实现进度（v1.0，2026-08-30）
 
-> 全量 **894 项单测**（实测 `python -m unittest discover -s tests`，failures=1, errors=9 均为既有沙箱项 test_memory）。逐项可核验基线见 **`progress/M0-M5-progress.md`**（M0-M5）与本表（M6）。M6 后端 6 包新增 72 项测试，拆解见 `_audit/拆解计划-M6-2026-08-31.md`。
+> 全量 **942 项单测**（历史快照：822 / 894 / 900）（实测 `python -m unittest discover -s tests`，failures=1, errors=9 均为既有沙箱项 test_memory）。逐项可核验基线见 **`progress/M0-M5-progress.md`**（M0-M5）与本表（M6）。M6 后端 6 包新增 72 项测试，拆解见 `_audit/拆解计划-M6-2026-08-31.md`。
 
 | 里程碑 | 状态 | 核心落地 |
 |---|---|---|

@@ -1,13 +1,13 @@
 # M1-vector-memory · 向量记忆与存储治理 · 模块设计书
 
-[yaml]
+```yaml
 module: M1-vector-memory
 version: v4.4.0
 status: draft
 depends_on: [M0-core, M1-memory, M6-growth]
 paradigm: D
 owner_notes: 增强 M1 检索注入（retrieval.py，四因子向量召回）；三层时间窗口存储治理 + 失效标记 + 存储满弹窗
-[/yaml]
+```
 
 ## 1. 目的与范围
 

@@ -3,7 +3,7 @@
 ```yaml
 module: M2-heart
 version: v4.1.0
-status: approved       # **MVP 阻塞项**（四态判定卡骨架+情感两变量+星云映射）；元对话/建设性冲突完整规格后置
+status: approved       # 已实现：四态判定卡骨架 + 情感两变量 + 星云映射；建设性冲突完整规格后置
 depends_on: [M0-core, M1-memory]
 paradigm: A/C 混合     # 会话服务（姿态内交互）+ 后台守护（情绪信号采集）
 owner_notes: 迁自 ROADMAP §1.3 + §4.M2；现底座：星云六形态映射（Nebula.tsx）、可打断配置、session 事件总线
