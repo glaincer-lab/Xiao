@@ -53,6 +53,11 @@ ACTION_VERBS_RECALL = (
 _INJECTION_HEADER = "以下是「小二」跨会话记忆里的相关线索，相关时自然参考，不要逐条复述："
 _DEFAULT_FUZZY_SUMMARY = "一条超过 180 天的记忆（细节已随情感淡忘）"
 
+# 四因子检索（语义向量 + 关键词 + 时间近因 + 重要度），默认等权各 25%（设计书 §5）
+FOUR_FACTORS = ("semantic", "keyword", "recency", "importance")
+DEFAULT_WEIGHTS = {"semantic": 0.25, "keyword": 0.25, "recency": 0.25, "importance": 0.25}
+DEFAULT_TOP_K = 8
+
 
 # ---------------------------------------------------------------------------
 # 请求分类：动词双信号 + 安全默认
@@ -117,6 +122,28 @@ def _collect_entries() -> list:
 
 
 # ---------------------------------------------------------------------------
+# 向量召回注入（M1-vector-memory 阶段一；缺省 None → 全量注入现状，降级自然）
+# ---------------------------------------------------------------------------
+
+_vector_retriever: Optional[Callable[[str], Optional[Iterable]]] = None
+
+
+def set_vector_retriever(retriever: Callable[[str], Optional[Iterable]]) -> None:
+    """设置向量召回器：query 文本 → 候选列表 [{id,text,meta,ts,score}]。
+
+    返回 None 表示「不可用」（如 embedding 缺失），build_injection 据此降级全量注入。
+    """
+    global _vector_retriever
+    _vector_retriever = retriever
+
+
+def reset_vector_retriever() -> None:
+    """清空向量召回器（回到全量注入现状），供测试或停用时复位。"""
+    global _vector_retriever
+    _vector_retriever = None
+
+
+# ---------------------------------------------------------------------------
 # 升轨只读沙盒面板（隔离通道：只读明文，不接 LLM）
 # ---------------------------------------------------------------------------
 
@@ -164,9 +191,14 @@ def render_sandbox_panel(raw_text: str) -> str:
 def build_injection(user_request: str) -> str:
     """契约：返回拼进系统提示词的记忆文本；无可用记忆时返回空串。
 
-    读取 `set_entry_provider` 注入的来源；默认安全策略 `resolve_state` 归一请求态。
+    优先走四因子向量召回（若已 `set_vector_retriever` 且召回器可用）；
+    否则降级为全量收集注入（现状行为）。召回结果仍经 `render_injection` 统一过滤
+    （sandbox/expired），保证 180 天滤镜与沙盒隔离不因向量化而破坏。
     """
-    return render_injection(user_request, _collect_entries())
+    entries = _vector_recall_entries(user_request)
+    if entries is None:
+        entries = _collect_entries()
+    return render_injection(user_request, entries)
 
 
 def render_injection(user_request: str, entries: Iterable, today: _dt.date | None = None) -> str:
@@ -200,6 +232,127 @@ def render_injection(user_request: str, entries: Iterable, today: _dt.date | Non
     if not lines:
         return ""
     return _INJECTION_HEADER + "\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 四因子向量召回（语义 + 关键词 + 近因 + 重要度）
+# ---------------------------------------------------------------------------
+
+def _vector_recall_entries(user_request: str) -> Optional[list]:
+    """尝试四因子向量召回；召回器未注入 / 不可用 / 异常 → 返回 None（降级全量）。"""
+    if _vector_retriever is None:
+        return None
+    try:
+        candidates = _vector_retriever(user_request)
+    except Exception:  # noqa: BLE001 - 召回异常一律降级，绝不阻断注入
+        return None
+    if not candidates:
+        return None
+    ranked = rank_entries(user_request, candidates)
+    return [_candidate_to_entry(c) for c in ranked]
+
+
+def rank_entries(
+    query: str,
+    candidates: Iterable,
+    *,
+    weights: dict | None = None,
+    today: _dt.date | None = None,
+    top_k: int = DEFAULT_TOP_K,
+) -> list[dict]:
+    """四因子加权排序候选，返回 top_k 条（带 _score/_factors 字段）。
+
+    候选为 dict：{id, text, meta, ts, score}；score 为语义 cosine（召回器已给）。
+    - ① 语义向量：直接用候选自带 score（cosine）。
+    - ② 关键词：query 与 text 的公共字/词重叠度（首版简单重叠计分）。
+    - ③ 时间近因：ts 距今越近分越高。
+    - ④ 重要度：meta.importance + P0 标签恒高。
+    四因子各归一化到 [0,1] 后按权重加权求和。
+    """
+    today = today or _dt.date.today()
+    w = dict(DEFAULT_WEIGHTS)
+    if weights:
+        w.update(weights)
+    items = [dict(c) for c in (candidates or [])]
+    scored: list[dict] = []
+    for c in items:
+        sem = _clamp01(c.get("score", 0.0))
+        kw = _keyword_score(query, c.get("text", ""))
+        rec = _recency_score(c.get("ts", 0.0), today)
+        imp = _importance_score(c.get("meta", {}))
+        total = (
+            float(w.get("semantic", 0.25)) * sem
+            + float(w.get("keyword", 0.25)) * kw
+            + float(w.get("recency", 0.25)) * rec
+            + float(w.get("importance", 0.25)) * imp
+        )
+        out = dict(c)
+        out["_score"] = total
+        out["_factors"] = {"semantic": sem, "keyword": kw, "recency": rec, "importance": imp}
+        scored.append(out)
+    scored.sort(key=lambda x: x.get("_score", 0.0), reverse=True)
+    return scored[: max(1, int(top_k))]
+
+
+def _clamp01(v: object) -> float:
+    try:
+        return max(0.0, min(1.0, float(v)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _keyword_score(query: str, text: str) -> float:
+    """query 与记忆 text 的公共字/词重叠度（字符级 Jaccard，归一化到 [0,1]）。"""
+    q = _normalize(query)
+    t = _normalize(text)
+    if not q or not t:
+        return 0.0
+    q_chars = set(q)
+    t_chars = set(t)
+    if not q_chars:
+        return 0.0
+    inter = len(q_chars & t_chars)
+    union = len(q_chars | t_chars)
+    return inter / union if union else 0.0
+
+
+def _recency_score(ts: object, today: _dt.date) -> float:
+    """时间近因：ts 距今越近分越高（半衰期约 30 天）。"""
+    try:
+        ts = float(ts)
+    except (TypeError, ValueError):
+        return 0.0
+    if ts <= 0:
+        return 0.0
+    now = _dt.datetime.combine(today, _dt.time()).timestamp()
+    age_days = max(0.0, (now - ts) / 86400.0)
+    return float(2.0 ** (-age_days / 30.0))
+
+
+def _importance_score(meta: object) -> float:
+    """重要度：meta.importance（0~1）；P0 标签（person/milestone）恒高。"""
+    m = meta if isinstance(meta, dict) else {}
+    imp = m.get("importance")
+    if imp is None:
+        kind = m.get("kind", "")
+        imp = 1.0 if kind in ("person", "milestone") else 0.5
+    return _clamp01(imp)
+
+
+def _candidate_to_entry(c: dict) -> dict:
+    """向量候选 → render_injection 可消费的 MEMV1 五要素 Entry dict。"""
+    meta = c.get("meta", {}) if isinstance(c.get("meta"), dict) else {}
+    return {
+        "id": c.get("id", ""),
+        "content": c.get("text", ""),
+        "effective_at": meta.get("effective_at", ""),
+        "scope": meta.get("scope", "event"),
+        "source": meta.get("source", "explicit"),
+        "status": meta.get("status", "active"),
+        "affective_luminance": meta.get("affective_luminance", 0),
+        "confidence": meta.get("confidence", 1.0),
+        "confirmed": meta.get("confirmed", False),
+    }
 
 
 # ---- 格式化 ----
@@ -288,12 +441,18 @@ __all__ = [
     "DEFAULT_TASK_STATE",
     "ACTION_VERBS_TASK",
     "ACTION_VERBS_RECALL",
+    "FOUR_FACTORS",
+    "DEFAULT_WEIGHTS",
+    "DEFAULT_TOP_K",
     "is_recall_or_task",
     "resolve_state",
     "build_injection",
     "render_injection",
     "set_entry_provider",
     "reset_entry_provider",
+    "set_vector_retriever",
+    "reset_vector_retriever",
+    "rank_entries",
     "mark_sandboxed",
     "reset_sandboxed",
     "is_sandboxed",
