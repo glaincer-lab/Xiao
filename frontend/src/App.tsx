@@ -395,6 +395,10 @@ export default function App() {
         setStorageAlert({ level: String(e.level ?? 'warn'), used_mb: Number(e.used_mb ?? 0), budget_mb: Number(e.budget_mb ?? 0) })
         break
       }
+      case 'storage_cleaned': {
+        addMessage({ role: 'system', text: `已清理 ${Number(e.invalidated ?? 0)} 条旧记忆（共同记忆与成长记录不受影响）`, kind: 'notice' })
+        break
+      }
       default:
         break
     }

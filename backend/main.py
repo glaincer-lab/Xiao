@@ -207,7 +207,9 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     try:
                         from backend.memv1.maintenance import clean_now
 
-                        clean_now()
+                        result = clean_now()
+                        n = int(result.get("invalidated", 0)) if isinstance(result, dict) else 0
+                        emit("storage_cleaned", invalidated=n)
                     except Exception:  # noqa: BLE001
                         pass
             elif t == "ping":
