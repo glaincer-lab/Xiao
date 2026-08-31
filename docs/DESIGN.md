@@ -67,7 +67,8 @@ Xiao\（本仓库 · 语音系统，独立可运行）
 │   ├── tts\    Qwen 实时流式(默认) + edge-tts(免费云) + Piper(离线) + MiniCPM-o(vLLM)
 │   ├── tools\  搜索/打开/天气/提醒
 │   ├── bridge\ ★ 唯一知道 DSH 的地方
-│   ├── session\ 状态机 + 事件总线
+│   ├── session\ 状态机 + 事件总线（前端 WebSocket 流）
+│   ├── event_bus.py 跨模块语义化事件总线（模块间唯一通信信道，EVENT_TYPES 白名单 fail-fast）
 │   ├── router.py 路由层
 │   ├── agent.py core.py main.py
 ├── frontend\  React 工作台
@@ -80,6 +81,14 @@ Xiao\（本仓库 · 语音系统，独立可运行）
 ```
 
 ## 4. 状态机
+
+> 状态机分两层：**音频管线状态机**（下方，语音交互即时态）+ **宏观状态机**（M0，伙伴长期态）。宏观状态机已落地 `backend/macro_state.py`（§0 已述）：
+>
+> ```
+> ACTIVE（有交互）─空闲>15min─►IDLE ─无交互7天─►DORMANT ─任意交互─►RETURNING ─新交互─►ACTIVE
+> ```
+>
+> DORMANT 冻结一切主动、零归因；RETURNING 分层问候。
 
 ```
 IDLE/SLEEPING ──唤醒──► LISTENING ──路由──► chat: PROCESSING/EXECUTING/SPEAKING
