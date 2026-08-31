@@ -163,6 +163,22 @@ class DataTrack:
         with self._lock:
             return [dict(r) for r in self._layers[kind]]
 
+    def prune_before(self, ts_threshold: float) -> int:
+        """删除所有 kind 中 ts 早于 ts_threshold 的记录（短期全量层容量治理）。
+
+        供治理层清理超窗口原文（>730 天只留向量，见 M1-vector-memory §4.3）。
+        按 ts 批量删，返回删除条数。
+        """
+        ts_threshold = float(ts_threshold)
+        removed = 0
+        with self._lock:
+            for kind in DATA_TRACK_KINDS:
+                kept = [r for r in self._layers[kind] if float(r.get("ts", 0)) >= ts_threshold]
+                removed += len(self._layers[kind]) - len(kept)
+                self._layers[kind] = kept
+                self._save(kind)
+        return removed
+
     # ---- 内部 ----
 
     @staticmethod
