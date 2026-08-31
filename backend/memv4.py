@@ -107,14 +107,14 @@ def evict_low_confidence(
     return sorted(kept, key=lambda e: e.id), sorted(removed, key=lambda e: e.id)
 
 
-# 【已冻结 · T0/S3】DataTrack 三层职责（session_logs/raw_frames_meta/context_snapshots）为只增不改的
-# 非破坏存储结构；变更 kind 或职责会破坏「原始层零丢失」断言与历史可读性。
+# DataTrack 三层职责（session_logs/raw_frames_meta/context_snapshots）默认只增不改；
+# 但被遗忘权要求用户可删除（经 M6 export.forget 按 id 精确删除），故不再承诺「零丢失」。
 class DataTrack:
-    """数据轨三层存储：只增不删、原子落盘、线程安全。
+    """数据轨三层存储：默认只增、原子落盘、线程安全；支持按 id 删除（被遗忘权）。
 
     每层一个 JSON 文件（`session_logs.json` / `raw_frames_meta.json` /
     `context_snapshots.json`），记录格式为 `[{"id","ts",**payload}, ...]`。
-    `append` 只在层内追加，**不提供任何删除/清空 API**，从结构上保证原始层零丢失。
+    `append` 默认只在层内追加；删除走 M6 export.forget（按 id 精确删，保留其余）。
 
     落盘采用原子写（tmp + `os.replace`，仿照 `backend/memory.py` 的 `_save`）。
     """
