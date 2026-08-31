@@ -13,7 +13,7 @@ from backend.config import config
 from backend.errors import human_reason
 from backend.llm.base import ChatMessage, LLMClient
 from backend.memory import MemoryStore, memory_store
-from backend.memv1.retrieval import build_injection, set_entry_provider
+from backend.memv1.retrieval import build_injection, set_entry_provider, set_vector_retriever
 from backend.session.state import State, emit
 from backend.tools.base import ToolRegistry
 from backend.tts.base import TTSEngine
@@ -112,6 +112,14 @@ class Agent:
 
         set_entry_provider(_provider)
 
+        # 向量召回接线：接上后 build_injection 优先四因子向量召回，向量库空/不可用自动降级全量
+        try:
+            from backend.memv1.vector_store import get_vector_store, make_retriever
+
+            set_vector_retriever(make_retriever(get_vector_store()))
+        except Exception:  # noqa: BLE001 - 向量召回不可用则保持全量注入降级
+            pass
+
     async def handle(self, text: str, images: list[str] | None = None) -> None:
         self._set_state(State.PROCESSING)
         self._history.append(ChatMessage(role="user", content=text, images=images or None))
@@ -143,6 +151,13 @@ class Agent:
             self._trim()
             if self._on_done:
                 self._on_done()
+            # 对话结束触发记忆维护（Sleeptime：索引 + 治理 + 巩固节流，后台异步不阻塞）
+            try:
+                from backend.memv1.maintenance import run_after_turn
+
+                run_after_turn()
+            except Exception:  # noqa: BLE001
+                pass
 
     async def _run(self) -> None:
         tools = self._registry.schemas()

@@ -115,6 +115,13 @@ async def startup() -> None:
     computer.set_confirm_hook(pipeline.request_tool_approval)
     open_app.set_confirm_hook(pipeline.request_tool_approval)
     pipeline.start(loop)
+    # M1 记忆定时兜底（daemon 长间隔治理，幂等）
+    try:
+        from backend.memv1.maintenance import start_sweeper
+
+        start_sweeper()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 @app.on_event("shutdown")
