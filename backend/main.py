@@ -463,6 +463,18 @@ async def get_status() -> dict:
     }
 
 
+@app.get("/api/recall")
+async def get_recall() -> dict:
+    """成长双轨 + 共同记忆的三栏回顾快照（只读，供前端翻看）。"""
+    from backend.m6.growth import GrowthStore
+    from backend.m6.recall import RecallComposer
+
+    try:
+        return {"ok": True, "data": RecallComposer(GrowthStore()).compose()}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "msg": str(exc)}
+
+
 @app.post("/api/dsh/approval")
 async def dsh_approval(payload: dict, request: Request) -> dict:
     """DSH 审批注入端点（🔒 安全红线：只接受本机回环来源，永不外放）。

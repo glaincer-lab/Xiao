@@ -189,6 +189,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showPerms, setShowPerms] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
+  const [showRecall, setShowRecall] = useState(false)
+  const [recallData, setRecallData] = useState<null | { user_track: any[]; agent_track: any[]; shared: any[] }>(null)
   // 首次启动向导（E1）：本机没有完成标记时弹出，完成后写 localStorage 不再弹
   const [showWizard, setShowWizard] = useState(() => !localStorage.getItem('xiao_onboarded'))
   const [tasks, setTasks] = useState<Task[]>([])
@@ -429,6 +431,19 @@ export default function App() {
       })
   }, [])
 
+  // 成长回顾：打开面板时拉取三栏快照
+  const openRecall = useCallback(() => {
+    setShowRecall(true)
+    fetch(API_BASE + '/api/recall')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.ok && d.data) setRecallData(d.data)
+      })
+      .catch(() => {
+        /* 后端未就绪时保留空面板 */
+      })
+  }, [])
+
   useEffect(() => {
     const onStatus = (ok: boolean) => {
       setConnected(ok)
@@ -595,6 +610,7 @@ export default function App() {
           <button className="settings-btn" onClick={() => setShowTasks(true)}>
             任务{activeTaskCount > 0 && <span className="chip-badge">{activeTaskCount}</span>}
           </button>
+          <button className="settings-btn" onClick={openRecall}>回顾</button>
           <button className="settings-btn" onClick={() => setShowPerms(true)}>权限</button>
           <button className="settings-btn" onClick={() => setShowSettings(true)}>设置</button>
         </div>
@@ -855,6 +871,61 @@ export default function App() {
       {showTasks && <TaskPanel tasks={tasks} onClose={() => setShowTasks(false)} />}
       {showPerms && <PermsPanel onClose={() => setShowPerms(false)} />}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} ui={ui} setUi={setUi} />}
+      {showRecall && (
+        <div className="mask show" onClick={() => setShowRecall(false)}>
+          <div className="dialog dialog--recall" onClick={(ev) => ev.stopPropagation()}>
+            <div className="dlg-head">
+              <h2>成长回顾</h2>
+            </div>
+            <div className="dlg-body">
+              <div className="recall-grid">
+                <div className="recall-col">
+                  <h3>你的成长</h3>
+                  {recallData && recallData.user_track.length > 0 ? (
+                    recallData.user_track.map((r) => (
+                      <div key={r.id} className="recall-item">
+                        <span className="recall-text">{r.milestone}</span>
+                        {r.date && <span className="recall-date">{r.date}</span>}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="recall-empty">还没有记录</p>
+                  )}
+                </div>
+                <div className="recall-col">
+                  <h3>小二的成长</h3>
+                  {recallData && recallData.agent_track.length > 0 ? (
+                    recallData.agent_track.map((r) => (
+                      <div key={r.id} className="recall-item">
+                        <span className="recall-text">{r.milestone}</span>
+                        {r.date && <span className="recall-date">{r.date}</span>}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="recall-empty">还没有记录</p>
+                  )}
+                </div>
+                <div className="recall-col">
+                  <h3>咱们的回忆</h3>
+                  {recallData && recallData.shared.length > 0 ? (
+                    recallData.shared.map((r) => (
+                      <div key={r.id} className="recall-item">
+                        <span className="recall-text">{r.event}</span>
+                        {r.date && <span className="recall-date">{r.date}</span>}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="recall-empty">还没有记录</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="dlg-foot">
+              <button className="pri" onClick={() => setShowRecall(false)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
