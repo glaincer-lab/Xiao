@@ -97,6 +97,7 @@ class HeartbeatEngine:
         decay_after_days: int = DECAY_AFTER_DAYS,
         interval_seconds: float = DEFAULT_INTERVAL_SECONDS,
         quality_gate_fn: Callable[[Mapping | None], bool] | None = None,
+        dormant: Any | None = None,
     ) -> None:
         self._notifier = notifier
         self._content = content if content is not None else _content.build_candidate
@@ -107,6 +108,9 @@ class HeartbeatEngine:
         self._decay_after_days: int = int(decay_after_days)
         self._interval_seconds: float = float(interval_seconds)
         self._quality_gate_fn = quality_gate_fn or quality_gate
+        # DORMANT 订阅协调器（M3-M4 dormant.DormantCoordinator / 或提供 is_frozen() 的替身）；
+        # 缺省 None → 不冻结检查（向后兼容），供 M3-M4 在生成候选前查询 is_frozen() 早退。
+        self._dormant = dormant
 
         # ---- 无响应退避状态 ----
         self.no_response_streak: int = 0          # 连续无响应天数（可读、可断言）
@@ -134,6 +138,10 @@ class HeartbeatEngine:
 
         零投递情形：未命中时段 / 内容源无素材 / 质量门不过（无素材宁可不说）。
         """
+        # DORMANT 冻结（sec 4.4）：生成候选前早退，零投递（M3-M1 notify 仍是消费端最终闸门，双保险）
+        if self._is_frozen():
+            logger.info("[m3.heartbeat] DORMANT 冻结，心跳零投递: now=%s", now)
+            return None
         if not self._should_run(now):
             return None
         candidate = self._build_candidate(now)
@@ -145,6 +153,19 @@ class HeartbeatEngine:
             self._record_delivery(now)
             self._maybe_decay(now)
         return status
+
+    def _is_frozen(self) -> bool:
+        """DORMANT 冻结查询（M3-M4 dormant.DormantCoordinator）；缺省无协调器 → 不冻结。
+
+        DORMANT 冻结是 M0 硬约束（is_proactive_allowed()），本引擎在生成候选前查一次早退，
+        避免冻结期仍生成候选再被 M3-M1 notify.process() 丢弃。
+        """
+        if self._dormant is None:
+            return False
+        try:
+            return bool(self._dormant.is_frozen())
+        except Exception:  # noqa: BLE001
+            return False
 
     def _build_candidate(self, now: _dt.datetime) -> Mapping | None:
         """调用内容源生成候选；ctx 携带当前时段/频率/时刻供内容源（及未来 M1）使用。"""

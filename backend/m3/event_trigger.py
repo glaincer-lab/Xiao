@@ -72,6 +72,7 @@ ROUTE_COOLDOWN = "route_cooldown"          # 冷却期内拦截
 ROUTE_ACCUMULATED = "route_accumulated"    # 进入攒着缓冲（未立即投递）
 ROUTE_LIGHT = "route_light"                # 只亮灯（未开口）
 ROUTE_DELIVERED = "route_delivered"        # 立即投递（消费结果透传 M3-M1 状态）
+ROUTE_FROZEN = "route_frozen"              # DORMANT 冻结：生成候选前早退（零投递）
 
 
 def _default_bus():
@@ -133,6 +134,7 @@ class EventTriggerEngine:
         weather: Any | None = None,
         schedule: Any | None = None,
         aggregator: Any | None = None,
+        dormant: Any | None = None,
     ) -> None:
         cfg = dict(config or {})
         self._config: dict[str, Any] = cfg
@@ -147,6 +149,9 @@ class EventTriggerEngine:
             window_seconds=float(cfg.get("aggregate_window_seconds", 1800)),
             now_fn=time.time,
         )
+        # DORMANT 订阅协调器（M3-M4 dormant.DormantCoordinator / 或提供 is_frozen() 的替身）；
+        # 缺省 None → 不冻结检查（向后兼容），供 M3-M4 在生成候选前查询 is_frozen() 早退。
+        self._dormant = dormant
         # 通知策略 & 冷却（§4.3 / §5）
         self._policy_by_urgency: dict[str, str] = dict(
             cfg.get("policy_by_urgency", DEFAULT_POLICY_BY_URGENCY)
@@ -308,6 +313,11 @@ class EventTriggerEngine:
     # =================================================================
     def _route_candidate(self, candidate: Mapping[str, Any]) -> str:
         """执行一条候选的完整触发管线，返回路由状态（见模块顶部常量）。"""
+        # ⓪ DORMANT 冻结（§4.4）：生成候选前早退，零投递（M3-M1 notify 仍是消费端最终闸门，双保险）
+        if self._is_frozen():
+            logger.info("[m3.event_trigger] DORMANT 冻结，候选不生成不投递: %s", candidate.get("类型"))
+            return ROUTE_FROZEN
+
         # ① 相关性判定（§4.3：是否与用户相关）
         if not self._is_related(candidate):
             logger.info("[m3.event_trigger] 相关性判定不通过，丢弃: %s", candidate.get("类型"))
@@ -347,6 +357,20 @@ class EventTriggerEngine:
             "内容草案": candidate.get("内容草案"),
         })
         return ROUTE_LIGHT
+
+    # ---- DORMANT 冻结（§4.4 生成候选前早退） ----
+    def _is_frozen(self) -> bool:
+        """DORMANT 冻结查询（M3-M4 dormant.DormantCoordinator）；缺省无协调器 → 不冻结。
+
+        DORMANT 冻结是 M0 硬约束（is_proactive_allowed()），本引擎在生成候选前查一次早退，
+        避免冻结期仍生成候选再被 M3-M1 notify.process() 丢弃。
+        """
+        if self._dormant is None:
+            return False
+        try:
+            return bool(self._dormant.is_frozen())
+        except Exception:  # noqa: BLE001
+            return False
 
     # ---- 相关性判定（§4.3：是否与用户相关；默认全部相关，config.relevance_block 排除） ----
     def _is_related(self, candidate: Mapping[str, Any]) -> bool:
