@@ -128,7 +128,10 @@ class TestAnniversaryCandidate(unittest.TestCase):
 class TestWitnessExemptQuota(unittest.TestCase):
     def test_boom_candidate_exempts_quota(self) -> None:
         budget = ProactiveBudget(daily_quota=3, persist_path=Path(tempfile.mkdtemp()) / "b.json")
-        notifier = ProactiveNotifier(budget=budget)
+        sensor = mock.Mock()
+        sensor.is_fullscreen.return_value = False
+        sensor.is_idle.return_value = False
+        notifier = ProactiveNotifier(budget=budget, sensor=sensor, config={"attention_policy": "off", "cooldown_seconds": 0})
         eng = AnniversaryEngine(bus=EventBus())
         cand = eng.build_candidate(_milestone_entry())
         status = notifier.process(cand)
