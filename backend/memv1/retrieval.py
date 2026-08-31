@@ -10,7 +10,7 @@
 
 任务态例外：
 - 动词双信号判定（`ACTION_VERBS_TASK` / `ACTION_VERBS_RECALL`，首版词表，可配置）；
-- **安全默认「不确定 → 任务态放行」**（误判放行代价 < 误判拦截代价）。
+- **安全默认「不确定 → 呈现轨（recall）」**（结构规划 D1/决策 4.1 收窄：仅明确信息检索动词走数据轨直通，模糊请求不穿透 180 天情感滤镜）。
 
 升轨只读面板（隔离，v4.1.1 关键）：捞出的原始明文经**显式沙盒隔离面板**渲染（只读，
 MVP 降级为 Markdown 代码块），该文本**不对 LLM 开放检索接口（Context Retrieval
@@ -34,8 +34,10 @@ DAYS_180 = 180
 # 隔离标记：升轨只读沙盒面板渲染文本必带此前缀；注入层从结构上排除含此标记的文本
 SANDBOX_MARKER = "[SANDBOX_READONLY]"
 
-# 安全默认态：不确定 → 任务态放行
-DEFAULT_TASK_STATE = "task"
+# 安全默认态：不确定 → 呈现轨（recall），不直通数据轨（结构规划 D1/决策 4.1 收窄）。
+# DEFAULT_TASK_STATE 保留为历史别名（值已改为 recall），供旧代码/测试向后兼容。
+DEFAULT_STATE = "recall"
+DEFAULT_TASK_STATE = DEFAULT_STATE
 
 # 首版动词清单（可配置，进 config；灰度期调优，见 M1-memory.md §8 开放问题 1）
 ACTION_VERBS_TASK = (
@@ -70,7 +72,7 @@ def is_recall_or_task(text: str) -> str:
     动词 + 上下文双信号；**安全默认由 `resolve_state` 将 `"unknown"` 归一为 `"task"`**。
     - 命中任务动词（`翻出/查/找/搜/报错`...）→ `"task"`（动作指令优先于仅追忆）。
     - 否则命中追忆短语（`还记得/记不记得/叫什么名字`...）→ `"recall"`。
-    - 两者皆无 → `"unknown"`（调用方按安全默认放行）。
+    - 两者皆无 → `"unknown"`（按决策 4.1 收窄：默认不直通数据轨）。
     """
     text = _normalize(text)
     if _match_any(text, ACTION_VERBS_TASK):
@@ -83,9 +85,10 @@ def is_recall_or_task(text: str) -> str:
 def resolve_state(state: str) -> str:
     """将 `is_recall_or_task` 的三态归一到消费态（"task" | "recall"）。
 
-    安全默认：`"unknown"` → `"task"`（放行）。`build_injection` 内部即用本函数。
+    安全默认（决策 4.1 收窄）：`"unknown"` → `"recall"`（呈现轨，180 天滤镜保护），
+    不直通数据轨；仅明确信息检索动词命中才走 `"task"`。`build_injection` 内部即用本函数。
     """
-    return state if state in ("task", "recall") else DEFAULT_TASK_STATE
+    return state if state in ("task", "recall") else DEFAULT_STATE
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +172,7 @@ def build_injection(user_request: str) -> str:
 def render_injection(user_request: str, entries: Iterable, today: _dt.date | None = None) -> str:
     """给定用户请求与条目集合，渲染注入文本（纯函数，`today` 可注入便于测试）。
 
-    - 任务态（含 unknown 归一后的 task）：数据轨直通，注入原始细节，不受 180 天滤镜拦截
+    - 任务态（仅明确信息检索动词命中）：数据轨直通，注入原始细节，不受 180 天滤镜拦截
       （B 型任务检索不走情感滤镜，见 EVAL.md 场景三断言 3）。
     - 非任务态（recall）：>180 天条目只注入巩固摘要 + 情感高光，原始细节硬截断。
     - 已隔离（sandboxed）条目一律跳过：原始明文只进沙盒面板，不进 LLM。
@@ -281,6 +284,7 @@ def _is_expired(entry: object, today: _dt.date | None = None) -> bool:
 __all__ = [
     "DAYS_180",
     "SANDBOX_MARKER",
+    "DEFAULT_STATE",
     "DEFAULT_TASK_STATE",
     "ACTION_VERBS_TASK",
     "ACTION_VERBS_RECALL",

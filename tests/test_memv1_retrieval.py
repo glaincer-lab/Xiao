@@ -2,7 +2,7 @@
 
 覆盖 DoD 三条：
 1. >180 天记忆注入不含原始细节（只注入巩固摘要 + 情感高光标签，原始明文硬截断）；
-2. 未知动词默认任务态放行（安全默认：不确定 → task）；
+2. 未知动词默认呈现轨（决策 4.1 收窄：不确定 → recall，不直通数据轨）；
 3. 沙盒面板降级版本不接 LLM 检索（隔离：升轨明文只进只读面板，不进注入）。
 
 另补：任务态直通（B 型任务检索不被情感滤镜拦截）、新鲜（<=180 天）记忆含原始细节、
@@ -83,15 +83,16 @@ class Aged181DayFilterTest(unittest.TestCase):
 
 
 class TaskExceptionTest(unittest.TestCase):
-    """DoD 2：未知动词默认任务态放行 + B 型任务检索不被情感滤镜拦截。"""
+    """DoD 2：未知动词默认呈现轨（不直通数据轨）+ B 型任务检索不被情感滤镜拦截。"""
 
-    def test_unknown_verb_defaults_to_task(self) -> None:
-        # 无动词/未知动词 → 原始分类 unknown → 安全默认归一为 task（放行）
+    def test_unknown_verb_defaults_to_recall(self) -> None:
+        # 无动词/未知动词 → 原始分类 unknown → 收窄默认归一为 recall（呈现轨，不直通数据轨）
         self.assertEqual(retrieval.is_recall_or_task("今天天气不错"), "unknown")
-        self.assertEqual(retrieval.resolve_state("unknown"), retrieval.DEFAULT_TASK_STATE)
+        self.assertEqual(retrieval.resolve_state("unknown"), "recall")
+        self.assertEqual(retrieval.resolve_state("unknown"), retrieval.DEFAULT_STATE)
         self.assertEqual(
             retrieval.resolve_state(retrieval.is_recall_or_task("今天天气不错")),
-            "task",
+            "recall",
         )
 
     def test_clear_task_and_recall_not_swapped(self) -> None:
@@ -106,13 +107,14 @@ class TaskExceptionTest(unittest.TestCase):
         inject = retrieval.build_injection(TASK_Q)
         self.assertIn("Project_9982_Secret", inject)  # 数据轨直通，保留原始细节
 
-    def test_unknown_verb_injection_is_not_filtered_like_recall(self) -> None:
-        # 安全默认的「放行」落到注入层：未知动词按任务态直通，不被 180 天滤镜拦截
+    def test_unknown_verb_injection_is_filtered_like_recall(self) -> None:
+        # 收窄后：未知动词按呈现轨（recall）→ >180 天记忆只注入摘要，原始明文硬截断
         e = _entry("Project_9982_Secret", _ago(400), summary="去年调试成功的项目")
         retrieval.set_entry_provider(lambda: [e])
         self.addCleanup(retrieval.reset_entry_provider)
-        inject = retrieval.build_injection("随便说点什么")  # 无动词 → unknown → task
-        self.assertIn("Project_9982_Secret", inject)
+        inject = retrieval.build_injection("随便说点什么")  # 无动词 → unknown → recall
+        self.assertNotIn("Project_9982_Secret", inject)  # 原始明文不进 LLM
+        self.assertIn("去年调试成功的项目", inject)  # 只注入巩固摘要
 
 
 class SandboxIsolationTest(unittest.TestCase):
