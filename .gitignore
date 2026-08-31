@@ -29,6 +29,9 @@ logs/
 # 截图工具运行时产物（B1，勿提交）
 screenshots/
 
+# M3 主动引擎预算持久化运行时数据（勿提交）
+runtime/
+
 # 桌面打包产物与内置运行时（本机生成，勿提交）
 desktop/release/
 desktop/runtime/
