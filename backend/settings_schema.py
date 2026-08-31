@@ -261,6 +261,8 @@ SCHEMA: list[dict] = [
      "hint": "固定 1：DSH 桥为单进程槽，并发任务会互相取消"},
     {"path": "tools.computer.enabled", "label": "语音操电脑", "type": "checkbox", "group": "exec", "reload": "soft",
      "hint": "开启后可语音控制鼠标键盘/窗口/截屏看图；点按、打字、热键、关窗逐次语音审批"},
+    {"path": "tools.computer.confirm_ttl_seconds", "label": "审批放行有效期(秒)", "type": "number", "group": "exec", "reload": "soft",
+     "min": 60, "hint": "同类语音操电脑动作批准后，多久内免重复询问（默认 1800 秒=30 分钟）"},
     # ---- 权限 ----
     {"path": "approval.enabled", "label": "审批开关", "type": "checkbox", "group": "perms", "reload": "soft"},
     {"path": "approval.timeout_ms", "label": "审批超时(毫秒)", "type": "number", "group": "perms", "reload": "soft"},

@@ -11,6 +11,7 @@ import asyncio
 import base64
 import os
 import sys
+import threading
 import time
 from typing import Any, Awaitable, Callable
 
@@ -21,6 +22,11 @@ from backend.tools.base import Tool
 _confirm_hook: Callable[[str], Awaitable[bool]] | None = None
 
 DEFAULT_CONFIRM = ["mouse", "type", "hotkey", "window_close"]
+
+# 会话级放行缓存（方案 A，老板定稿）：批准过的类别在 TTL 内免重复询问
+_approval_cache: dict[str, float] = {}
+_approval_cache_lock = threading.Lock()
+DEFAULT_APPROVAL_TTL_SECONDS = 30 * 60  # 默认 30 分钟
 
 MOUSEEVENTF_LEFTDOWN = 0x02
 MOUSEEVENTF_LEFTUP = 0x04
@@ -63,9 +69,39 @@ def _master_gate() -> str | None:
     return None
 
 
+def _approval_ttl_seconds() -> int:
+    """会话放行 TTL（秒），可配置；默认 1800（30 分钟）。"""
+    try:
+        return max(60, int(config.get("tools.computer.confirm_ttl_seconds", DEFAULT_APPROVAL_TTL_SECONDS)))
+    except (TypeError, ValueError):
+        return DEFAULT_APPROVAL_TTL_SECONDS
+
+
+def _category_recently_approved(category: str) -> bool:
+    """该类别是否在 TTL 内已获批（会话级放行）。"""
+    with _approval_cache_lock:
+        last = _approval_cache.get(category, 0.0)
+    return time.time() - last < _approval_ttl_seconds()
+
+
+def _mark_approved(category: str) -> None:
+    """记录该类别本次已批准（写入会话放行缓存）。"""
+    with _approval_cache_lock:
+        _approval_cache[category] = time.time()
+
+
+def reset_approval_cache() -> None:
+    """清空会话放行缓存（测试 / 复位用）。"""
+    global _approval_cache
+    with _approval_cache_lock:
+        _approval_cache = {}
+
+
 async def _confirm(category: str, question: str) -> str | None:
     if category not in _confirm_categories():
         return None
+    if _category_recently_approved(category):
+        return None  # 会话内已批准过该类别，TTL 内免重复询问
     hook = _confirm_hook
     if hook is None:
         return "现在语音审批通道不可用，为安全起见我先不执行这一步。"
@@ -76,6 +112,7 @@ async def _confirm(category: str, question: str) -> str | None:
         return "语音审批出了点问题，为安全起见我先不执行。"
     if not ok:
         return "好，那我不动了。"
+    _mark_approved(category)  # 批准后记入会话放行缓存
     return None
 
 

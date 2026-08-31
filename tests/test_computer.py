@@ -21,6 +21,7 @@ from backend.tools.computer import (
     ScreenLookTool,
     UiADumpTool,
     set_confirm_hook,
+    reset_approval_cache,
 )
 
 _IMG = "data:image/jpeg;base64,QQ=="
@@ -29,6 +30,7 @@ _IMG = "data:image/jpeg;base64,QQ=="
 class _ComputerCase(unittest.TestCase):
     def setUp(self) -> None:
         set_confirm_hook(None)
+        reset_approval_cache()
 
     def _cfg(self, cfg: dict) -> None:
         old = computer_mod.config
