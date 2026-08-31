@@ -77,7 +77,7 @@ class MemoryExporter:
         bus: Any | None = None,
     ) -> None:
         self._store = store
-        self._growth_root = Path(getattr(store, "_root", None) or ROOT / "logs" / "m6")
+        self._growth_root = Path(getattr(store, "root", None) or ROOT / "logs" / "m6")
         self._persona_root = ROOT if persona_root is None else Path(persona_root)
         self._memv4_root = ROOT / "logs" / "memv4" if memv4_root is None else Path(memv4_root)
         self._bus = bus
@@ -191,13 +191,10 @@ class MemoryExporter:
         return value
 
     def _refresh_store(self) -> None:
-        """导入/删除改动 growth.json 后，刷新传入 GrowthStore 的内存态（立即可见）。
-
-        GrowthStore._load() 只返回不赋值（赋值发生在 __init__），故此处显式
-        用返回值重建 _data，否则外部持有的同一 store 实例读到的仍是旧内存态。
-        """
-        if hasattr(self._store, "_load"):
-            self._store._data = self._store._load()
+        """导入/删除改动 growth.json 后，刷新传入 GrowthStore 的内存态（立即可见）。"""
+        reload = getattr(self._store, "reload", None)
+        if callable(reload):
+            reload()
 
     # ------------------------------------------------------------------ #
     # 选择性删除（"忘掉那段"被遗忘权）：按 id 删指定条目，其余保留

@@ -361,7 +361,7 @@ class Canonizer:
     def _state_path(self) -> Path:
         if self._explicit_state_path is not None:
             return self._explicit_state_path
-        root = getattr(self.store, "_root", None)
+        root = getattr(self.store, "root", None)
         base = Path(root) if root is not None else ROOT / "logs" / "m6"
         return base / "canonizer_state.json"
 

@@ -33,6 +33,11 @@ class GrowthStore:
         self._lock = threading.Lock()
         self._data = self._load()
 
+    @property
+    def root(self) -> Path:
+        """落盘根目录（只读，供业务层推导同目录状态文件路径，如 canonizer_state.json）。"""
+        return self._root
+
     # ---- 双轨追加 ----
 
     def add_user_record(
@@ -125,6 +130,11 @@ class GrowthStore:
                 "last_type": str(last_type),
             }
             self._save()
+
+    def reload(self) -> None:
+        """从磁盘重载内存态（供业务层直接写回落盘文件后刷新，保持立即可见）。"""
+        with self._lock:
+            self._data = self._load()
 
     # ---- 内部 ----
 

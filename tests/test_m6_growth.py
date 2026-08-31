@@ -86,6 +86,26 @@ class GrowthStoreTests(unittest.TestCase):
         recs = self.store.user_records()
         self.assertGreaterEqual(recs[0]["ts"], recs[1]["ts"])
 
+    def test_root_property_exposed(self) -> None:
+        # 公开只读 root 属性（供业务层推导同目录状态文件，替代私有 _root 触碰）
+        self.assertEqual(self.store.root, self._root)
+
+    def test_reload_refreshes_from_disk(self) -> None:
+        import json
+        self.store.add_user_record("旧")
+        path = self._root / "growth.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["user_track"].append({
+            "id": "x", "ts": 0.0, "date": "2026-01-01",
+            "milestone": "外部写入", "source": "explicit", "canon": False,
+        })
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        # reload 前旧内存态不含"外部写入"
+        self.assertFalse(any(r["milestone"] == "外部写入" for r in self.store.user_records()))
+        # reload 后可见
+        self.store.reload()
+        self.assertTrue(any(r["milestone"] == "外部写入" for r in self.store.user_records()))
+
 
 if __name__ == "__main__":
     unittest.main()
