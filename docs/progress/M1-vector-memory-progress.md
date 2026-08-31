@@ -42,22 +42,22 @@
 - 全量 936 项（= 900 基线 + 36 新增），36 项新增全绿。
 - 10 项失败为既有沙箱环境问题：全部在 tests/test_memory.py（v3 MemoryStore 用 tempfile 落系统 Temp，DSH 沙箱拒写），与本次改动无关（M6-progress §三已记录同因）。本次未触碰 memory.py / test_memory.py。
 
-## 四、待接线（集成层，未接）
+## 四、接线（已完成，Sleeptime 调度）
 
-模块能力已完整落地并通过单测，但「生产接线」（谁在何时调用）尚未接入，属后台调度架构，见 §五待拍板：
+调度形态（老板定稿）：**聊完天触发 + 空闲消化，定时只做兜底**。新增 backend/memv1/maintenance.py（记忆后台管家）：
 
-1. 检索侧：backend/agent.py 的 _setup_m1_provider 目前仅 set_entry_provider（全量收集）；未接 set_vector_retriever(make_retriever(get_vector_store()))。接上后向量库为空时自动降级全量注入（安全）。
-2. 巩固触发：backend/memv1/consolidate.py 的 trigger_consolidation 目前无调用方（对话结束无人触发）。
-3. 治理触发：governance.enforce_vector_retention / enforce_capacity 无调用方（后台定时/事件触发未定）。
-4. 存储满弹窗：governance.threshold_state 已提供 ok/warn/critical，但前端弹窗（80% 提醒 / 95% 强提示 → 用户选清理/扩容/暂不处理）未接。
+1. 检索侧：agent.py _setup_m1_provider 已接 set_vector_retriever(make_retriever(get_vector_store()))——向量库空/不可用自动降级全量注入。
+2. 对话结束触发：agent.py handle finally 已接 run_after_turn()——daemon 线程异步跑「索引 → 治理 → 巩固（15 分钟节流）」，不阻塞对话。
+3. 定时兜底：main.py startup 已接 start_sweeper()——daemon 长间隔（6 小时）做治理，幂等。
+4. 存储满弹窗：后端 sweep_now 已产出 ok/warn/critical 阈值状态；前端弹窗 UI 待续（见 §五）。
 
-## 五、待拍板清单（C 类）
+## 五、待续清单
 
 | # | 问题 | 说明 |
 |---|---|---|
-| 1 | 后台任务调度架构 | 巩固流水线 + 治理清理的触发时机未定（thread 定时循环 / 事件驱动 / 对话结束钩子）；设计书 §6 仅说「内部后台任务」，未定调度器形态 |
+| 1 | 前端存储满弹窗 UI | 后端 sweep_now 已产出 ok/warn/critical，但前端「80% 提醒 / 95% 强提示 → 用户选清理/扩容/暂不处理」的弹窗尚未接 |
 | 2 | sqlite-vec 本机验证 | 本机沙箱拦 pip，SqliteVecStore 按官方 API 编写但未运行验证；numpy 兜底已完整测通。打包时需在装有 sqlite-vec 的环境验证 + 核验 LICENSE |
-| 3 | 设置 select 值类型 | 已修正为 str（前端 SettingsPanel FieldOption.value 为 string，show_if 用 === 严格比较）；config.yaml 默认值保持 int，治理代码 int 兼容 |
+| 3 | 巩固增量机制 | consolidate 每次提炼全部 session_logs（非增量），15 分钟节流已缓解频率；长期需增量标记优化 |
 
 ## 六、提交建议（Conventional Commits，未提交）
 
