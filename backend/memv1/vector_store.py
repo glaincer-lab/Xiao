@@ -4,12 +4,14 @@
 真源仍是 M1 画像存储（ProfileStore）与 GrowthStore，向量库可由真源重建（rebuild）。
 
 后端选型（老板定稿，见 M1-vector-memory.md §2/§8 问题4）：
-- 主选：sqlite-vec 0.1.9（win_amd64 预编译 wheel，py3-none；许可证预期 MIT，引入打包时核验）
+- 主选：sqlite-vec 0.1.9（win_amd64 预编译 wheel，py3-none；许可证 MIT + Apache-2.0 双许可，与项目 MIT 兼容，已核验）
 - 兜底：numpy 暴力 cosine 检索（零新增依赖，开箱即用）
 
-本机沙箱未安装 sqlite-vec（pip 被 DSH 沙箱拦），工厂 get_vector_store 探测失败时
-自动回退 NumpyVectorStore——这正是设计书 §4.4「sqlite-vec 不可用 → numpy 暴力检索」。
-SqliteVecStore 按 sqlite-vec 0.1.x 官方 README API 编写，未在本机运行验证（待打包时验证）。
+工厂 get_vector_store 探测失败时自动回退 NumpyVectorStore——设计书 §4.4「sqlite-vec 不可用 →
+numpy 暴力检索」。SqliteVecStore 已在本机真机验证（2026-08-31，sqlite-vec 0.1.9）：
+建表/upsert/查询/invalidate/delete/rebuild 全链路通过。验证修正两处与官方 API 的差异：
+① KNN 查询需 `k = ?` 约束（JOIN 场景 LIMIT 不被识别）；② vec0 默认 L2 距离，需显式
+`distance_metric=cosine` 以对齐 numpy 兜底的余弦相似度语义。
 
 字段约定（对齐设计书 §3.1）：VectorRecord = {id, text, embedding, meta, ts}，
 meta 含 kind/scope/effective_at/source/status/confidence/importance。
@@ -221,9 +223,9 @@ class NumpyVectorStore(VectorStore):
 class SqliteVecStore(VectorStore):
     """sqlite-vec 主选后端（vec0 虚拟表 + rowid 关联元数据表）。
 
-    注意：本机沙箱未安装 sqlite-vec（pip 被拦），本类按 sqlite-vec 0.1.x 官方
-    README API 编写，**未在本机运行验证**；工厂 get_vector_store 在本机会自动回退
-    NumpyVectorStore。引入打包时在装有 sqlite-vec 的环境验证本类。
+    已在本机真机验证（2026-08-31，sqlite-vec 0.1.9）：建表/upsert/查询/invalidate/
+    delete/rebuild 全链路通过。关键 API 对齐：vec0 建表需显式 distance_metric=cosine
+    （默认 L2），KNN 查询需 `AND k = ?` 约束（非 LIMIT）。
     """
 
     def __init__(self, path: str | Path | None = None, dim: int = DIM) -> None:
@@ -243,7 +245,7 @@ class SqliteVecStore(VectorStore):
             "rowid INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, text TEXT, meta TEXT, ts REAL)"
         )
         self._conn.execute(
-            f"CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(embedding float[{self._dim}])"
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(embedding float[{self._dim}] distance_metric=cosine)"
         )
         self._conn.commit()
 
@@ -282,7 +284,7 @@ class SqliteVecStore(VectorStore):
             rows = self._conn.execute(
                 "SELECT m.id, m.text, m.meta, m.ts, v.distance "
                 "FROM memories_vec v JOIN memories m ON m.rowid=v.rowid "
-                "WHERE v.embedding MATCH ? ORDER BY v.distance LIMIT ?",
+                "WHERE v.embedding MATCH ? AND k = ? ORDER BY v.distance",
                 (q_json, max(1, int(top_k))),
             ).fetchall()
         out: list[dict[str, Any]] = []

@@ -5,6 +5,7 @@ python-dotenv>=1.0
 PyYAML>=6.0
 tokenizers>=0.19  # 可选增强：网关语义消歧（semantic_filter），未装则自动降级为规则
 numpy>=1.26
+sqlite-vec==0.1.9  # 向量主选后端（Win x64 预编译 wheel，MIT+Apache-2.0；装不上自动回退 numpy 暴力兜底，绝不因缺后端无法启动）
 sounddevice>=0.4.6
 webrtcvad-wheels>=2.0.10
 sherpa-onnx>=1.13

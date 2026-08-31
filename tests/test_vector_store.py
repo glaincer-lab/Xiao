@@ -78,11 +78,44 @@ class NumpyVectorStoreTest(unittest.TestCase):
         self.assertEqual(store2.all_records()[0]["id"], "a")
 
 
+@unittest.skipUnless(vector_store_available(), "本机未装 sqlite-vec，跳过真机测试")
+class SqliteVecStoreTest(unittest.TestCase):
+    """SqliteVecStore 真机全链路（需本机装有 sqlite-vec，否则整体跳过）。"""
+
+    def setUp(self) -> None:
+        self._tmp = _make_tmp_dir("sqlite_vec_test")
+        self.addCleanup(lambda: shutil.rmtree(self._tmp, ignore_errors=True))
+        self.store = SqliteVecStore(self._tmp / "vec.sqlite3", dim=8)
+
+    def test_full_chain(self) -> None:
+        self.store.upsert(_rec("a", "我喜欢猫", [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+        self.store.upsert(_rec("b", "我喜欢狗", [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+        self.store.upsert(_rec("c", "苹果电脑", [1.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+        res = self.store.query([1.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], top_k=2)
+        self.assertEqual(len(res), 2)
+        self.assertEqual(res[0]["id"], "a")
+        self.assertGreaterEqual(res[0]["score"], 0.9)
+        self.assertEqual(self.store.count(), 3)
+        self.assertEqual(self.store.active_count(), 3)
+
+    def test_invalidate_delete_rebuild(self) -> None:
+        self.store.upsert(_rec("a", "x", [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+        self.store.upsert(_rec("b", "y", [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+        self.store.invalidate("a", "摘要")
+        self.assertEqual(self.store.active_count(), 1)
+        self.assertEqual(self.store.count(), 2)
+        self.store.delete("b")
+        self.assertEqual(self.store.count(), 1)
+        self.store.rebuild([_rec("d", "z", [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0])])
+        self.assertEqual(self.store.count(), 1)
+        self.assertEqual(self.store.all_records()[0]["id"], "d")
+
+
 class FactoryTest(unittest.TestCase):
     def test_get_vector_store_matches_backend_availability(self) -> None:
         d = _make_tmp_dir("vector_store_factory")
         self.addCleanup(lambda: shutil.rmtree(d, ignore_errors=True))
-        store = get_vector_store(path=d / "vec.json")
+        store = get_vector_store(path=d / "vec.json", dim=2)
         if vector_store_available():
             self.assertIsInstance(store, SqliteVecStore)
         else:
