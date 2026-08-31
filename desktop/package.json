@@ -42,6 +42,7 @@
       { "from": "../.env.example", "to": ".env.example" },
       { "from": "../requirements.txt", "to": "requirements.txt" },
       { "from": "../requirements-local-asr.txt", "to": "requirements-local-asr.txt" },
+      { "from": "../requirements-local-tts.txt", "to": "requirements-local-tts.txt" },
       { "from": "../frontend/dist", "to": "frontend/dist" },
       { "from": "../models", "to": "models" },
       { "from": "runtime/python", "to": "runtime/python" }

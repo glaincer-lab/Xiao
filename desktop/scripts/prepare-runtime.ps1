@@ -107,6 +107,21 @@ if (-not $SkipModels) {
     Download-File "$voiceBase/zh_CN-huayan-medium.onnx" $piperOnnx
     Download-File "$voiceBase/zh_CN-huayan-medium.onnx.json" "$piperOnnx.json"
   }
+
+  # bge 语义消歧模型（出网网关合规底线，随包）
+  # tokenizer 配置可从 HF 自动下载；ONNX 官方仓库默认不含（需导出/预置），见 scripts/install_gateway_model.py
+  $bgeDir = Join-Path $models "gateway-semantic\bge-small-zh-v1.5"
+  New-Item -ItemType Directory -Force -Path $bgeDir | Out-Null
+  foreach ($f in @("config.json", "tokenizer.json", "tokenizer_config.json")) {
+    $bgeDst = Join-Path $bgeDir $f
+    if (-not (Test-Path $bgeDst)) {
+      Write-Step "下载 bge 配置文件 $f"
+      Download-File "https://huggingface.co/BAAI/bge-small-zh-v1.5/resolve/main/$f" $bgeDst
+    }
+  }
+  if (-not (Test-Path (Join-Path $bgeDir "model_quantized.onnx")) -and -not (Test-Path (Join-Path $bgeDir "model.onnx"))) {
+    Write-Host "     [提示] bge 语义模型 ONNX（model_quantized.onnx / model.onnx）官方仓库不含，需手动预置到 $bgeDir（或用 optimum 导出）" -ForegroundColor Yellow
+  }
 }
 
 # ---- 3. 自检：关键依赖可导入 ----
