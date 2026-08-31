@@ -366,6 +366,7 @@ def apply_profile(
     store: Any | None = None,
     *,
     cancel_token: Callable[[], bool] | CancellationToken | None = None,
+    last_consolidated_ts: float | None = None,
 ) -> None:
     """原子提交画像：全部写入或回滚到上一版本。
 
@@ -391,13 +392,14 @@ def apply_profile(
         snapshot = copy.deepcopy(old)
         pending_was = bool(old.get("pending", False))
         try:
-            store.save(
-                {
-                    "entries": new_entries,
-                    "version": new_version,
-                    "pending": False,
-                }
-            )
+            new_profile = {
+                "entries": new_entries,
+                "version": new_version,
+                "pending": False,
+            }
+            if last_consolidated_ts is not None:
+                new_profile["last_consolidated_ts"] = float(last_consolidated_ts)
+            store.save(new_profile)
         except Exception as exc:  # noqa: BLE001
             # 原子提交失败：回滚到上一版本 + 记 consolidation_pending。
             try:
@@ -430,10 +432,25 @@ async def _consolidate(
     cancel_token: Callable[[], bool] | CancellationToken | None,
 ) -> dict[str, Any]:
     track = data_track if data_track is not None else _default_datatrack()
-    logs = track.items("session_logs")
+    store_obj = store if store is not None else _default_store()
+    profile = store_obj.load()
+    last_ts = float(profile.get("last_consolidated_ts", 0) or 0)
+    # 增量：有 ts 的记录只纳入 ts > 上次已巩固位置的新增；无 ts 的记录（历史/测试数据）总是纳入
+    all_logs = track.items("session_logs")
+    logs: list[dict[str, Any]] = []
+    for l in all_logs:
+        if not isinstance(l, dict):
+            continue
+        ts = l.get("ts")
+        if ts is None:
+            logs.append(l)
+        elif float(ts or 0) > last_ts:
+            logs.append(l)
+    ts_values = [float(l.get("ts", 0) or 0) for l in logs if l.get("ts")]
+    max_ts = max(ts_values, default=last_ts)
     raw = _join_session_logs(logs)
     if not raw:
-        return {"status": "empty", "session_id": session_id, "reason": "无会话原文可巩固"}
+        return {"status": "empty", "session_id": session_id, "reason": "无新增会话原文可巩固"}
 
     # 出网必过 guard_outbound（gateway 返回 (处置, 处理文本)）。
     verdict, processed = _guard_outbound(raw, session_id)
@@ -465,7 +482,7 @@ async def _consolidate(
             "committed": False,
         }
 
-    apply_profile(candidates, store=store)
+    apply_profile(candidates, store=store, last_consolidated_ts=max_ts)
     return {
         "status": "ok",
         "session_id": session_id,

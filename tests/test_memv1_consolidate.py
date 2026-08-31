@@ -274,5 +274,50 @@ class TestParseCandidates(unittest.TestCase):
             cons.parse_candidates("不是 JSON")
 
 
+# --------------------------------------------------------------------------- #
+# 增量巩固（last_consolidated_ts）
+# --------------------------------------------------------------------------- #
+class TestIncrementalConsolidation(unittest.TestCase):
+    """增量：有 ts 的记录只提炼上次位置之后的新增；无 ts 的总是纳入。"""
+
+    SID = "session_incr"
+
+    def _run(self, track, store):
+        llm = _FakeLLM('{"summary": "x", "emotional_tag": "1", "suggested_entities": []}')
+        with mock.patch.object(gw, "guard_outbound", side_effect=lambda raw, sid: ("cloud_safe", raw)), \
+                mock.patch.object(gw, "guard_inbound", side_effect=lambda t, s: t):
+            result = cons.trigger_consolidation(self.SID, data_track=track, store=store, llm_client=llm)
+            return result, llm
+
+    @staticmethod
+    def _last_user_text(llm):
+        return llm.messages[-1].content if llm.messages else ""
+
+    def test_second_run_skips_already_processed(self) -> None:
+        store = _FakeStore()
+        logs1 = [{"text": "旧A", "ts": 100}, {"text": "旧B", "ts": 200}]
+        r1, llm1 = self._run(_FakeTrack(logs1), store)
+        self.assertEqual(r1["status"], "ok")
+        self.assertEqual(store.load().get("last_consolidated_ts"), 200)
+        t1 = self._last_user_text(llm1)
+        self.assertIn("旧A", t1)
+        self.assertIn("旧B", t1)
+
+        logs2 = [{"text": "旧A", "ts": 100}, {"text": "旧B", "ts": 200}, {"text": "新C", "ts": 300}]
+        r2, llm2 = self._run(_FakeTrack(logs2), store)
+        self.assertEqual(r2["status"], "ok")
+        t2 = self._last_user_text(llm2)
+        self.assertIn("新C", t2)
+        self.assertNotIn("旧A", t2)
+        self.assertNotIn("旧B", t2)
+        self.assertEqual(store.load().get("last_consolidated_ts"), 300)
+
+    def test_no_ts_logs_always_included(self) -> None:
+        store = _FakeStore()
+        r, llm = self._run(_FakeTrack([{"text": "无时间戳"}]), store)
+        self.assertEqual(r["status"], "ok")
+        self.assertIn("无时间戳", self._last_user_text(llm))
+
+
 if __name__ == "__main__":
     unittest.main()
