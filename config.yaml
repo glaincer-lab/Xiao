@@ -389,3 +389,6 @@ perms:
     - 切到窗口
     - 截屏看
     - 看看屏幕
+logging:
+  level: INFO
+  file: logs/xiao.log

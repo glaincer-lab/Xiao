@@ -25,6 +25,15 @@ function readBackendPort() {
 const BACKEND_PORT = readBackendPort()
 const FRONTEND_URL = DEV ? 'http://localhost:5173' : `http://${BACKEND_HOST}:${BACKEND_PORT}`
 
+// 主进程日志：试用期定位「后端没拉起/闪退」用，写 logs/electron.log（相对 ROOT，失败不阻塞）
+function elog(msg) {
+  try {
+    fs.appendFileSync(path.join(ROOT, 'logs', 'electron.log'), `[${new Date().toISOString()}] ${msg}\n`)
+  } catch {
+    /* 写日志失败不阻塞主流程 */
+  }
+}
+
 let mainWindow = null
 let tray = null
 let backendProc = null
@@ -44,9 +53,11 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function bootstrap() {
+  elog('app ready，开始 bootstrap')
   await ensureBackend()
   createWindow()
   createTray()
+  elog('bootstrap 完成：后端就绪 + 窗口 + 托盘')
 }
 
 function findPython() {
@@ -54,6 +65,7 @@ function findPython() {
   if (app.isPackaged) {
     const bundled = path.join(process.resourcesPath, 'runtime', 'python', 'python.exe')
     if (fs.existsSync(bundled)) return bundled
+    elog('内置 Python 运行时缺失: ' + bundled)
     dialog.showErrorBox('小二', '内置 Python 运行时缺失，安装包可能不完整。\n请重新下载安装包；问题仍存在请到项目主页反馈。')
     app.quit()
     return ''
@@ -99,8 +111,10 @@ function waitForBackend() {
 function startBackend() {
   const py = findPython()
   if (!py) return
+  elog('拉起后端: ' + py + ' (cwd=' + ROOT + ')')
   backendProc = spawn(py, ['run.py'], { cwd: ROOT, stdio: 'ignore' })
   backendProc.on('exit', () => {
+    elog('后端进程退出')
     backendProc = null
     // 后端播完结束语后主动退出：稍等声卡收尾，再让整个桌面壳退出
     if (!quitting) {
@@ -146,6 +160,12 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  })
+  // 前端 console.warn/error 转发到主进程日志（试用期回溯前端报错）
+  mainWindow.webContents.on('console-message', (_event, details) => {
+    const level = details && typeof details.level === 'number' ? details.level : 3
+    const message = details && details.message ? String(details.message) : String(details)
+    if (level >= 2) elog(`[renderer:${level}] ${message}`)
   })
   mainWindow.loadURL(FRONTEND_URL)
   mainWindow.once('ready-to-show', () => mainWindow.show())
@@ -195,6 +215,7 @@ app.on('before-quit', () => {
 })
 
 app.on('quit', () => {
+  elog('app quit')
   if (backendProc) {
     try {
       backendProc.kill()
