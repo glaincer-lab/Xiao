@@ -57,7 +57,7 @@
 
 | 编号 | 级别 | 问题 | 证据 | 处置 |
 |---|---|---|---|---|
-| F1 | 🔴 阻塞 | `models/` 内 Piper 声库为 **huayan**（Unknown 授权）残留，非 chaowen(CC0)；`config.yaml` 的 `tts.*.piperModel` 已引用 `models/zh_CN-chaowen-medium.onnx` 但文件缺失 | `models/zh_CN-huayan-medium.onnx`(60.3MB) 存在；chaowen 缺失 | 下载 chaowen + 删除 huayan 残留 |
+| F1 | ✅ 已解决 | `models/` 内 Piper 声库曾为 **huayan**（Unknown 授权）残留，非 chaowen(CC0) | 已换 chaowen(CC0) 就位，huayan 移入 `_archive/` | ✅ chaowen 就位 + huayan 归档 |
 | F2 | 🔴 阻塞 | sherpa 唤醒模型目录缺 **Apache-2.0 LICENSE/NOTICE**，违反「分发包内保留其声明」口径 | `models/sherpa-onnx-kws-.../` 仅 README.md，无 LICENSE | 补 LICENSE/NOTICE |
 | F3 | 🟡 低 | 首启向导语言选择不落盘（config 无 lang 字段） | OnboardingWizard L236 选择后 finish() 未保存 | 记录，不阻塞（en 占位） |
 | F4 | 🟡 中 | `config.yaml` `agent.workspace: ../03_Workspace` 为开发者本机三段式命名痕迹，随包分发后第三方环境无此目录 | config.yaml L170 | 建议改通用默认值，待老板拍板 |

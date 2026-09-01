@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { API_BASE } from '../api'
+import { truncate } from '../lib/text'
 
 export type Task = {
   id: string
@@ -18,11 +19,6 @@ const STATUS_LABEL: Record<string, string> = {
   done: '完成',
   failed: '失败',
   cancelled: '已取消',
-}
-
-function truncate(s: string, n = 80): string {
-  const t = s.replace(/\s+/g, ' ').trim()
-  return t.length > n ? t.slice(0, n) + '…' : t
 }
 
 /* 按 id 合并两批任务：后者覆盖前者同名项，保留仅前者存在的旧项 */
@@ -103,8 +99,8 @@ export function TaskPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => vo
                         {STATUS_LABEL[t.status] ?? t.status}
                       </span>
                     </span>
-                    {t.error && <span className="perms-desc">{truncate(t.error)}</span>}
-                    {t.result && <span className="perms-desc">{truncate(t.result)}</span>}
+                    {t.error && <span className="perms-desc">{truncate(t.error, 80)}</span>}
+                    {t.result && <span className="perms-desc">{truncate(t.result, 80)}</span>}
                   </div>
                   {(t.status === 'pending' || t.status === 'running') && (
                     <div className="perms-item-actions">

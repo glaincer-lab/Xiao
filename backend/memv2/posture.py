@@ -28,7 +28,6 @@ from typing import Any, Callable
 # --------------------------------------------------------------------------- #
 # 八态常量（写死，见 M2_CONTRACT.md）
 # --------------------------------------------------------------------------- #
-STEWARD = "steward"
 FRIEND = "friend"
 COMPANION = "companion"
 ADVISOR = "advisor"
@@ -41,11 +40,6 @@ DEFEND = "defend"
 
 #: 首版自动参与判定的核心四态（扫描顺序=安全优先：应急/医护 → 同乐 → 陪伴）
 ACTIVE_CORE = (EMERGENCY, MEDICAL, CELEBRATE, COMPANION)
-
-#: 留接口（卡已注册，默认不自动判定，可经 activate 加入 active）
-# T9a：DEFEND 为影子日志硬门——卡已注册，但默认永不自动判定（人工校准后才能真路由）。
-RESERVED = (ADVISOR, METADIALOGUE, DEFEND)
-
 
 # --------------------------------------------------------------------------- #
 # 信号词表（字面子串匹配；纯文本，不含音频叹气）

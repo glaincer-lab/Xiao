@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from typing import Callable
 
 from backend.event_bus import EventBus
 from backend.m6.growth import MICRO_TYPES, GrowthStore

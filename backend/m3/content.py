@@ -19,21 +19,13 @@
 from __future__ import annotations
 
 import datetime as _dt
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Mapping
 
 # 质量门最低素材分：至少一个四维维度达到此分才视为「有料」（无素材宁可不说）
 MIN_MATERIAL_SCORE: float = 0.6
 
 # 四维维度名（与 score.DIMS 对齐；供质量门扫描）
 _DIMS: tuple[str, ...] = ("urgency", "actionability", "relationship", "freshness")
-
-
-class ContentSource(Protocol):
-    """内容源协议：给定时刻与上下文，产出候选 dict 或 None（无素材）。"""
-
-    def build_candidate(
-        self, now: _dt.datetime, ctx: Mapping[str, Any]
-    ) -> Mapping[str, Any] | None: ...
 
 
 def build_candidate(

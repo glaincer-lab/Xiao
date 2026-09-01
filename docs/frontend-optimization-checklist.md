@@ -50,7 +50,7 @@
 | # | 档 | 问题 | 位置 |
 |---|---|---|---|
 | 23 | 🔴 | 颜色 token 未落地，硬编码色值散落 20+ 处；`--danger` 未在 :root 定义靠兜底 | styles.css 多处 |
-| 24 | 🟡 | CosyVoice v3 / Qwen-Audio-TTS 死代码残留（AGENTS.md 已声明移除，SettingsPanel 仍渲染音色列表） | SettingsPanel.tsx:74-111/1178-1197/1301-1316 |
+| 24 | ✅ | CosyVoice v3 / Qwen-Audio-TTS 前后端均已清理（前端 SettingsPanel 音色列表 + 后端 cosyvoice.py/factory/settings_schema/provider_test 分支已删） | 已清理 |
 | 25 | ⚪ | 样式重复/覆盖式声明 5 处 | styles.css:470vs1448 等 |
 | 26 | ⚪ | BEM 命名混用 | styles.css:1261/1342 |
 | 27 | ⚪ | 设置面板窄屏无响应式（nav 固定 196px，actions 不换行） | styles.css:717-721/728 |
@@ -76,4 +76,4 @@
 - **批 1（核心，约 22 项）**：§一 性能（1-4）+ §二 稳定性（5-10）+ §三 交互反馈（11-16）+ §四 无障碍（19-20）
 - **批 2（打磨，约 16 项）**：§五 视觉/样式（23-28）+ §六 代码质量（29-38）
 
-> 两个需老板拍板的方向：① §五-24 死代码（CosyVoice/Qwen）清理与否；② §六-31 语言 en 选项（禁用 vs 落地 i18n）。
+> 需老板拍板的方向：§六-31 语言 en 选项（禁用 vs 落地 i18n）。

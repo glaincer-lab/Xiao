@@ -36,11 +36,6 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 # 无匹配时的兜底话术（请勿包含「记岔了」等断言，避免遮蔽必收组检查）
 DEFAULT_PHRASE = "嗯，我在，慢慢说。"
 
-# 话术条目的合法键（用于 load 后校验与最小解析器白名单）
-_PHRASE_KEYS = frozenset(
-    {"id", "stance", "emotion", "intimacy_range", "skeleton", "template", "ban_words", "variables"}
-)
-
 
 # --------------------------------------------------------------------------- #
 # 加载

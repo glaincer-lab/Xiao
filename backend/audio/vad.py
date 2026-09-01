@@ -31,7 +31,7 @@ class SileroVAD:
         if not p.exists():
             raise FileNotFoundError(
                 f"缺少 Silero VAD 模型：{p}\n"
-                "请下载 silero_vad.onnx 到 models/（Silero VAD 非商用免费，不随仓库分发）"
+                "缺少 Silero VAD 模型（MIT，随包提供），请重新安装或从项目仓库恢复 models/silero_vad.onnx"
             )
         return str(p)
 

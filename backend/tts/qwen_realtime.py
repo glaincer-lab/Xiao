@@ -1,10 +1,10 @@
 """TTS：阿里云实时流式播报（qwen3-tts-flash-realtime）+ sounddevice 流式播放。
 
-与非流式（cosyvoice.py 的整段合成完再播）不同，这里走 Realtime WebSocket：
+与整段合成完再播的非流式不同，这里走 Realtime WebSocket：
 commit 文本后服务端持续推送 PCM 音频帧（base64），边收边播，首包约 0.4s，
 语音能紧跟字幕。API Key 复用阿里云百炼的 DASHSCOPE_API_KEY。
 
-音色体系与 CosyVoice/Qwen-Audio-TTS 不同：Ethan / Serena / Moon 等英文名音色。
+音色体系为英文名：Ethan / Serena / Moon 等英文名音色。
 
 延迟优化：speak 结束后后台预热下一条 WebSocket 连接（建连约 0.9s），
 下次播报直接复用，首音延迟约 0.4s。

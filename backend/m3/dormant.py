@@ -34,8 +34,6 @@ SUBSCRIBED_EVENTS: tuple[str, ...] = ("macro.state_changed",)
 
 # DORMANT 字符串常量引用（只读；来自 M0，安全默认非 DORMANT）
 _DORMANT = "DORMANT"
-_RETURNING = "RETURNING"
-_ACTIVE = "ACTIVE"
 
 logger = logging.getLogger("m3.dormant")
 

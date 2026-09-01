@@ -32,7 +32,6 @@ except Exception:  # pragma: no cover - 环境缺依赖时的兜底
     ort = None
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_DIR = _PROJECT_ROOT / "models" / "gateway-semantic"
 DEFAULT_THRESHOLD = 0.72
 
 # 内置「安全技术语境」锚点（命中黑词后与之比较相似度；可经 cfg['anchors'] 增补）。
@@ -52,7 +51,6 @@ class SemanticUnavailable(RuntimeError):
 # ---------------------------------------------------------------------------
 # 内置标准库 BERT WordPiece tokenizer（tokenizers 库缺失时的回退）
 # ---------------------------------------------------------------------------
-_CJK = re.compile(r"[一-鿿㐀-䶿]")
 _PRETOKEN = re.compile(r"[A-Za-z0-9]+|[一-鿿㐀-䶿]|[^sA-Za-z0-9一-鿿㐀-䶿]")
 
 

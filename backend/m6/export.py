@@ -27,7 +27,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from backend.config import ROOT
 from backend.m6.growth import GrowthStore

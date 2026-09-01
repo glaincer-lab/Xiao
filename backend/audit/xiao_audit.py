@@ -31,9 +31,6 @@ FACT_EVENT_TYPES: frozenset[str] = frozenset({
     "turn/end",
 })
 
-# 桥内部派生态（供前端上屏用），auditor 只忽略、不重复记录。
-_DERIVED_EVENT_TYPES: frozenset[str] = frozenset({"work_step", "dsh_chunk"})
-
 
 class XiaoAuditor:
     """把 bridge 的 event_sink 事件追加式写入 run 级事实平面，并提供 replay/scorecard。"""

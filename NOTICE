@@ -25,6 +25,6 @@ Copyright (c) 2025 Xiao（小二）
 ----------
 关键依赖的许可证（其余详见各依赖包内 LICENSE 与 requirements.txt）：
 * sherpa-onnx（Apache-2.0）、onnxruntime（MIT）、dashscope（Apache-2.0）
-* pygame（LGPL）—— 动态链接、不修改源码即可使用，不传染本项目代码
+* pygame（LGPL）、edge-tts（LGPLv3）—— 动态链接、不修改源码即可使用，不传染本项目代码
 * Piper（GPL-3.0）—— 本地离线保底播报引擎，为可选组件：不随主分发包捆绑，用户按需自行下载安装声库与二进制，小二仅提供运行时加载句柄，避免 MIT 主包被 GPL-3.0 传染
-* 其余（fastapi、edge-tts、openai 等）—— 详见各依赖包内 LICENSE
+* 其余（fastapi、openai 等）—— 详见各依赖包内 LICENSE

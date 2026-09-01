@@ -9,6 +9,7 @@ import { PermsPanel } from './components/PermsPanel'
 import { TaskPanel, type Task } from './components/TaskPanel'
 import { WorkPanel, type WorkStep } from './components/WorkPanel'
 import { OnboardingWizard } from './components/OnboardingWizard'
+import { truncate } from './lib/text'
 
 type Message = {
   id: number
@@ -132,11 +133,6 @@ type LogEntry = {
   time: string
   label: string
   kind: string
-}
-
-function truncate(s: string, n = 60): string {
-  const t = s.replace(/\s+/g, ' ').trim()
-  return t.length > n ? t.slice(0, n) + '…' : t
 }
 
 function describeEvent(e: ServerEvent): { label: string; kind: string } | null {
