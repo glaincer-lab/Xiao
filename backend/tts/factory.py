@@ -13,6 +13,8 @@ provider 收敛为 6 类：
 """
 from __future__ import annotations
 
+import os
+
 from backend.config import OMNI_BASE_URL, OMNI_MODEL, config
 from backend.tts.base import TTSEngine
 from backend.tts.edge_tts import EdgeTTS
@@ -41,8 +43,9 @@ def _build_qwen_rt(voice: str, api_key: str | None, warm: bool = True) -> TTSEng
     from backend.tts.qwen_realtime import QwenRealtimeTTS
 
     engine = QwenRealtimeTTS(voice=voice, api_key=api_key)
-    if warm:
-        engine.warm()  # 启动即预热连接，首句播报首音约 0.4s
+    # 无 Key 时预热必失败（且产生告警日志），跳过 warm，播报时再走 Piper/edge 降级
+    if warm and (api_key or os.environ.get("DASHSCOPE_API_KEY")):
+        engine.warm()  # 有 Key 才预热连接，首句播报首音约 0.4s
     return engine
 
 
