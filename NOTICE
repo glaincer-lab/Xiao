@@ -4,13 +4,18 @@ Copyright (c) 2025 Xiao（小二）
 
 本项目源代码以 MIT 许可证发布（见 LICENSE 文件）。
 
-模型与权重
-----------
-本仓库只分发源代码，不分发受非商用或商用限制的模型权重：
+模型与权重（随分发包；四项授权均已逐项核验，详见 docs/packaging-notes.md）
+--------------------------------------------------------------------------
+本项目随分发包提供以下本地模型：
 
-* Sherpa-ONNX KWS 中文唤醒模型（models/）—— Apache-2.0，可由用户自行下载。
-* Silero VAD 模型（models/silero_vad.onnx）—— 非商用免费、商用需授权，不随仓库分发，请自行下载。
-* FunASR（paraformer-zh）本地模型 —— 非商用免费、商用需阿里授权，不随仓库分发。
+* Silero VAD 模型（models/silero_vad.onnx）—— MIT（snakers4/silero-vad），随包。
+* Sherpa-ONNX KWS 中文唤醒模型（models/sherpa-onnx-kws-.../）—— Apache-2.0（k2-fsa/sherpa-onnx），随包；分发包内须保留 Apache-2.0 LICENSE/NOTICE 声明。
+* bge-small-zh-v1.5 语义消歧模型（models/gateway-semantic/bge-small-zh-v1.5/）—— MIT（BAAI）；ONNX 权重经 Xenova/bge-small-zh-v1.5 转换、继承 BAAI MIT；随包（出网网关合规底线）。
+* Piper 中文声库（models/zh_CN-chaowen-medium.onnx）—— CC0（OHF-Voice/voice-datasets，来源 rhasspy/piper-voices）；随包（仅声库模型文件，非 piper-tts GPL 库本体）。
+
+不随包：
+* FunASR（paraformer-zh）本地模型 —— 非商用免费、商用需阿里授权，按需自行安装。
+* piper-tts 库本体 —— GPL-3.0，不随包（随包的是 CC0 声库 .onnx 模型文件）。
 
 云端服务
 --------
