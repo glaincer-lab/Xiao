@@ -177,7 +177,7 @@ class XiaoFactPlane:
 
     # ---- 测试 / 清理 ----
     def clear(self) -> None:
-        """删除整个 audit 工作区（仅测试用，运行时勿调）。"""
+        """删除整个 audit 工作区（测试用；隐私删除入口 /api/audit/clear 也复用）。"""
         with self._lock:
             if self._base_dir.exists():
                 shutil.rmtree(self._base_dir, ignore_errors=True)

@@ -419,6 +419,87 @@ async def clear_memory() -> dict:
     return {"ok": True}
 
 
+@app.post("/api/memory/delete")
+async def delete_memory(payload: dict) -> dict:
+    """删除单条长期记忆（按 id，部分选择，非一键全清）。body: {id}。"""
+    from backend.memory import memory_store
+
+    entry_id = str(payload.get("id") or "").strip()
+    if not entry_id:
+        return {"ok": False, "msg": "缺少要删除的记忆 id"}
+    if not memory_store.delete(entry_id):
+        return {"ok": False, "msg": "未找到该条记忆（可能已被删除）"}
+    return {"ok": True, "deleted": entry_id}
+
+
+@app.post("/api/memory/delete_range")
+async def delete_memory_range(payload: dict) -> dict:
+    """按时间区间删除长期记忆（快捷项由前端换算成 ts 传入）。body: {start_ts?, end_ts?}。"""
+    from backend.memory import memory_store
+
+    start_ts = payload.get("start_ts")
+    end_ts = payload.get("end_ts")
+    try:
+        lo = None if start_ts in (None, "") else float(start_ts)
+        hi = None if end_ts in (None, "") else float(end_ts)
+    except (TypeError, ValueError):
+        return {"ok": False, "msg": "时间戳格式不正确（需为 Unix 秒数字）"}
+    if lo is not None and hi is not None and lo > hi:
+        return {"ok": False, "msg": "开始时间不能晚于结束时间"}
+    removed = memory_store.delete_range(lo, hi)
+    return {"ok": True, "removed": removed}
+
+
+@app.post("/api/audit/clear")
+async def clear_audit() -> dict:
+    """清空审计 fact plane（run 级事实日志）。"""
+    if auditor is None:
+        return {"ok": False, "msg": "审计未初始化"}
+    runs = auditor.plane.runs()
+    auditor.flush()
+    auditor.plane.clear()
+    return {"ok": True, "cleared_runs": len(runs)}
+
+
+@app.post("/api/persona/clear")
+async def clear_persona() -> dict:
+    """清空用户画像：人设卡/亲友卡/哀伤标签/惯例画像（世界观 lorebook 保留）。"""
+    from backend.memv1.persona import clear_persona as persona_clear
+
+    try:
+        persona_clear()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "msg": f"清空画像失败：{exc}"}
+    return {"ok": True}
+
+
+@app.post("/api/memv4/clear")
+async def clear_memv4() -> dict:
+    """清空会话数据轨（session_logs / raw_frames_meta / context_snapshots）。
+
+    走 memv4 模块单例，清空后 agent 注入的会话原文 provider 立即同步（无需重启）。
+    """
+    from backend.memv4 import get_datatrack
+
+    removed = get_datatrack().clear()
+    return {"ok": True, "removed": removed}
+
+
+@app.post("/api/memv1/profile/clear")
+async def clear_profile() -> dict:
+    """清空向量画像真源（ProfileStore）+ 同步清空其派生向量索引（kind=episodic）。
+
+    返回 {ok, cleared}；向量索引清理失败不阻断（真源已清，索引可自动重建）。
+    """
+    from backend.memv1.consolidate import clear_profile as do_clear_profile
+
+    try:
+        cleared = do_clear_profile()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "msg": f"清空画像失败：{exc}"}
+    return {"ok": True, "cleared": cleared}
+
+
 @app.post("/api/mic/echo")
 async def mic_echo(payload: dict) -> dict:
     """回声测试：录一段麦克风音频，立即经扬声器回放，验证音频通路。

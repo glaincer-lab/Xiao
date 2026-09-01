@@ -531,6 +531,21 @@ class PersonaStore:
             })
             return self.habit_profile()
 
+    # ===================================================================== #
+    # 清空画像（隐私删除入口，幂等）
+    # ===================================================================== #
+
+    def clear(self) -> None:
+        """清空用户画像（幂等）：人设卡重置为默认、亲友卡/哀伤标签清空、惯例画像重置。
+
+        世界观（lorebook/*.json）为预置内容资产，不随画像清空。
+        """
+        with self._lock:
+            _save_json(self._persona_path, copy.deepcopy(DEFAULT_PERSONA))
+            _save_json(self._kinship_path, [])
+            _save_json(self._grief_path, [])
+            _save_json(self._habit_path, {"mode": "normal", "rebuild_reason": "", "habits": []})
+
 
 # --------------------------------------------------------------------------- #
 # 模块级默认实例 + 契约函数
@@ -623,6 +638,11 @@ def exit_rebuild_mode() -> dict[str, Any]:
     return _store.exit_rebuild_mode()
 
 
+def clear_persona() -> None:
+    """清空用户画像（契约入口，见 PersonaStore.clear）。"""
+    return _store.clear()
+
+
 __all__ = [
     "DEFAULT_PERSONA",
     "KinshipCard",
@@ -644,4 +664,5 @@ __all__ = [
     "add_habit",
     "enter_rebuild_mode",
     "exit_rebuild_mode",
+    "clear_persona",
 ]

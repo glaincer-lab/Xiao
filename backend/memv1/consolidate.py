@@ -206,6 +206,16 @@ class ProfileStore:
         profile["pending"] = bool(flag)
         self.save(profile)
 
+    def clear(self) -> int:
+        """清空画像真源（幂等）：entries 置空、version 归 0、pending 置 False。
+
+        返回清空的条目数。派生向量索引里画像的投影由 `clear_profile()` 另行同步清理。
+        """
+        old = self.load()
+        cleared = len(old.get("entries", []))
+        self.save({"entries": [], "version": 0, "pending": False})
+        return cleared
+
 
 def _default_store() -> ProfileStore:
     return ProfileStore()
@@ -219,6 +229,37 @@ def _default_datatrack() -> Any:
     from backend.memv4 import DataTrack
 
     return DataTrack()
+
+
+def clear_profile(store: Any | None = None, vector_store: Any | None = None) -> int:
+    """清空画像真源 + 同步清空派生向量索引里画像（kind=episodic）的投影（幂等）。
+
+    向量索引是「画像 + 成长三轨/共同记忆」的混合派生索引；此处只精确删除画像条目
+    （meta.kind == "episodic"）的向量投影，**保留成长 P0（milestone/person）**，
+    避免误伤永不失效的共同记忆。向量索引清理失败只告警不抛错——真源已清，索引
+    下次 index_now() 会重建为不含画像的状态。
+
+    Args:
+        store: 可注入的 ProfileStore（测试用）；缺省用默认真源路径。
+        vector_store: 可注入的向量存储（测试用）；缺省用 get_vector_store()。
+
+    Returns:
+        清空的画像条目数。
+    """
+    profile = store if store is not None else _default_store()
+    cleared = profile.clear()
+    try:
+        vs = vector_store
+        if vs is None:
+            from backend.memv1.vector_store import get_vector_store
+
+            vs = get_vector_store()
+        for rec in vs.all_records():
+            if (rec.get("meta") or {}).get("kind") == "episodic":
+                vs.delete(str(rec.get("id")))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[consolidate] 清空向量索引里画像投影失败: {exc}")
+    return cleared
 
 
 # --------------------------------------------------------------------------- #
@@ -520,6 +561,7 @@ __all__ = [
     "ConsolidationCancelled",
     "ConsolidationParseError",
     "ProfileStore",
+    "clear_profile",
     "create_client",
     "parse_candidates",
     "apply_profile",

@@ -179,6 +179,24 @@ class DataTrack:
                 self._save(kind)
         return removed
 
+    def clear(self, kind: str | None = None) -> int:
+        """清空一条或全部数据轨（幂等）；kind 缺省清空全部三层，返回删除行数。
+
+        供隐私删除入口使用：按 kind 可单独清（「部分选择，非一键全清」）。
+        """
+        if kind is None:
+            kinds = DATA_TRACK_KINDS
+        else:
+            self._validate_kind(kind)
+            kinds = (kind,)
+        removed = 0
+        with self._lock:
+            for k in kinds:
+                removed += len(self._layers[k])
+                self._layers[k] = []
+                self._save(k)
+        return removed
+
     # ---- 内部 ----
 
     @staticmethod
@@ -217,10 +235,29 @@ class DataTrack:
             print(f"[memv4] 数据轨保存失败 ({kind}): {e}")
 
 
+_datatrack = None  # 惰性单例：避免 import 即读盘（见 get_datatrack）
+_datatrack_lock = threading.Lock()
+
+
+def get_datatrack() -> "DataTrack":
+    """模块级单例：返回同一个 DataTrack 实例（默认 root logs/memv4）。
+
+    供 agent.py 的注入 provider 与 /api/memv4/clear 共享同一内存态，清空后立即
+    生效（无需重启进程）。线程安全（双重检查锁）。
+    """
+    global _datatrack
+    if _datatrack is None:
+        with _datatrack_lock:
+            if _datatrack is None:
+                _datatrack = DataTrack()
+    return _datatrack
+
+
 __all__ = [
     "DATA_TRACK_KINDS",
     "PROFILE_MAX_ENTRIES",
     "MemEntry",
     "DataTrack",
+    "get_datatrack",
     "evict_low_confidence",
 ]

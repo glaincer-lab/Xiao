@@ -17,8 +17,8 @@ from pathlib import Path
 
 from backend.config import ROOT, config
 
-DEFAULT_MAX_ENTRIES = 100
-DEFAULT_INJECT_LIMIT = 20
+DEFAULT_MAX_ENTRIES = 500
+DEFAULT_INJECT_LIMIT = 30
 
 
 class MemoryStore:
@@ -54,6 +54,51 @@ class MemoryStore:
         with self._lock:
             self._entries = []
         self._save()
+
+    def delete(self, entry_id: str) -> bool:
+        """按 id 删除单条记忆；返回是否真的删除（id 不存在返回 False）。"""
+        entry_id = str(entry_id or "").strip()
+        if not entry_id:
+            return False
+        with self._lock:
+            before = len(self._entries)
+            self._entries = [e for e in self._entries if str(e.get("id")) != entry_id]
+            removed = before - len(self._entries)
+        if removed:
+            self._save()
+        return removed > 0
+
+    def delete_range(
+        self,
+        start_ts: float | None = None,
+        end_ts: float | None = None,
+    ) -> int:
+        """按时间区间删除（闭区间 [start_ts, end_ts]，按 entry 的 ts 过滤）。
+
+        start_ts / end_ts 为 Unix 秒；缺省一端视为无界。返回删除条数。
+        """
+        lo = None if start_ts is None else float(start_ts)
+        hi = None if end_ts is None else float(end_ts)
+        with self._lock:
+            before = len(self._entries)
+            kept: list[dict] = []
+            for e in self._entries:
+                try:
+                    ts = float(e.get("ts", 0) or 0)
+                except (TypeError, ValueError):
+                    ts = 0.0
+                if lo is not None and ts < lo:
+                    kept.append(e)
+                    continue
+                if hi is not None and ts > hi:
+                    kept.append(e)
+                    continue
+                # 落在区间内 → 删除（不保留）
+            self._entries = kept
+            removed = before - len(self._entries)
+        if removed:
+            self._save()
+        return removed
 
     def context_text(self, limit: int | None = None) -> str:
         """拼进系统提示词的注入文本；无记忆时返回空串（调用方据此跳过）。"""
