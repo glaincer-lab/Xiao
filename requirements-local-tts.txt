@@ -4,5 +4,5 @@
 # 故作为可选依赖单列。仅在需要「断网也能播报」的离线保底场景安装：
 #   pip install -r requirements-local-tts.txt
 #
-# 声库：models/zh_CN-huayan-medium.onnx（约 63MB）+ 同名 .onnx.json 已随项目提供。
+# 声库：models/zh_CN-chaowen-medium.onnx（约 63MB）+ 同名 .onnx.json 已随项目提供。
 piper-tts>=1.2

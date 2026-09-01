@@ -1,7 +1,7 @@
 """TTS：本地 Piper（完全离线）+ pygame 播放。
 
 依赖：pip install piper-tts（含 onnxruntime + espeak-ng-data）。
-声库：从 rhasspy/piper-voices 下载中文 .onnx（如 zh_CN-huayan-medium.onnx），
+声库：从 rhasspy/piper-voices 下载中文 .onnx（如 zh_CN-chaowen-medium.onnx），
 在设置面板填该文件的本地路径。API 以 piper-tts 官方为准（PiperVoice.load + synthesize）。
 """
 from __future__ import annotations

@@ -158,7 +158,7 @@ SCHEMA: list[dict] = [
          {"value": "plus", "label": "plus（音质更好）", "status": "ok"},
      ]},
     {"path": "_guide.tts.piper", "label": "引导", "type": "guide", "group": "tts",
-     "guide": "本地 Piper：完全离线合成，作为断网保底。\n依赖：pip install piper-tts；声库 models/zh_CN-huayan-medium.onnx（已随项目提供）。"},
+     "guide": "本地 Piper：完全离线合成，作为断网保底。\n依赖：pip install piper-tts；声库 models/zh_CN-chaowen-medium.onnx（已随项目提供）。"},
     {"path": "_guide.tts.omni", "label": "引导", "type": "guide", "group": "tts",
      "guide": f"MiniCPM-o 通过本地 vLLM-omni 服务播报（llm.omni 的 base_url，默认 {OMNI_BASE_URL}）。\n需本机已启动 vLLM-omni，否则无声音。"},
 

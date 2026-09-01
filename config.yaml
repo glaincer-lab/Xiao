@@ -139,7 +139,7 @@ tts:
     rate: +0%
     tier: flash
     apiKey: ''
-    piperModel: models/zh_CN-huayan-medium.onnx
+    piperModel: models/zh_CN-chaowen-medium.onnx
   - id: tts_edge
     name: edge-tts 免费云
     provider: edge
@@ -147,7 +147,7 @@ tts:
     rate: +30%
     tier: flash
     apiKey: ''
-    piperModel: models/zh_CN-huayan-medium.onnx
+    piperModel: models/zh_CN-chaowen-medium.onnx
   - id: tts_piper
     name: Piper（本地离线保底）
     provider: piper
@@ -155,7 +155,7 @@ tts:
     tier: flash
     rate: +0%
     apiKey: ''
-    piperModel: models/zh_CN-huayan-medium.onnx
+    piperModel: models/zh_CN-chaowen-medium.onnx
   - id: tts_omni
     name: MiniCPM-o（本地 vLLM）
     provider: omni
@@ -163,7 +163,7 @@ tts:
     tier: flash
     rate: +0%
     apiKey: ''
-    piperModel: models/zh_CN-huayan-medium.onnx
+    piperModel: models/zh_CN-chaowen-medium.onnx
   voice: zh-CN-YunjianNeural
   rate: +30%
 agent:

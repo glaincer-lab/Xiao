@@ -218,7 +218,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'qwen-audio-3.0-asr-flash-streaming', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
   const [editASRId, setEditASRId] = useState<string | null>(null)
   const [showAddTTS, setShowAddTTS] = useState(false)
-  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; tier: 'flash' | 'plus'; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-huayan-medium.onnx' })
+  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; tier: 'flash' | 'plus'; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-chaowen-medium.onnx' })
   const [editTTSId, setEditTTSId] = useState<string | null>(null)
   const [showAddWake, setShowAddWake] = useState(false)
   const [wakeForm, setWakeForm] = useState<{ engine: 'sherpa' | 'omni'; keyword: string; pinyin: string; threshold: number; modelDir: string; name: string; baseUrl: string; model: string }>({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '', baseUrl: 'http://localhost:8000/v1', model: 'openbmb/MiniCPM-o-4_5' })
@@ -1062,13 +1062,13 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
 
     const startNewTTS = () => {
       setEditTTSId(null)
-      setTtsForm({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-huayan-medium.onnx' })
+      setTtsForm({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-chaowen-medium.onnx' })
       setShowAddTTS(true)
     }
 
     const startEditTTS = (m: SavedTTS) => {
       setEditTTSId(m.id)
-      setTtsForm({ provider: m.provider, voice: m.voice, rate: m.rate, name: m.name, apiKey: m.apiKey || '', tier: m.tier || 'flash', piperModel: m.piperModel || 'models/zh_CN-huayan-medium.onnx' })
+      setTtsForm({ provider: m.provider, voice: m.voice, rate: m.rate, name: m.name, apiKey: m.apiKey || '', tier: m.tier || 'flash', piperModel: m.piperModel || 'models/zh_CN-chaowen-medium.onnx' })
       setShowAddTTS(true)
     }
 
@@ -1199,7 +1199,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             {ttsForm.provider === 'piper' && (
               <label className="settings-field">
                 <span className="settings-field-label">Piper 声库路径</span>
-                <input type="text" value={ttsForm.piperModel} placeholder="models/zh_CN-huayan-medium.onnx" onChange={(e) => setTtsForm({ ...ttsForm, piperModel: e.target.value })} />
+                <input type="text" value={ttsForm.piperModel} placeholder="models/zh_CN-chaowen-medium.onnx" onChange={(e) => setTtsForm({ ...ttsForm, piperModel: e.target.value })} />
               </label>
             )}
 
@@ -1317,7 +1317,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
         {activeScheme && activeScheme.provider === 'piper' && (
           <label className="settings-field">
             <span className="settings-field-label">Piper 声库路径</span>
-            <input type="text" value={activeScheme.piperModel || 'models/zh_CN-huayan-medium.onnx'} onChange={(e) => updateTTS(activeTTS, { piperModel: e.target.value })} />
+            <input type="text" value={activeScheme.piperModel || 'models/zh_CN-chaowen-medium.onnx'} onChange={(e) => updateTTS(activeTTS, { piperModel: e.target.value })} />
           </label>
         )}
       </>

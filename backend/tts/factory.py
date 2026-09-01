@@ -63,7 +63,7 @@ _PROVIDER_DEFAULTS = {
     "qwen_rt": {"voice": "Ethan"},
     "cosyvoice": {"tier": "flash", "voice": "longanyang"},
     "qwen": {"tier": "flash", "voice": "longyingsongliu"},
-    "piper": {"model": "models/zh_CN-huayan-medium.onnx"},
+    "piper": {"model": "models/zh_CN-chaowen-medium.onnx"},
 }
 
 
@@ -90,7 +90,7 @@ def _active_model() -> dict:
         m["voice"] = config.get("tts.voice", "Ethan")
         m["apiKey"] = config.get("tts.api_key")
     elif provider == "piper":
-        m["piperModel"] = config.section("tts.piper").get("model", "models/zh_CN-huayan-medium.onnx")
+        m["piperModel"] = config.section("tts.piper").get("model", "models/zh_CN-chaowen-medium.onnx")
     else:  # edge
         m["voice"] = config.get("tts.voice", "zh-CN-YunjianNeural")
         m["rate"] = config.get("tts.rate", "+30%")
@@ -112,7 +112,7 @@ def _dispatch(m: dict, warm: bool = True) -> TTSEngine:
             warm=warm,
         )
     if provider == "piper":
-        return _build_piper(m.get("piperModel", "models/zh_CN-huayan-medium.onnx"))
+        return _build_piper(m.get("piperModel", "models/zh_CN-chaowen-medium.onnx"))
     if provider == "omni":
         return _build_omni()
     raise ValueError(f"TTS 方案尚未接入: {provider}")
@@ -134,7 +134,7 @@ def build_tts() -> TTSEngine:
             pass
     # 本地保底 Piper（已配置且前置检查通过才纳入）
     try:
-        piper = _build_piper(config.section("tts.piper").get("model", "models/zh_CN-huayan-medium.onnx"))
+        piper = _build_piper(config.section("tts.piper").get("model", "models/zh_CN-chaowen-medium.onnx"))
         if piper.preflight() is None:
             engines.append(piper)
     except Exception:  # noqa: BLE001
