@@ -28,11 +28,24 @@ compliance_gateway:
     - "bank"
     - "自杀"
     - "不想活了"
+    - "银行卡"
+    - "手机号"
+    - "家庭住址"
+    - "身份证号"
+    - "工资"
+    - "病历"
+    - "定位"
 
   # 2. 差序/敏感名词混淆映射（出网前替换，回程还原）。
   #    格式：{"原词": "占位符"}。例如 "我妈": "User_Kinship_Mother"。
   #    留空 {} 表示暂不替换；手工映射只护高频实体，长尾明文出网（个人自用豁免）。
-  obfuscation_mapping: {}   # 示例: {"我妈": "User_Kinship_Mother", "张总": "User_Leader_Alpha"}
+  obfuscation_mapping:
+    "我妈": "User_Kinship_Mother"
+    "我爸": "User_Kinship_Father"
+    "我老婆": "User_Spouse"
+    "我女朋友": "User_Partner"
+    "我老板": "User_Leader_Alpha"
+    "我家": "User_Home_Alpha"
 
   # 3. 巩固摘要 Prompt 的 suggested_entities 最大条数（顺风车 NER 上限）。
   suggested_entities_max: 5

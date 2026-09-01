@@ -10,14 +10,16 @@ per-node 独立 context，节点间数据经 backend/event_bus.py 的 task.node_
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
+from dataclasses import replace
 from typing import Any
 
+from backend.authorization import AuthorizationCenter
 from backend.config import config
 from backend.event_bus import EventBus, bus
-from backend.llm.base import LLMClient
+from backend.gateway.gateway import guard_outbound
+from backend.llm.base import ChatMessage, LLMClient
 from backend.llm.factory import build_llm, build_llm_by_id
 
 from backend.orchestrator.xiao_events import (
@@ -42,6 +44,24 @@ logger = logging.getLogger(__name__)
 # 编排层可直接构造的 LLMClient 抽象（供依赖注入/测试）。
 # 默认从 backend.llm.factory 的 build_llm / build_llm_by_id 解析，复用多方案可切能力。
 DEFAULT_MAX_NODES = 8
+
+
+def _guard_messages(messages: list[ChatMessage], session_id: str) -> list[ChatMessage]:
+    """出网前过安全网关：逐条 str content 做黑词拦截/敏感词混淆，返回新的消息列表。
+
+    - verdict == "blocked"：content 替换为占位提示（本条仅本机处理，未发云端）；
+    - verdict == "cloud_safe"：content 替换为混淆后文本；
+    - content 为 None / 非 str、或 assistant 消息带 tool_calls 时跳过（不动 tool_calls 结构）。
+    """
+    blocked_placeholder = "（本条内容含敏感信息，已仅在本机处理，未发送给云端）"
+    guarded: list[ChatMessage] = []
+    for msg in messages:
+        content = msg.content
+        if isinstance(content, str) and not (msg.role == "assistant" and msg.tool_calls):
+            verdict, processed = guard_outbound(content, session_id)
+            content = blocked_placeholder if verdict == "blocked" else processed
+        guarded.append(replace(msg, content=content))
+    return guarded
 
 
 def resolve_role_client(role: str, cfg: Any = None) -> LLMClient:
@@ -166,6 +186,8 @@ class XiaoOrchestrator:
     async def _plan(self, task_text: str, task_id: str) -> XiaoPlan:
         try:
             messages = build_planner_messages(task_text, self._max_nodes)
+            if getattr(self._planner, "is_cloud", False) and AuthorizationCenter().is_granted("guard_outbound"):
+                messages = _guard_messages(messages, task_id)
             completion = await self._planner.complete(messages)
             content = (completion.content or "")
         except Exception as exc:  # noqa: BLE001
@@ -188,6 +210,8 @@ class XiaoOrchestrator:
         """构建本节点全新消息序列并交给执行器（独立 context，不共享历史）。"""
         messages = build_worker_messages(task_text, plan.summary, node, node.inputs)
         try:
+            if getattr(self._worker, "is_cloud", False) and AuthorizationCenter().is_granted("guard_outbound"):
+                messages = _guard_messages(messages, plan.task_id)
             completion = await self._worker.complete(messages)
         except Exception as exc:  # noqa: BLE001
             raise XiaoNodeError(node.node_id, str(exc)) from exc

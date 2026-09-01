@@ -7,10 +7,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 from typing import Callable
 
+from backend.authorization import AuthorizationCenter
 from backend.config import config
 from backend.errors import human_reason
+from backend.gateway.gateway import guard_outbound
 from backend.llm.base import ChatMessage, LLMClient
 from backend.memory import MemoryStore, memory_store
 from backend.memv1.retrieval import build_injection, set_entry_provider, set_vector_retriever
@@ -68,6 +71,24 @@ def tool_rounds() -> int:
     return DEFAULT_TOOL_ROUNDS
 
 
+def _guard_messages(messages: list[ChatMessage], session_id: str) -> list[ChatMessage]:
+    """出网前过安全网关：逐条 str content 做黑词拦截/敏感词混淆，返回新的消息列表。
+
+    - verdict == "blocked"：content 替换为占位提示（本条仅本机处理，未发云端）；
+    - verdict == "cloud_safe"：content 替换为混淆后文本；
+    - content 为 None / 非 str、或 assistant 消息带 tool_calls 时跳过（不动 tool_calls 结构）。
+    """
+    blocked_placeholder = "（本条内容含敏感信息，已仅在本机处理，未发送给云端）"
+    guarded: list[ChatMessage] = []
+    for msg in messages:
+        content = msg.content
+        if isinstance(content, str) and not (msg.role == "assistant" and msg.tool_calls):
+            verdict, processed = guard_outbound(content, session_id)
+            content = blocked_placeholder if verdict == "blocked" else processed
+        guarded.append(replace(msg, content=content))
+    return guarded
+
+
 class Agent:
     def __init__(
         self,
@@ -96,8 +117,8 @@ class Agent:
         global _M1_DATATRACK
         if _M1_DATATRACK is None:
             try:
-                from backend.memv4 import DataTrack
-                _M1_DATATRACK = DataTrack()
+                from backend.memv4 import get_datatrack
+                _M1_DATATRACK = get_datatrack()
             except Exception:  # noqa: BLE001
                 _M1_DATATRACK = None
         if _M1_DATATRACK is None:
@@ -161,7 +182,10 @@ class Agent:
 
     async def _run(self) -> None:
         tools = self._registry.schemas()
-        completion = await self._llm.complete(self._messages(), tools=tools)
+        messages = self._messages()
+        if getattr(self._llm, "is_cloud", False) and AuthorizationCenter().is_granted("guard_outbound"):
+            messages = _guard_messages(messages, "main")
+        completion = await self._llm.complete(messages, tools=tools)
 
         # ---- 多轮工具循环（E3：轮数上限见 tool_rounds()，默认 500）----
         limit = tool_rounds()
@@ -216,13 +240,19 @@ class Agent:
                     tool_obj.pending_images = None
             used += 1
             if used < limit:
-                completion = await self._llm.complete(self._messages(), tools=tools)
+                messages = self._messages()
+                if getattr(self._llm, "is_cloud", False) and AuthorizationCenter().is_granted("guard_outbound"):
+                    messages = _guard_messages(messages, "main")
+                completion = await self._llm.complete(messages, tools=tools)
 
         if completion.tool_calls:
             # 轮数用尽模型仍想继续调工具：不带 tools 再问一次，强制文本收尾
             print(f"[agent] 工具调用轮数已达上限（{limit}），先汇报已完成部分")
             emit("log", level="warn", message=f"工具调用轮数已达上限（{limit}），先汇报已完成部分")
-            completion = await self._llm.complete(self._messages())
+            messages = self._messages()
+            if getattr(self._llm, "is_cloud", False) and AuthorizationCenter().is_granted("guard_outbound"):
+                messages = _guard_messages(messages, "main")
+            completion = await self._llm.complete(messages)
 
         # ---- 阶段B：结果回复 ----
         result_text = (completion.content or "").strip()
