@@ -32,6 +32,7 @@ import time
 from functools import partial
 from typing import Any, Callable, Mapping
 
+from backend.authorization import AuthorizationCenter
 from backend.m3.aggregate import EventWindowAggregator
 from backend.m3.score import RELATIONSHIP_BOOM_THRESHOLD, WEIGHTS, total_score
 
@@ -117,6 +118,7 @@ class EventTriggerEngine:
         config     配置字典（relevance_block / urgency_map / policy_by_urgency /
                    emergency_passthrough / aggregate_window_seconds / cooldown_seconds /
                    grief_schedule / cold_snap_delta_c / cold_min_c / emergency_event_map）
+        auth       授权中心实例（默认 AuthorizationCenter()；emergency_passthrough 的单一事实来源）
         now_fn     返回当前时刻（默认 datetime.now）
         content    可选内容源（含 build_candidate(event_type,payload)->str 或 callable；供候选草案）
         weather    天气源（today_temp_c()/tomorrow_min_c()；首版可注入 stub）
@@ -129,6 +131,7 @@ class EventTriggerEngine:
         bus: Any | None = None,
         notifier: Any | None = None,
         config: Mapping[str, Any] | None = None,
+        auth: Any | None = None,
         now_fn: Callable[[], _dt.datetime] | None = None,
         content: Any | None = None,
         weather: Any | None = None,
@@ -159,7 +162,12 @@ class EventTriggerEngine:
         self._cooldown_seconds: float = float(cfg.get("cooldown_seconds", 900))
         self._relevance_block: list[str] = [str(x) for x in cfg.get("relevance_block", [])]
         self._urgency_map: dict[str, Any] = dict(cfg.get("urgency_map", {}))
-        self._emergency_passthrough: list[str] = [str(x) for x in cfg.get("emergency_passthrough", [])]
+        # 白名单单一事实来源：授权中心；热加载——_is_emergency 每次实时读。
+        # 测试注入场景：cfg 显式携带时优先（静态覆盖，向后兼容）。
+        self._passthrough_override: list[str] | None = (
+            [str(x) for x in cfg["emergency_passthrough"]] if "emergency_passthrough" in cfg else None
+        )
+        self._auth = auth if auth is not None else AuthorizationCenter()
         self._grief_schedule: list = list(cfg.get("grief_schedule", []))
         self._emergency_event_map: dict[str, Any] = dict(cfg.get("emergency_event_map", {}))
 
@@ -410,7 +418,12 @@ class EventTriggerEngine:
     # ---- 紧急穿透（§5：仅限用户配置清单；与 M3-M1 notify._is_emergency 一致） ----
     def _is_emergency(self, candidate: Mapping[str, Any]) -> bool:
         et = str(candidate.get("紧急类型", ""))
-        return bool(et) and et in self._emergency_passthrough
+        passthrough = (
+            self._passthrough_override
+            if self._passthrough_override is not None
+            else [str(x) for x in self._auth.get().get("emergency_passthrough", [])]
+        )
+        return bool(et) and et in passthrough
 
     # ---- 冷却检查（§4.3/§5） ----
     def _in_cooldown(self, ctype: str) -> bool:

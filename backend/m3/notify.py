@@ -26,6 +26,7 @@ import time
 import uuid
 from typing import Any, Callable, Mapping
 
+from backend.authorization import AuthorizationCenter
 from backend.m3.budget import ProactiveBudget
 from backend.m3.score import DIMS, TOTAL_THRESHOLD, is_relationship_boom, score_candidate
 
@@ -55,6 +56,7 @@ class ProactiveNotifier:
         macro   提供 is_proactive_allowed()（默认 backend.macro_state.macro_state）
         bus     事件总线实例（默认全局 bus）
         config  勿扰/冷却/注意力/紧急穿透 配置字典
+        auth    授权中心实例（默认 AuthorizationCenter()；emergency_passthrough 的单一事实来源）
     """
 
     def __init__(
@@ -64,6 +66,7 @@ class ProactiveNotifier:
         macro: Any | None = None,
         bus: Any | None = None,
         config: Mapping[str, Any] | None = None,
+        auth: Any | None = None,
         now_fn: Callable[[], float] | None = None,
         shadow: bool = False,
         shadow_recorder: Any | None = None,
@@ -77,7 +80,12 @@ class ProactiveNotifier:
         self._cooldown_seconds = float(cfg.get("cooldown_seconds", 900))  # 全局冷却（秒）
         # block_when_idle | allow_when_idle | off
         self._attention_policy = str(cfg.get("attention_policy", "block_when_idle"))
-        self._emergency_passthrough = list(cfg.get("emergency_passthrough", []))  # 用户可配紧急清单
+        # 白名单单一事实来源：授权中心；热加载——_is_emergency 每次实时读。
+        # 测试注入场景：cfg 显式携带时优先（静态覆盖，向后兼容）。
+        self._passthrough_override: list[str] | None = (
+            list(cfg["emergency_passthrough"]) if "emergency_passthrough" in cfg else None
+        )
+        self._auth = auth if auth is not None else AuthorizationCenter()
         self._now_fn = now_fn or time.time
         self._last_delivered_at: float | None = None
         self._shadow = bool(shadow)
@@ -191,7 +199,12 @@ class ProactiveNotifier:
     # ---- 紧急穿透（§5：什么算紧急，用户可配清单） ----
     def _is_emergency(self, candidate: Mapping[str, Any]) -> bool:
         et = str(candidate.get("紧急类型", ""))
-        return bool(et) and et in self._emergency_passthrough
+        passthrough = (
+            self._passthrough_override
+            if self._passthrough_override is not None
+            else self._auth.get().get("emergency_passthrough", [])
+        )
+        return bool(et) and et in passthrough
 
     # ---- 依赖懒加载（测试注入替身为 None 时走真实单例；无硬编码本机路径） ----
     def _get_sensor(self):
