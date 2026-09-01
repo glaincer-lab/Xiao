@@ -16,6 +16,7 @@ import time
 from typing import Any, Awaitable, Callable
 
 from backend.attention import guard_blacklisted_window
+from backend.authorization import AuthorizationCenter
 from backend.config import ROOT, config
 from backend.tools.base import Tool
 
@@ -467,11 +468,13 @@ class ScreenLookTool(Tool):
         blocked = guard_blacklisted_window()
         if blocked:
             return blocked
+        if not AuthorizationCenter().is_granted("screen_capture"):
+            return "截屏未开启：请在设置 → 隐私授权里开启后再说。"
         try:
             rel, data_url = await asyncio.to_thread(self._capture)
         except Exception as e:  # noqa: BLE001
             return f"截屏失败：{e}"
-        vision_on = bool(config.get("llm.cloud.image_input", False))
+        vision_on = bool(config.get("llm.cloud.image_input", False)) and AuthorizationCenter().is_granted("cloud_vision")
         self.pending_images = [data_url] if vision_on else None
         if vision_on:
             return f"已截屏并保存到 {rel}，截图已附在本条消息里，请结合截图回答。"

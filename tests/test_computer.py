@@ -190,7 +190,8 @@ class TestScreenLook(_ComputerCase):
     def test_vision_on_attaches_pending(self):
         self._cfg({"tools": {"computer": {"enabled": True}}, "llm": {"cloud": {"image_input": True}}})
         tool = ScreenLookTool()
-        with mock.patch.object(ScreenLookTool, "_capture", return_value=("screenshots/s.jpg", _IMG)):
+        with mock.patch.object(computer_mod.AuthorizationCenter, "is_granted", return_value=True), \
+                mock.patch.object(ScreenLookTool, "_capture", return_value=("screenshots/s.jpg", _IMG)):
             out = asyncio.run(tool.run())
         self.assertIn("截图已附", out)
         self.assertEqual(tool.pending_images, [_IMG])
@@ -198,7 +199,8 @@ class TestScreenLook(_ComputerCase):
     def test_vision_off_no_pending(self):
         self._cfg({"tools": {"computer": {"enabled": True}, "llm": {"cloud": {"image_input": False}}}})
         tool = ScreenLookTool()
-        with mock.patch.object(ScreenLookTool, "_capture", return_value=("screenshots/s.jpg", _IMG)):
+        with mock.patch.object(computer_mod.AuthorizationCenter, "is_granted", return_value=True), \
+                mock.patch.object(ScreenLookTool, "_capture", return_value=("screenshots/s.jpg", _IMG)):
             out = asyncio.run(tool.run())
         self.assertIn("未开启图片输入", out)
         self.assertIsNone(tool.pending_images)

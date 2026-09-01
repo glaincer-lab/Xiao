@@ -39,6 +39,7 @@ from backend.tools.computer import (
     ScreenLookTool,
     set_confirm_hook,
 )
+import backend.tools.system_control as system_control_mod
 from backend.tools.system_control import ScreenshotTool
 
 import backend.event_bus as event_bus_mod
@@ -152,9 +153,12 @@ class TestBlacklistGuard(unittest.TestCase):
         self._old_sensor = attention._default_sensor
         self._old_computer_config = computer_mod.config
         computer_mod.config = Config({"tools": {"computer": {"enabled": True, "confirm": []}}})
+        self._old_sys_config = system_control_mod.config
+        system_control_mod.config = Config({"tools": {"computer": {"enabled": True, "confirm": []}}})
         set_confirm_hook(None)
         self.addCleanup(lambda: setattr(attention, "_default_sensor", self._old_sensor))
         self.addCleanup(setattr, computer_mod, "config", self._old_computer_config)
+        self.addCleanup(setattr, system_control_mod, "config", self._old_sys_config)
         self.addCleanup(set_confirm_hook, None)
 
     def _patch_sensor(

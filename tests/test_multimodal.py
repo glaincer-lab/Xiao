@@ -136,6 +136,10 @@ class TestPipelineImages(unittest.TestCase):
         old_cfg = core_mod.config
         core_mod.config = Config({"llm": {"cloud": {"image_input": enabled}}})
         self.addCleanup(lambda: setattr(core_mod, "config", old_cfg))
+        # cloud_vision 授权默认关会拦截图片；图片转发测试需授权
+        auth_patcher = mock.patch.object(core_mod.AuthorizationCenter, "is_granted", return_value=True)
+        auth_patcher.start()
+        self.addCleanup(auth_patcher.stop)
         return core_mod
 
     def test_disabled_shows_notice_not_agent(self):

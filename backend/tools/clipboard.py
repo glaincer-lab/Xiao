@@ -5,6 +5,7 @@ import asyncio
 import os
 import sys
 
+from backend.authorization import AuthorizationCenter
 from backend.tools.base import Tool
 
 VK_CONTROL = 0x11
@@ -94,6 +95,8 @@ class ClipboardTool(Tool):
         if action == "paste":
             await asyncio.to_thread(_paste_keystroke)
             return "已粘贴到当前窗口。"
+        if not AuthorizationCenter().is_granted("clipboard_read"):
+            return "读取剪贴板未开启：请在设置 → 隐私授权里开启后再说。"
         content = await asyncio.to_thread(_get_clipboard)
         if not content:
             return "剪贴板是空的。"

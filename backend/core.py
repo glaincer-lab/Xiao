@@ -10,12 +10,12 @@ import threading
 import time
 from collections import deque
 
-from backend.asr.factory import build_asr, build_asr_chain
+from backend.asr.factory import build_asr_chain
 from backend.audio.mic import MicStream
 from backend.audio.vad import VADSegmenter
 from backend.audio.wake import build_wake_word
+from backend.authorization import AuthorizationCenter
 from backend.config import config
-from backend.bridge.dsh_bridge import DSHCancelled
 from backend.errors import reason_from_text
 from backend.llm.base import sanitize_images
 from backend.memory import memory_store
@@ -362,7 +362,7 @@ class Pipeline:
         if not imgs:
             self._dispatch(text)
             return
-        if not bool(config.get("llm.cloud.image_input", False)):
+        if not (bool(config.get("llm.cloud.image_input", False)) and AuthorizationCenter().is_granted("cloud_vision")):
             self._on_images_blocked()
             return
         if self._loop is None or self._agent is None:

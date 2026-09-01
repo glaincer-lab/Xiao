@@ -6,7 +6,8 @@ import os
 import sys
 
 from backend.attention import guard_blacklisted_window
-from backend.config import ROOT
+from backend.authorization import AuthorizationCenter
+from backend.config import ROOT, config
 from backend.tools.base import Tool
 
 VK_VOLUME_MUTE = 0xAD
@@ -69,9 +70,13 @@ class ScreenshotTool(Tool):
     async def run(self) -> str:
         if sys.platform != "win32":
             return _unsupported()
+        if not bool(config.get("tools.computer.enabled", False)):
+            return "语音操电脑还没开启：请在设置 → 执行 → 「语音操电脑」勾选开启后再试。"
         blocked = guard_blacklisted_window()
         if blocked:
             return blocked
+        if not AuthorizationCenter().is_granted("screen_capture"):
+            return "截屏未开启：请在设置 → 隐私授权里开启后再说。"
         return await asyncio.to_thread(self._capture)
 
     def _capture(self) -> str:
