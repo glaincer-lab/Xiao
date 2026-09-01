@@ -66,15 +66,19 @@ class TestDefaultsAllOff(unittest.TestCase):
         keys = {i["key"] for i in AUTHORIZATION_ITEMS}
         self.assertEqual(
             keys,
-            {"camera_enabled", "screen_awareness", "proactivity_level",
-             "emergency_passthrough", "per_feature"},
+            {"cloud_asr", "cloud_llm", "cloud_vision", "cloud_tts",
+             "clipboard_read", "screen_capture", "camera_enabled",
+             "screen_awareness", "emergency_passthrough", "per_feature",
+             "proactivity_level", "guard_outbound"},
         )
-        # 默认全关与登记一致
+        # 默认值与登记一致
         self.assertEqual(set(DEFAULT_AUTHORIZATIONS), keys)
+        # 除「网关」外的布尔项默认全关；guard_outbound 是保护措施，默认开
         for item in AUTHORIZATION_ITEMS:
-            if item["type"] == "bool":
+            if item["type"] == "bool" and item["key"] != "guard_outbound":
                 self.assertIs(item["default"], False)
         self.assertEqual(DEFAULT_AUTHORIZATIONS["proactivity_level"], 0)
+        self.assertIs(DEFAULT_AUTHORIZATIONS["guard_outbound"], True)
 
     def test_get_returns_copies(self):
         ac = AuthorizationCenter(FakeConfig({"authorizations": {"emergency_passthrough": ["火警"]}}))

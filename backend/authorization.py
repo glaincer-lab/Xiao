@@ -1,8 +1,10 @@
 """授权中心（M0 · 结构规划 S5 / M0-core §3）：统一收口敏感能力授权项。
 
-授权项（camera_enabled / screen_awareness / proactivity_level /
-emergency_passthrough / per_feature）在此集中登记（AUTHORIZATION_ITEMS），默认全关
-（传感默认关，见 PRODUCT 红线）。
+授权项共 12 项：语音/对话/图片/合成四类上云能力（cloud_asr / cloud_llm /
+cloud_vision / cloud_tts）、剪贴板/截屏（clipboard_read / screen_capture）、
+摄像头/屏幕感知（camera_enabled / screen_awareness）、紧急穿透清单
+（emergency_passthrough）、细项授权（per_feature）、主动程度（proactivity_level）、
+出网脱敏网关（guard_outbound）。除「网关」外默认全关（最小化，见 PRODUCT 红线）。
 
 设计定位（安全边界）：
     - 授权项**不在** backend.settings_schema.SCHEMA 登记 —— 因此 config_guard 的
@@ -15,11 +17,16 @@ emergency_passthrough / per_feature）在此集中登记（AUTHORIZATION_ITEMS�
     - 本模块只依赖 backend.config（基础设施），跨模块通信一律走 event_bus，
       不直调其它模块核心函数（模块边界纪律 T0/S6）。
 
-消费方（待 M3 主动引擎 / M4 视觉接入后读取）：
+消费方接线：
+    - cloud_asr / cloud_llm / cloud_tts：asr/llm/tts 工厂选云端前判（未授权回退本地）。
+    - cloud_vision：图片上云闸门（core/computer 发图前判）。
+    - clipboard_read：剪贴板读取闸门（默认关）。
+    - screen_capture：截屏闸门（默认关）。
     - camera_enabled / screen_awareness：M4 视觉能力闸门（默认关）。
     - proactivity_level：M3 主动行为总闸门（默认 0 = 全关）。
     - emergency_passthrough：紧急场景穿透审批清单（默认空 = 不穿透）。
     - per_feature：各功能细项授权注册表（默认空 = 全部未授权）。
+    - guard_outbound：出网脱敏网关（保护措施，默认开）。
 """
 from __future__ import annotations
 
@@ -35,9 +42,51 @@ def _copy(value: Any) -> Any:
     return copy.deepcopy(value)
 
 
-# 授权项集中登记（单一事实来源）：默认全关。
+# 授权项集中登记（单一事实来源）：除「网关」外默认全关（最小化）。
 # type: bool | int | list | dict —— 按 type 校验；default 为「出厂/撤回」值。
 AUTHORIZATION_ITEMS: tuple[dict[str, Any], ...] = (
+    {
+        "key": "cloud_asr",
+        "type": "bool",
+        "label": "语音上云识别",
+        "default": False,
+        "desc": "是否允许语音上云识别（听懂）；未授权回退本地 FunASR/一体化引擎（默认关闭）",
+    },
+    {
+        "key": "cloud_llm",
+        "type": "bool",
+        "label": "对话上云",
+        "default": False,
+        "desc": "是否允许对话上云（脑子）；未授权回退本地 Ollama（默认关闭）",
+    },
+    {
+        "key": "cloud_vision",
+        "type": "bool",
+        "label": "图片上云",
+        "default": False,
+        "desc": "是否允许图片上云识别（看图）；未授权不把图片发往云端（默认关闭）",
+    },
+    {
+        "key": "cloud_tts",
+        "type": "bool",
+        "label": "语音上云合成",
+        "default": False,
+        "desc": "是否允许文字上云合成（说话）；未授权回退本地 Piper（默认关闭）",
+    },
+    {
+        "key": "clipboard_read",
+        "type": "bool",
+        "label": "读取剪贴板",
+        "default": False,
+        "desc": "是否允许读取剪贴板内容（默认关闭）",
+    },
+    {
+        "key": "screen_capture",
+        "type": "bool",
+        "label": "截屏看屏幕",
+        "default": False,
+        "desc": "是否允许截屏查看屏幕内容（默认关闭）",
+    },
     {
         "key": "camera_enabled",
         "type": "bool",
@@ -53,15 +102,6 @@ AUTHORIZATION_ITEMS: tuple[dict[str, Any], ...] = (
         "desc": "是否允许截屏/读屏感知（默认关闭）",
     },
     {
-        "key": "proactivity_level",
-        "type": "int",
-        "label": "主动程度",
-        "default": 0,
-        "min": 0,
-        "max": 100,
-        "desc": "主动行为总闸门滑块：0 为全关，100 为最大主动（默认 0）",
-    },
-    {
         "key": "emergency_passthrough",
         "type": "list",
         "label": "紧急穿透清单",
@@ -74,6 +114,22 @@ AUTHORIZATION_ITEMS: tuple[dict[str, Any], ...] = (
         "label": "细项授权",
         "default": {},
         "desc": "各功能细项授权注册表（默认空 = 全部未授权；值为功能 key -> bool）",
+    },
+    {
+        "key": "proactivity_level",
+        "type": "int",
+        "label": "主动程度",
+        "default": 0,
+        "min": 0,
+        "max": 100,
+        "desc": "主动行为总闸门滑块：0 为全关，100 为最大主动（默认 0）",
+    },
+    {
+        "key": "guard_outbound",
+        "type": "bool",
+        "label": "出网脱敏网关",
+        "default": True,
+        "desc": "出网脱敏网关（保护措施，默认开启；与其他默认关的隐私能力相反）",
     },
 )
 
