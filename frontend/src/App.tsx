@@ -17,6 +17,10 @@ type Message = {
   kind?: 'plan' | 'result' | 'notice'
 }
 
+// 成长回顾三栏条目：user_track/agent_track 用 milestone，shared 用 event
+type RecallItem = { id: number | string; milestone?: string; event?: string; date?: string }
+type RecallData = { user_track: RecallItem[]; agent_track: RecallItem[]; shared: RecallItem[] }
+
 type UISettings = {
   font: string
   tabularNums: boolean
@@ -174,6 +178,21 @@ function describeEvent(e: ServerEvent): { label: string; kind: string } | null {
   }
 }
 
+// 顶栏时钟独立组件：秒级跳动只重渲染自身，避免每秒波及 App 根组件
+function Clock() {
+  const [text, setText] = useState('')
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date()
+      setText([d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':'))
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [])
+  return <div className="clock" aria-hidden>{text || '--:--:--'}</div>
+}
+
 export default function App() {
   const [sessionState, setSessionState] = useState('idle')
   const [connected, setConnected] = useState(false)
@@ -190,7 +209,8 @@ export default function App() {
   const [showPerms, setShowPerms] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
   const [showRecall, setShowRecall] = useState(false)
-  const [recallData, setRecallData] = useState<null | { user_track: any[]; agent_track: any[]; shared: any[] }>(null)
+  const [recallData, setRecallData] = useState<null | RecallData>(null)
+  const [recallError, setRecallError] = useState(false)
   // 首次启动向导（E1）：本机没有完成标记时弹出，完成后写 localStorage 不再弹
   const [showWizard, setShowWizard] = useState(() => !localStorage.getItem('xiao_onboarded'))
   const [tasks, setTasks] = useState<Task[]>([])
@@ -201,7 +221,6 @@ export default function App() {
   const [dshLive, setDshLive] = useState('')
   const [approvalText, setApprovalText] = useState('')
   const [storageAlert, setStorageAlert] = useState<null | { level: string; used_mb: number; budget_mb: number }>(null)
-  const [clock, setClock] = useState('')
   const [shuttingDown, setShuttingDown] = useState(false) // 收到 app_shutdown 后置真：显示关机谢幕遮罩
   const [ui, setUi] = useState<UISettings>(() => {
     try {
@@ -227,21 +246,9 @@ export default function App() {
     }
   }, [ui])
 
-  // 顶栏时钟：等宽字体秒级跳动
-  useEffect(() => {
-    const tick = () => {
-      const d = new Date()
-      setClock(
-        [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':'),
-      )
-    }
-    tick()
-    const id = window.setInterval(tick, 1000)
-    return () => window.clearInterval(id)
-  }, [])
-
   const wsRef = useRef<WSHandle | null>(null)
   const interruptTimer = useRef<number | null>(null)
+  const micLevelLastRef = useRef(0)
   const logBodyRef = useRef<HTMLDivElement | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const followBottom = useRef(true)
@@ -249,7 +256,8 @@ export default function App() {
 
   const addMessage = useCallback((m: Omit<Message, 'id'>): Message => {
     const msg: Message = { ...m, id: idCounter++ }
-    setMessages((prev) => [...prev, msg])
+    // 保留最近 200 条，避免长期运行内存与渲染线性增长
+    setMessages((prev) => [...prev, msg].slice(-200))
     return msg
   }, [])
 
@@ -306,7 +314,12 @@ export default function App() {
         break
       }
       case 'mic_level': {
-        setMicLevel(Number(e.level ?? 0))
+        // 声线事件约 10 条/秒，节流到 50ms 降低根组件重渲染频率
+        const now = performance.now()
+        if (now - micLevelLastRef.current >= 50) {
+          micLevelLastRef.current = now
+          setMicLevel(Number(e.level ?? 0))
+        }
         break
       }
       case 'asr_final': {
@@ -434,14 +447,15 @@ export default function App() {
   // 成长回顾：打开面板时拉取三栏快照
   const openRecall = useCallback(() => {
     setShowRecall(true)
+    setRecallData(null)
+    setRecallError(false)
     fetch(API_BASE + '/api/recall')
       .then((r) => r.json())
       .then((d) => {
         if (d && d.ok && d.data) setRecallData(d.data)
+        else setRecallError(true)
       })
-      .catch(() => {
-        /* 后端未就绪时保留空面板 */
-      })
+      .catch(() => setRecallError(true))
   }, [])
 
   useEffect(() => {
@@ -449,7 +463,9 @@ export default function App() {
       setConnected(ok)
       if (ok) refreshSnapshot()
     }
-    const ws = connectWS(WS_URL, handleEvent, onStatus)
+    const ws = connectWS(WS_URL, handleEvent, onStatus, (msg) => {
+      addMessage({ role: 'system', text: msg, kind: 'notice' })
+    })
     wsRef.current = ws
     refreshSnapshot()
     return () => ws.close()
@@ -461,6 +477,13 @@ export default function App() {
       logBodyRef.current.scrollTop = logBodyRef.current.scrollHeight
     }
   }, [logs])
+
+  // 卸载时清理打断闪烁的定时器（防泄漏）
+  useEffect(() => {
+    return () => {
+      if (interruptTimer.current !== null) window.clearTimeout(interruptTimer.current)
+    }
+  }, [])
 
   // 对话自动滚动：新消息滚到底；打字机逐字展开时若贴近底部则跟随
   useEffect(() => {
@@ -501,19 +524,26 @@ export default function App() {
 
   const pickImages = (files: FileList | null) => {
     if (!files || files.length === 0) return
+    const all = Array.from(files)
+    const valid = all.filter((f) => f.type.startsWith('image/') && f.size <= MAX_IMAGE_BYTES)
+    const skipped = all.length - valid.length
+    if (skipped > 0) {
+      pushLog(`已忽略 ${skipped} 个非图片或超过 ${MAX_IMAGE_BYTES / 1024 / 1024}MB 的文件`, 'warn')
+    }
+    if (valid.length === 0) return
     void Promise.all(
-      Array.from(files)
-        .filter((f) => f.type.startsWith('image/') && f.size <= MAX_IMAGE_BYTES)
-        .map(
-          (f) =>
-            new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onload = () => resolve(String(reader.result))
-              reader.onerror = reject
-              reader.readAsDataURL(f)
-            }),
-        ),
-    ).then(addImages)
+      valid.map(
+        (f) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result))
+            reader.onerror = reject
+            reader.readAsDataURL(f)
+          }),
+      ),
+    )
+      .then(addImages)
+      .catch(() => pushLog('图片读取失败，请重试', 'warn'))
   }
 
   const captureScreen = async () => {
@@ -537,13 +567,17 @@ export default function App() {
         stream.getTracks().forEach((track) => track.stop())
       }
     } catch {
-      return
+      pushLog('截屏失败或已取消授权', 'warn')
     }
   }
 
   const sendText = () => {
     const t = input.trim()
     if (!t && pendingImages.length === 0) return
+    if (!connected) {
+      pushLog('后端未连接，消息未发送（连接后请重发）', 'warn')
+      return
+    }
     wsRef.current?.send({ type: 'text', text: t, images: pendingImages.length > 0 ? pendingImages : undefined })
     addMessage({ role: 'user', text: t || `[图片 ×${pendingImages.length}]` })
     setInput('')
@@ -551,9 +585,21 @@ export default function App() {
     setExpanded(null)
   }
 
-  const wake = () => wsRef.current?.send({ type: 'wake' })
+  const wake = () => {
+    if (!connected) {
+      pushLog('后端未连接，无法唤醒', 'warn')
+      return
+    }
+    wsRef.current?.send({ type: 'wake' })
+  }
 
-  const interrupt = () => wsRef.current?.send({ type: 'interrupt' })
+  const interrupt = () => {
+    if (!connected) {
+      pushLog('后端未连接，无法打断', 'warn')
+      return
+    }
+    wsRef.current?.send({ type: 'interrupt' })
+  }
 
   // 底栏精灵轮换：自动 → 圆形 → 六边晶体 → 蜂巢描边 → 菱晶切片 → 铁环 → 自动
   const cycleSprite = () => {
@@ -567,6 +613,10 @@ export default function App() {
   }
 
   const setMode = (m: string) => {
+    if (!connected) {
+      pushLog('后端未连接，无法切换路由', 'warn')
+      return
+    }
     setRouterMode(m)
     wsRef.current?.send({ type: 'router_mode', mode: m })
   }
@@ -595,7 +645,7 @@ export default function App() {
             <span className="conn-dot" />
             {connected ? '已连接' : '连接中…'}
           </div>
-          <div className="clock" aria-hidden>{clock || '--:--:--'}</div>
+          <Clock />
         </div>
         <div className="brand">
           <span className="hex" aria-hidden>⬡</span>
@@ -766,7 +816,12 @@ export default function App() {
           <span className="logbar-count">{logs.length}</span>
           <span className="logbar-spacer" />
           {logOpen && (
-            <button className="logbar-clear" onClick={() => setLogs([])}>
+            <button
+              className="logbar-clear"
+              onClick={() => {
+                if (logs.length > 0 && window.confirm('确认清空日志？')) setLogs([])
+              }}
+            >
               清空
             </button>
           )}
@@ -881,7 +936,11 @@ export default function App() {
               <div className="recall-grid">
                 <div className="recall-col">
                   <h3>你的成长</h3>
-                  {recallData && recallData.user_track.length > 0 ? (
+                  {recallError ? (
+                    <p className="recall-empty">加载失败</p>
+                  ) : !recallData ? (
+                    <p className="recall-empty">加载中…</p>
+                  ) : recallData.user_track.length > 0 ? (
                     recallData.user_track.map((r) => (
                       <div key={r.id} className="recall-item">
                         <span className="recall-text">{r.milestone}</span>
@@ -894,7 +953,11 @@ export default function App() {
                 </div>
                 <div className="recall-col">
                   <h3>小二的成长</h3>
-                  {recallData && recallData.agent_track.length > 0 ? (
+                  {recallError ? (
+                    <p className="recall-empty">加载失败</p>
+                  ) : !recallData ? (
+                    <p className="recall-empty">加载中…</p>
+                  ) : recallData.agent_track.length > 0 ? (
                     recallData.agent_track.map((r) => (
                       <div key={r.id} className="recall-item">
                         <span className="recall-text">{r.milestone}</span>
@@ -907,7 +970,11 @@ export default function App() {
                 </div>
                 <div className="recall-col">
                   <h3>咱们的回忆</h3>
-                  {recallData && recallData.shared.length > 0 ? (
+                  {recallError ? (
+                    <p className="recall-empty">加载失败</p>
+                  ) : !recallData ? (
+                    <p className="recall-empty">加载中…</p>
+                  ) : recallData.shared.length > 0 ? (
                     recallData.shared.map((r) => (
                       <div key={r.id} className="recall-item">
                         <span className="recall-text">{r.event}</span>

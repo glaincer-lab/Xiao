@@ -70,45 +70,6 @@ const LLM_PROVIDERS: LLMProviderDef[] = [
     exampleModel: 'qwen3', needsKey: false, status: 'ok', keyHint: '装好 Ollama 后执行 ollama pull <模型>，模型名填下方' },
 ]
 
-// CosyVoice v3 音色（短名，flash/plus 通用；中文名展示，value 存短名）
-const COSYVOICE_VOICES = [
-  { value: 'longanyang', label: '龙安洋（男·阳光大男孩）' },
-  { value: 'longanlang_v3', label: '龙安朗（男·清爽利落）' },
-  { value: 'longanyun_v3', label: '龙安昀（男·居家暖男）' },
-  { value: 'longze_v3', label: '龙泽（男·温暖元气）' },
-  { value: 'longsanshu_v3', label: '龙三叔（男·沉稳质感）' },
-  { value: 'longfei_v3', label: '龙飞（男·热血磁性）' },
-  { value: 'longanhuan_v3', label: '龙安欢（女·四川话）' },
-  { value: 'longxiaochun_v3', label: '龙小淳（女·知性积极）' },
-  { value: 'longxiaoxia_v3', label: '龙小夏（女·沉稳权威）' },
-  { value: 'longanwen_v3', label: '龙安温（女·优雅知性）' },
-  { value: 'longanli_v3', label: '龙安莉（女·利落从容）' },
-  { value: 'longwan_v3', label: '龙婉（女·细腻柔声）' },
-  { value: 'longlaotie_v3', label: '龙老铁（东北话）' },
-  { value: 'longanyue_v3', label: '龙安粤（粤语）' },
-]
-// Qwen-Audio-TTS 音色（存短名，运行时由后端拼 qwen-audio-3.0-tts-{flash|plus}- 前缀）
-const QWEN_VOICES = [
-  { value: 'longyingsongliu', label: '龙莹松柳（男·爽朗利落）' },
-  { value: 'longlanyufu', label: '龙岚煜芙（男·温柔亲和）' },
-  { value: 'longxinruixuan', label: '龙昕蕊璇（男·自然亲和）' },
-  { value: 'longxiamuyan', label: '龙霞暮燕（男·专业解说）' },
-  { value: 'longluliuche', label: '龙露柳澈（男·标准播音）' },
-  { value: 'longbaixiuyun', label: '龙柏岫云（男·标准播音）' },
-  { value: 'longyuzhihe', label: '龙羽芷荷（男·客观冷静）' },
-  { value: 'longcanzhuyue', label: '龙璨竹月（女·平实质朴）' },
-  { value: 'longrongzhihe', label: '龙蓉芷荷（女·电台质感）' },
-  { value: 'longlanghongmo', label: '龙朗虹沫（女·温柔亲和）' },
-  { value: 'longfengyueyao', label: '龙风月瑶（女·直爽利落）' },
-  { value: 'longtongxuxian', label: '龙彤旭弦（女·活泼灵动）' },
-  { value: 'longliuxulan', label: '龙柳旭澜（女·标准播音）' },
-  { value: 'longyujunxuan', label: '龙羽珺萱（女·温柔坚韧）' },
-]
-// 档位下拉
-const TIER_OPTIONS = [
-  { value: 'flash', label: 'flash（快、省钱）' },
-  { value: 'plus', label: 'plus（音质更好）' },
-]
 // Qwen 实时流式（qwen3-tts-flash-realtime）音色：英文名，边合成边播
 const QWEN_RT_VOICES = [
   { value: 'Ethan', label: 'Ethan（男·阳光温暖，推荐）' },
@@ -154,10 +115,9 @@ type SavedASR = {
 type SavedTTS = {
   id: string
   name: string
-  provider: 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
+  provider: 'edge' | 'qwen_rt' | 'piper' | 'omni'
   voice: string
   rate: string
-  tier: 'flash' | 'plus'
   apiKey?: string
   piperModel?: string
 }
@@ -185,15 +145,20 @@ function getPath(obj: Record<string, any>, path: string): any {
 }
 
 function setPath(obj: Record<string, any>, path: string, value: any): Record<string, any> {
-  const next = JSON.parse(JSON.stringify(obj))
+  // 浅拷贝路径（结构共享）：只复制经过的每一层，避免每次全量 JSON 深拷贝
   const parts = path.split('.')
-  let node = next
+  const root: Record<string, any> = Array.isArray(obj) ? [...obj] : { ...obj }
+  let node: any = root
   for (let i = 0; i < parts.length - 1; i++) {
-    if (typeof node[parts[i]] !== 'object' || node[parts[i]] === null) node[parts[i]] = {}
-    node = node[parts[i]]
+    const k = parts[i]
+    const child = node[k]
+    if (Array.isArray(child)) node[k] = [...child]
+    else if (typeof child === 'object' && child !== null) node[k] = { ...child }
+    else node[k] = {}
+    node = node[k]
   }
   node[parts[parts.length - 1]] = value
-  return next
+  return root
 }
 
 export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui: UISettings; setUi: (u: UISettings) => void }) {
@@ -218,7 +183,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const [asrForm, setAsrForm] = useState<{ provider: 'cloud' | 'local' | 'omni'; model: string; name: string; apiKey: string; localEngine: string; localModelDir: string }>({ provider: 'cloud', model: 'qwen-audio-3.0-asr-flash-streaming', name: '', apiKey: '', localEngine: 'funasr', localModelDir: '' })
   const [editASRId, setEditASRId] = useState<string | null>(null)
   const [showAddTTS, setShowAddTTS] = useState(false)
-  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; tier: 'flash' | 'plus'; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-chaowen-medium.onnx' })
+  const [ttsForm, setTtsForm] = useState<{ provider: 'edge' | 'qwen_rt' | 'piper' | 'omni'; voice: string; rate: string; name: string; apiKey: string; piperModel: string }>({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', piperModel: 'models/zh_CN-chaowen-medium.onnx' })
   const [editTTSId, setEditTTSId] = useState<string | null>(null)
   const [showAddWake, setShowAddWake] = useState(false)
   const [wakeForm, setWakeForm] = useState<{ engine: 'sherpa' | 'omni'; keyword: string; pinyin: string; threshold: number; modelDir: string; name: string; baseUrl: string; model: string }>({ engine: 'sherpa', keyword: '小二', pinyin: 'x iǎo èr', threshold: 0.25, modelDir: '', name: '', baseUrl: 'http://localhost:8000/v1', model: 'openbmb/MiniCPM-o-4_5' })
@@ -261,11 +226,31 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     }
   }, [tab])
 
+  // Esc 关闭：先关子模态，再关主面板
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (showAddModel) setShowAddModel(false)
+      else if (showAddASR) setShowAddASR(false)
+      else if (showAddTTS) setShowAddTTS(false)
+      else if (showAddWake) setShowAddWake(false)
+      else {
+        const dirty = !!origConfig && JSON.stringify(config) !== JSON.stringify(origConfig)
+        if (dirty && !window.confirm('有未保存的更改，确认放弃并关闭？')) return
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showAddModel, showAddASR, showAddTTS, showAddWake, config, origConfig, onClose])
+
   const runProbe = async () => {
     setProbeBusy(true)
     setProbeMsg('正在逐项探测（ASR / LLM / TTS / agent）…首次约需几秒')
+    const ctrl = new AbortController()
+    const timer = window.setTimeout(() => ctrl.abort(), 30000) // 后端 30s 硬超时，前端留余量兜底
     try {
-      const r = await fetch(`${API_BASE}/api/health/probe`)
+      const r = await fetch(`${API_BASE}/api/health/probe`, { signal: ctrl.signal })
       const j = await r.json()
       if (j.ok) {
         const items: ProbeItem[] = j.items || []
@@ -275,9 +260,10 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       } else {
         setProbeMsg('探测失败：' + (j.msg || ''))
       }
-    } catch {
-      setProbeMsg('探测失败（网络错误，后端未启动？）')
+    } catch (e) {
+      setProbeMsg(e instanceof DOMException && e.name === 'AbortError' ? '探测超时，请重试' : '探测失败（网络错误，后端未启动？）')
     } finally {
+      window.clearTimeout(timer)
       setProbeBusy(false)
     }
   }
@@ -375,6 +361,8 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   }
 
   const clearMemory = async () => {
+    if (!window.confirm('确认清空对话记忆？此操作不可恢复。')) return
+    setMsg('正在清空…')
     try {
       const r = await fetch(`${API_BASE}/api/memory/clear`, { method: 'POST' })
       const j = await r.json()
@@ -467,7 +455,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             {f.label}
             {f.hint && <span className="settings-hint">{f.hint}</span>}
           </span>
-          <input type="number" min={f.min} max={f.max} value={value ?? ''} onChange={(e) => setField(f.path, Number(e.target.value))} />
+          <input type="number" min={f.min} max={f.max} value={value ?? ''} onChange={(e) => setField(f.path, e.target.value === '' ? null : Number(e.target.value))} />
         </label>
       )
     }
@@ -655,11 +643,18 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     }
 
     const removeModel = (id: string) => {
+      if (!window.confirm('确认删除该模型？')) return
       const next = savedModels.filter((m) => m.id !== id)
       setField('llm.models', next)
       if (activeId === id) {
-        setField('llm.active', next.length ? next[0].id : '')
-        if (next.length) applyModel(next[0])
+        if (next.length) {
+          setField('llm.active', next[0].id)
+          applyModel(next[0])
+        } else {
+          // 删除当前激活项且已无其他模型：清空激活与云端旧值，避免残留
+          setField('llm.active', '')
+          setField('llm.cloud.api_key', '')
+        }
       }
     }
 
@@ -670,7 +665,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
         </div>
         {showAddModel && (
           <div className="modal-overlay" onClick={() => { setShowAddModel(false); setEditModelId(null) }}>
-            <div className="modal settings-form-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal settings-form-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <span className="modal-role">{editModelId ? '编辑模型' : '新建模型'}</span>
                 <button className="modal-close" onClick={() => { setShowAddModel(false); setEditModelId(null) }}>✕ 关闭</button>
@@ -811,7 +806,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               const def = LLM_PROVIDERS.find((x) => x.id === m.provider)
               return (
                 <div key={m.id} className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
-                  <div className="scheme-item-main" onClick={() => applyModel(m)}>
+                  <div className="scheme-item-main" role="button" tabIndex={0} onClick={() => applyModel(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (e.currentTarget as HTMLElement).click() } }}>
                     <span className="scheme-item-icon">{def?.status === 'ok' ? '✅' : '⬜'}</span>
                     <div className="scheme-item-info">
                       <div className="scheme-item-name">{m.name}{isActive && <span className="scheme-item-tag">当前</span>}</div>
@@ -907,11 +902,17 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     }
 
     const removeASR = (id: string) => {
+      if (!window.confirm('确认删除该识别方案？')) return
       const next = savedASR.filter((m) => m.id !== id)
       setField('asr.models', next)
       if (activeASR === id) {
-        setField('asr.active', next.length ? next[0].id : '')
-        if (next.length) applyASR(next[0])
+        if (next.length) {
+          setField('asr.active', next[0].id)
+          applyASR(next[0])
+        } else {
+          setField('asr.active', '')
+          setField('asr.cloud.api_key', '')
+        }
       }
     }
 
@@ -922,7 +923,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
         </div>
         {showAddASR && (
           <div className="modal-overlay" onClick={() => { setShowAddASR(false); setEditASRId(null) }}>
-            <div className="modal settings-form-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal settings-form-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <span className="modal-role">{editASRId ? '编辑方案' : '新建方案'}</span>
                 <button className="modal-close" onClick={() => { setShowAddASR(false); setEditASRId(null) }}>✕ 关闭</button>
@@ -1004,7 +1005,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               const isActive = m.id === activeASR
               return (
                 <div key={m.id} className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
-                  <div className="scheme-item-main" onClick={() => applyASR(m)}>
+                  <div className="scheme-item-main" role="button" tabIndex={0} onClick={() => applyASR(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (e.currentTarget as HTMLElement).click() } }}>
                     <span className="scheme-item-icon">{m.provider === 'omni' ? '⬜' : '✅'}</span>
                     <div className="scheme-item-info">
                       <div className="scheme-item-name">{m.name}{isActive && <span className="scheme-item-tag">当前</span>}</div>
@@ -1035,8 +1036,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     const activeScheme = savedTTS.find((m) => m.id === activeTTS)
     // 候选音色批量试听列表：按供应商返回可枚举的音色集（edge 用 schema 列表；piper/omni 单音色不提供）
     const voicesForProvider = (p: string): FieldOption[] => {
-      if (p === 'cosyvoice') return COSYVOICE_VOICES
-      if (p === 'qwen') return QWEN_VOICES
       if (p === 'qwen_rt') return QWEN_RT_VOICES
       if (p === 'edge') return voiceOptions
       return []
@@ -1058,17 +1057,17 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       if (updated && activeTTS === id) applyTTS(updated)
     }
 
-    const providerName = (p: string) => p === 'edge' ? 'edge-tts' : p === 'qwen_rt' ? 'Qwen 实时流式' : p === 'cosyvoice' ? 'CosyVoice v3' : p === 'qwen' ? 'Qwen-Audio-TTS' : p === 'piper' ? '本地 Piper' : 'MiniCPM-o'
+    const providerName = (p: string) => p === 'edge' ? 'edge-tts' : p === 'qwen_rt' ? 'Qwen 实时流式' : p === 'piper' ? '本地 Piper' : 'MiniCPM-o'
 
     const startNewTTS = () => {
       setEditTTSId(null)
-      setTtsForm({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', tier: 'flash', piperModel: 'models/zh_CN-chaowen-medium.onnx' })
+      setTtsForm({ provider: 'edge', voice: 'zh-CN-YunjianNeural', rate: '+30%', name: '', apiKey: '', piperModel: 'models/zh_CN-chaowen-medium.onnx' })
       setShowAddTTS(true)
     }
 
     const startEditTTS = (m: SavedTTS) => {
       setEditTTSId(m.id)
-      setTtsForm({ provider: m.provider, voice: m.voice, rate: m.rate, name: m.name, apiKey: m.apiKey || '', tier: m.tier || 'flash', piperModel: m.piperModel || 'models/zh_CN-chaowen-medium.onnx' })
+      setTtsForm({ provider: m.provider, voice: m.voice, rate: m.rate, name: m.name, apiKey: m.apiKey || '', piperModel: m.piperModel || 'models/zh_CN-chaowen-medium.onnx' })
       setShowAddTTS(true)
     }
 
@@ -1079,7 +1078,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           provider: ttsForm.provider,
           voice: ttsForm.voice,
           rate: ttsForm.rate,
-          tier: ttsForm.tier,
           apiKey: ttsForm.apiKey,
           piperModel: ttsForm.piperModel,
         })
@@ -1090,7 +1088,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
           provider: ttsForm.provider,
           voice: ttsForm.voice,
           rate: ttsForm.rate,
-          tier: ttsForm.tier,
           apiKey: ttsForm.apiKey,
           piperModel: ttsForm.piperModel,
         }
@@ -1102,11 +1099,16 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
     }
 
     const removeTTS = (id: string) => {
+      if (!window.confirm('确认删除该播报方案？')) return
       const next = savedTTS.filter((m) => m.id !== id)
       setField('tts.models', next)
       if (activeTTS === id) {
-        setField('tts.active', next.length ? next[0].id : '')
-        if (next.length) applyTTS(next[0])
+        if (next.length) {
+          setField('tts.active', next[0].id)
+          applyTTS(next[0])
+        } else {
+          setField('tts.active', '')
+        }
       }
     }
 
@@ -1117,7 +1119,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
         </div>
         {showAddTTS && (
           <div className="modal-overlay" onClick={() => { setShowAddTTS(false); setEditTTSId(null) }}>
-            <div className="modal settings-form-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal settings-form-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <span className="modal-role">{editTTSId ? '编辑方案' : '新建方案'}</span>
                 <button className="modal-close" onClick={() => { setShowAddTTS(false); setEditTTSId(null) }}>✕ 关闭</button>
@@ -1127,13 +1129,11 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
             <label className="settings-field">
               <span className="settings-field-label">播报方式</span>
               <select value={ttsForm.provider} onChange={(e) => {
-                const p = e.target.value as 'edge' | 'qwen_rt' | 'cosyvoice' | 'qwen' | 'piper' | 'omni'
-                // 切换播报方式时同步默认音色/档位，避免把别的引擎参数误带进来
-                const patch: any = { provider: p, tier: 'flash' }
+                const p = e.target.value as 'edge' | 'qwen_rt' | 'piper' | 'omni'
+                // 切换播报方式时同步默认音色，避免把别的引擎参数误带进来
+                const patch: any = { provider: p }
                 if (p === 'edge') patch.voice = 'zh-CN-YunjianNeural'
                 else if (p === 'qwen_rt') patch.voice = 'Ethan'
-                else if (p === 'cosyvoice') patch.voice = 'longanyang'
-                else if (p === 'qwen') patch.voice = 'longyingsongliu'
                 setTtsForm({ ...ttsForm, ...patch })
               }}>
                 <option value="qwen_rt">✅ Qwen 实时流式（快，语音跟字幕）</option>
@@ -1166,27 +1166,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                   <span className="settings-field-label">音色</span>
                   <select value={ttsForm.voice} onChange={(e) => setTtsForm({ ...ttsForm, voice: e.target.value })}>
                     {QWEN_RT_VOICES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </label>
-                <label className="settings-field">
-                  <span className="settings-field-label">API Key（可留空，走 .env）</span>
-                  <input type="password" value={ttsForm.apiKey} placeholder="阿里云百炼 Key（留空读 DASHSCOPE_API_KEY）" onChange={(e) => setTtsForm({ ...ttsForm, apiKey: e.target.value })} />
-                </label>
-              </>
-            )}
-
-            {(ttsForm.provider === 'cosyvoice' || ttsForm.provider === 'qwen') && (
-              <>
-                <label className="settings-field">
-                  <span className="settings-field-label">档位</span>
-                  <select value={ttsForm.tier} onChange={(e) => setTtsForm({ ...ttsForm, tier: e.target.value as 'flash' | 'plus' })}>
-                    {TIER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </label>
-                <label className="settings-field">
-                  <span className="settings-field-label">音色</span>
-                  <select value={ttsForm.voice} onChange={(e) => setTtsForm({ ...ttsForm, voice: e.target.value })}>
-                    {(ttsForm.provider === 'cosyvoice' ? COSYVOICE_VOICES : QWEN_VOICES).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </label>
                 <label className="settings-field">
@@ -1233,11 +1212,11 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               return (
                 <div key={m.id}>
                   <div className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
-                    <div className="scheme-item-main" onClick={() => applyTTS(m)}>
+                    <div className="scheme-item-main" role="button" tabIndex={0} onClick={() => applyTTS(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (e.currentTarget as HTMLElement).click() } }}>
                       <span className="scheme-item-icon">✅</span>
                       <div className="scheme-item-info">
                         <div className="scheme-item-name">{m.name}{isActive && <span className="scheme-item-tag">当前</span>}</div>
-                        <div className="scheme-item-sub">{providerName(m.provider)}{(m.provider === 'cosyvoice' || m.provider === 'qwen') ? ` · ${m.tier || 'flash'}` : ''} · {m.voice || '默认'}</div>
+                        <div className="scheme-item-sub">{providerName(m.provider)} · {m.voice || '默认'}</div>
                       </div>
                     </div>
                     <div className="scheme-item-actions">
@@ -1258,7 +1237,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
                           <button
                             key={o.value}
                             type="button"
-                            className={`voice-batch-btn ${m.voice === o.value ? 'voice-batch__on' : ''}`}
+                            className={`voice-batch-btn ${m.voice === o.value ? 'voice-batch--on' : ''}`}
                             disabled={!!previewBusy}
                             onClick={() => preview(m, o.value)}
                           >
@@ -1297,22 +1276,6 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               {QWEN_RT_VOICES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
-        )}
-        {(activeScheme?.provider === 'cosyvoice' || activeScheme?.provider === 'qwen') && (
-          <>
-            <label className="settings-field">
-              <span className="settings-field-label">档位</span>
-              <select value={activeScheme.tier || 'flash'} onChange={(e) => updateTTS(activeTTS, { tier: e.target.value as 'flash' | 'plus' })}>
-                {TIER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </label>
-            <label className="settings-field">
-              <span className="settings-field-label">音色</span>
-              <select value={activeScheme.voice} onChange={(e) => updateTTS(activeTTS, { voice: e.target.value })}>
-                {(activeScheme.provider === 'cosyvoice' ? COSYVOICE_VOICES : QWEN_VOICES).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </label>
-          </>
         )}
         {activeScheme && activeScheme.provider === 'piper' && (
           <label className="settings-field">
@@ -1400,7 +1363,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
       <>
         {showAddWake && (
           <div className="modal-overlay" onClick={() => { setShowAddWake(false) }}>
-            <div className="modal settings-form-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal settings-form-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <span className="modal-role">编辑方案</span>
                 <button className="modal-close" onClick={() => { setShowAddWake(false) }}>✕ 关闭</button>
@@ -1466,7 +1429,7 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
               const isDefault = m.engine === 'sherpa'
               return (
                 <div key={m.id} className={`scheme-item ${isActive ? 'scheme-item--on' : ''}`}>
-                  <div className="scheme-item-main" onClick={() => applyWake(m)}>
+                  <div className="scheme-item-main" role="button" tabIndex={0} onClick={() => applyWake(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (e.currentTarget as HTMLElement).click() } }}>
                     <span className="scheme-item-icon">{isDefault ? '✅' : '⬜'}</span>
                     <div className="scheme-item-info">
                       <div className="scheme-item-name">
@@ -1508,12 +1471,18 @@ export function SettingsPanel({ onClose, ui, setUi }: { onClose: () => void; ui:
   const allTabs: Group[] = [{ key: 'status', label: '状态' }, ...groups, ...EXTRA_TABS]
   const currentInput = config ? getPath(config, 'audio.input_device') : undefined
 
+  const handleClose = () => {
+    const dirty = !!origConfig && JSON.stringify(config) !== JSON.stringify(origConfig)
+    if (dirty && !window.confirm('有未保存的更改，确认放弃并关闭？')) return
+    onClose()
+  }
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal settings" onClick={(ev) => ev.stopPropagation()}>
+    <div className="modal-overlay" onClick={handleClose}>
+      <div className="modal settings" role="dialog" aria-modal="true" onClick={(ev) => ev.stopPropagation()}>
         <div className="modal-head">
           <span className="modal-role">设置</span>
-          <button className="modal-close" onClick={onClose}>✕ 关闭</button>
+          <button className="modal-close" onClick={handleClose}>✕ 关闭</button>
         </div>
 
         <div className="settings-layout">

@@ -1,33 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { stateColorsFromCss } from './Nebula'
-
-/* 生命值曲线（与 Nebula 同源）：波形与光球共用同一套「生命力」节拍 */
-function lifeOf(s: string, t: number, env: number): number {
-  switch (s) {
-    case 'sleeping':
-      return 0.5 + Math.sin((t * Math.PI * 2) / 14) * 0.1
-    case 'idle':
-      return 0.5 + Math.sin((t * Math.PI * 2) / 14) * 0.25
-    case 'listening':
-      return 0.5 + Math.sin((t * Math.PI * 2) / 8) * 0.25
-    case 'processing':
-      return 0.3 + Math.pow(Math.abs(Math.sin((t * Math.PI * 2) / 5)), 1.5) * 0.55
-    case 'speaking':
-      return 0.25 + env * 0.9
-    case 'executing':
-    case 'working':
-      return 0.5 + Math.sin((t * Math.PI * 2) / 8) * 0.225
-    case 'await_approval': {
-      const ph = (t % 2.5) / 2.5 /* 急促双跳 */
-      return 0.15 + 0.75 * (Math.exp(-ph * 7) * 0.9 + Math.exp(-Math.max(0, ph - 0.32) * 9) * 0.6)
-    }
-    case 'confirm_shutdown': {
-      const ph = (t % 4) / 4 /* 沉重搏动 */
-      return 0.2 + Math.pow(Math.sin(ph * Math.PI), 2) * 0.6
-    }
-  }
-  return 0.5
-}
+import { lifeOf } from '../lib/life'
 
 /* 各态底噪包络区间 [低, 高]：非聆听/播报态也保持微弱起伏，避免声纹完全静止 */
 const ENV_MAP: Record<string, [number, number]> = {

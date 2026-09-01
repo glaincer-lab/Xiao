@@ -17,6 +17,9 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
   const [standing, setStanding] = useState<string[]>([])
   const [deferred, setDeferred] = useState<Deferred[]>([])
   const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [standingBusy, setStandingBusy] = useState<Record<string, boolean>>({})
+  const [deferredBusy, setDeferredBusy] = useState<Record<string, boolean>>({})
 
   const load = useCallback(() => {
     fetch(`${API_BASE}/api/perms`)
@@ -31,6 +34,7 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
         }
       })
       .catch(() => setMsg('读取失败（后端未启动？）'))
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
@@ -39,6 +43,11 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
 
   const toggle = async (id: string, granted: boolean) => {
     setMsg('')
+    const prev = standing.includes(id)
+    if (prev === granted) return
+    // 乐观更新：立即反映勾选，失败再回滚，避免等待期间勾选框滞后
+    setStanding((s) => (granted ? [...s, id] : s.filter((x) => x !== id)))
+    setStandingBusy((b) => ({ ...b, [id]: true }))
     try {
       const r = await fetch(`${API_BASE}/api/perms/standing`, {
         method: 'POST',
@@ -47,14 +56,25 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
       })
       const j = await r.json()
       if (j.ok) setStanding(j.standing || [])
-      else setMsg('更新失败：' + (j.msg || ''))
+      else {
+        setStanding((s) => (prev ? [...s, id] : s.filter((x) => x !== id)))
+        setMsg('更新失败：' + (j.msg || ''))
+      }
     } catch {
+      setStanding((s) => (prev ? [...s, id] : s.filter((x) => x !== id)))
       setMsg('更新失败（网络错误）')
+    } finally {
+      setStandingBusy((b) => {
+        const n = { ...b }
+        delete n[id]
+        return n
+      })
     }
   }
 
   const decide = async (id: string, approved: boolean) => {
     setMsg('')
+    setDeferredBusy((b) => ({ ...b, [id]: true }))
     try {
       const r = await fetch(`${API_BASE}/api/perms/deferred/${id}`, {
         method: 'POST',
@@ -66,6 +86,12 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
       else setMsg('处理失败：' + (j.msg || ''))
     } catch {
       setMsg('处理失败（网络错误）')
+    } finally {
+      setDeferredBusy((b) => {
+        const n = { ...b }
+        delete n[id]
+        return n
+      })
     }
   }
 
@@ -79,43 +105,59 @@ export function PermsPanel({ onClose }: { onClose: () => void }) {
 
         <div className="settings-body">
           <h4 className="perms-h">常驻授权（勾选后不再询问）</h4>
-          <div className="settings-fields">
-            {categories.map((c) => (
-              <label key={c.id} className="settings-field">
-                <span className="settings-field-label">
-                  {c.label}
-                  <span className="perms-desc">{c.desc}</span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={standing.includes(c.id)}
-                  onChange={(e) => toggle(c.id, e.target.checked)}
-                />
-              </label>
-            ))}
-          </div>
+          {loading ? (
+            <p className="settings-msg">加载中…</p>
+          ) : categories.length === 0 ? (
+            <p className="settings-msg">暂无权限项</p>
+          ) : (
+            <div className="settings-fields">
+              {categories.map((c) => (
+                <label key={c.id} className="settings-field">
+                  <span className="settings-field-label">
+                    {c.label}
+                    <span className="perms-desc">{c.desc}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={standing.includes(c.id)}
+                    disabled={!!standingBusy[c.id]}
+                    onChange={(e) => toggle(c.id, e.target.checked)}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
 
           <h4 className="perms-h">待授权任务</h4>
-          {deferred.length === 0 ? (
+          {loading ? (
+            <p className="settings-msg">加载中…</p>
+          ) : deferred.length === 0 ? (
             <p className="settings-msg">暂无待授权任务</p>
           ) : (
             <div className="perms-list">
-              {deferred.map((d) => (
-                <div key={d.id} className="perms-item">
-                  <div className="perms-item-main">
-                    <span className="perms-item-text">{d.text}</span>
-                    <span className="perms-item-tags">
-                      {(d.needed || []).map((n) => (
-                        <span key={n} className="perms-tag">{NEEDED_LABEL[n] || n}</span>
-                      ))}
-                    </span>
+              {deferred.map((d) => {
+                const busy = !!deferredBusy[d.id]
+                return (
+                  <div key={d.id} className="perms-item">
+                    <div className="perms-item-main">
+                      <span className="perms-item-text">{d.text}</span>
+                      <span className="perms-item-tags">
+                        {(d.needed || []).map((n) => (
+                          <span key={n} className="perms-tag">{NEEDED_LABEL[n] || n}</span>
+                        ))}
+                      </span>
+                    </div>
+                    <div className="perms-item-actions">
+                      <button className="btn btn--allow" disabled={busy} onClick={() => decide(d.id, true)}>
+                        {busy ? '处理中…' : '允许'}
+                      </button>
+                      <button className="btn btn--reject" disabled={busy} onClick={() => decide(d.id, false)}>
+                        拒绝
+                      </button>
+                    </div>
                   </div>
-                  <div className="perms-item-actions">
-                    <button className="btn btn--allow" onClick={() => decide(d.id, true)}>允许</button>
-                    <button className="btn btn--reject" onClick={() => decide(d.id, false)}>拒绝</button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

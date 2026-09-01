@@ -16,6 +16,7 @@ export function connectWS(
   url: string,
   onEvent: (e: ServerEvent) => void,
   onStatus: (connected: boolean) => void,
+  onNotice?: (msg: string, level: 'warn' | 'error') => void,
 ): WSHandle {
   let ws: WebSocket | null = null
   let closed = false
@@ -24,6 +25,8 @@ export function connectWS(
   let heartbeat: number | null = null
   let heartbeatDeadline: number | null = null
   const pending: object[] = []
+  let disconnectNotified = false
+  let troubleshootNotified = false
 
   const clearHeartbeat = () => {
     if (heartbeat !== null) {
@@ -52,6 +55,8 @@ export function connectWS(
     ws = new WebSocket(url)
     ws.onopen = () => {
       retry = 0
+      disconnectNotified = false
+      troubleshootNotified = false
       onStatus(true)
       heartbeatDeadline = Date.now()
       startHeartbeat()
@@ -65,6 +70,20 @@ export function connectWS(
       clearHeartbeat()
       if (!closed) {
         retry = Math.min(retry + 1, 30)
+        // 一次性断线提示：只在首次断开时提醒「正在重连」，避免每次重试都刷屏
+        if (!disconnectNotified) {
+          disconnectNotified = true
+          const notice = '连接已断开，正在重连…'
+          onNotice?.(notice, 'warn')
+          console.warn(`[ws] ${notice}`)
+        }
+        // 连续重连失败：给出一句排查指引（同样一次性，不重复）
+        if (retry >= 5 && !troubleshootNotified) {
+          troubleshootNotified = true
+          const guide = '连续重连失败，请检查后端服务是否运行（默认 http://127.0.0.1:8123）或网络是否可达'
+          onNotice?.(guide, 'error')
+          console.warn(`[ws] ${guide}`)
+        }
         timer = window.setTimeout(open, Math.min(500 * retry, 5000))
       }
     }
@@ -79,7 +98,8 @@ export function connectWS(
         if (e.type === 'pong') return
         onEvent(e)
       } catch {
-        /* 忽略无法解析的消息 */
+        const raw = typeof ev.data === 'string' ? ev.data : String(ev.data)
+        console.warn(`[ws] 收到无法解析的消息：${raw.slice(0, 200)}`)
       }
     }
   }
