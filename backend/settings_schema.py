@@ -60,7 +60,7 @@ PERM_CATEGORIES = [
 # 一体化 MiniCPM-o（vLLM）接入引导：作为「大脑」通过 OpenAI 兼容端点接入
 VLLM_GUIDE = (
     "作为「大脑」接入：MiniCPM-o 通过 vLLM 的 OpenAI 兼容端点接入，填地址 + 模型即可（本地无 Key）。\n"
-    "部署：NVIDIA GPU（约 9B 参数）+ vLLM（MiniCPM-o 多模态需 vllm-omni 分支，见官方 README）。\n"
+    "部署：NVIDIA GPU（MiniCPM-o 8B 全模态，约 5~6GB 显存）+ vLLM（MiniCPM-o 多模态需 vllm-omni 分支，见官方 README）。\n"
     f"步骤：① 装 vLLM → ② 下载 {OMNI_MODEL} → ③ 启动服务 → ④ 上方填地址与模型名。\n"
     "注意：其「一体化语音」（唤醒 / 识别 / 播报）仍待后续接入。"
 )
@@ -141,8 +141,6 @@ SCHEMA: list[dict] = [
      "options": [
          {"value": "qwen_rt", "label": "Qwen 实时流式（快，语音跟字幕）", "status": "ok"},
          {"value": "edge", "label": "edge-tts 免费云", "status": "ok"},
-         {"value": "cosyvoice", "label": "CosyVoice v3（付费云，高音质）", "status": "ok"},
-         {"value": "qwen", "label": "Qwen-Audio-TTS（付费云）", "status": "ok"},
          {"value": "piper", "label": "本地 Piper（离线保底）", "status": "ok"},
          {"value": "omni", "label": "MiniCPM-o（本地 vLLM）", "status": "ok"},
      ]},
@@ -152,11 +150,6 @@ SCHEMA: list[dict] = [
     {"path": "tts.rate", "label": "语速", "type": "select", "group": "tts", "reload": "restart",
      "show_if": {"path": "tts.provider", "value": "edge"},
      "options": TTS_RATES},
-    {"path": "tts.tier", "label": "档位", "type": "select", "group": "tts", "reload": "restart",
-     "options": [
-         {"value": "flash", "label": "flash（快、省钱）", "status": "ok"},
-         {"value": "plus", "label": "plus（音质更好）", "status": "ok"},
-     ]},
     {"path": "_guide.tts.piper", "label": "引导", "type": "guide", "group": "tts",
      "guide": "本地 Piper：完全离线合成，作为断网保底。\n依赖：pip install piper-tts；声库 models/zh_CN-chaowen-medium.onnx（已随项目提供）。"},
     {"path": "_guide.tts.omni", "label": "引导", "type": "guide", "group": "tts",
@@ -221,7 +214,7 @@ SCHEMA: list[dict] = [
      "hint": "保存备用（流式接入后生效）"},
     {"path": "llm.cloud.image_input", "label": "支持图片输入", "type": "checkbox", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "cloud"},
-     "hint": "开启后输入框出现贴图/截图按钮；需模型本身支持视觉（如 qwen-vl-max、glm-4v），DeepSeek 暂不支持图片"},
+     "hint": "开启后输入框出现贴图/截图按钮；需模型本身支持视觉（如 qwen-vl-max、glm-4v），DeepSeek Flash Vision 支持多模态"},
     {"path": "llm.cloud.top_p", "label": "采样 Top P", "type": "text", "group": "llm", "reload": "restart",
      "show_if": {"path": "llm.provider", "value": "cloud"},
      "hint": "0~1，留空跟随模型默认"},

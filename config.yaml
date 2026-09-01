@@ -121,7 +121,7 @@ llm:
     temperature: 0.3
   local:
     base_url: http://localhost:11434/v1
-    model: qwen2.5:7b
+    model: qwen3:8b
     temperature: 0.3
   omni:
     base_url: http://localhost:8000/v1
@@ -137,7 +137,6 @@ tts:
     provider: qwen_rt
     voice: Moon
     rate: +0%
-    tier: flash
     apiKey: ''
     piperModel: models/zh_CN-chaowen-medium.onnx
   - id: tts_edge
@@ -145,14 +144,12 @@ tts:
     provider: edge
     voice: zh-CN-YunjianNeural
     rate: +30%
-    tier: flash
     apiKey: ''
     piperModel: models/zh_CN-chaowen-medium.onnx
   - id: tts_piper
     name: Piper（本地离线保底）
     provider: piper
     voice: ''
-    tier: flash
     rate: +0%
     apiKey: ''
     piperModel: models/zh_CN-chaowen-medium.onnx
@@ -160,7 +157,6 @@ tts:
     name: MiniCPM-o（本地 vLLM）
     provider: omni
     voice: ''
-    tier: flash
     rate: +0%
     apiKey: ''
     piperModel: models/zh_CN-chaowen-medium.onnx

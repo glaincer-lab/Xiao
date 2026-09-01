@@ -39,8 +39,6 @@ _LLM_LABELS = {
 _TTS_LABELS = {
     "edge": "edge-tts",
     "qwen_rt": "Qwen 实时流式",
-    "cosyvoice": "CosyVoice",
-    "qwen": "Qwen-Audio-TTS",
     "piper": "Piper",
     "omni": "MiniCPM-o",
 }

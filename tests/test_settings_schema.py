@@ -29,7 +29,7 @@ class TestDefaults(unittest.TestCase):
 
     def test_ollama_defaults(self):
         self.assertEqual(OLLAMA_BASE_URL, "http://localhost:11434/v1")
-        self.assertEqual(OLLAMA_MODEL, "qwen2.5:7b")
+        self.assertEqual(OLLAMA_MODEL, "qwen3:8b")
 
     def test_cloud_defaults_map(self):
         self.assertIn("deepseek", LLM_CLOUD_DEFAULTS)

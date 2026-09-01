@@ -77,6 +77,19 @@ def env(name: str, default: str | None = None) -> str | None:
     return os.environ.get(name, default)
 
 
+def active_model(cfg: Config, key: str) -> dict[str, Any] | None:
+    """从 cfg 的 {key}.models[] 里按 {key}.active 选当前激活方案；未命中回退 models[0]。
+
+    TTS/ASR/LLM 工厂共用「多方案选 active」逻辑，统一收口避免漂移；cfg 由调用方注入
+    （便于测试 mock 与 provider_test 复用）。无 models 时返回 None（调用方回退旧单字段）。
+    """
+    models = cfg.get(f"{key}.models", None)
+    if not models:
+        return None
+    active = cfg.get(f"{key}.active")
+    return next((x for x in models if x.get("id") == active), (models[0] if models else None))
+
+
 # ---- 引擎默认参数（唯一事实来源）----
 # 各工厂 / 注册表 / 前端提示统一从这里读取，避免同一默认值在多处硬编码而漂移。
 # 一体化 MiniCPM-o 经本地 vLLM-omni 服务接入（与云 LLM 同为 base_url+model+key 三件套）
@@ -85,7 +98,7 @@ OMNI_MODEL = "openbmb/MiniCPM-o-4_5"
 
 # 本地 Ollama（OpenAI 兼容端点，无需真实 Key）
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
-OLLAMA_MODEL = "qwen2.5:7b"
+OLLAMA_MODEL = "qwen3:8b"
 
 # 云端 LLM 供应商默认参数：默认 base_url、默认模型、回退用的环境变量 key
 # （None 表示仅用配置里的 key，不读环境变量）
