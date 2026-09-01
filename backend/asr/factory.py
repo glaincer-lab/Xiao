@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from backend.asr.base import ASREngine, ResultCallback
-from backend.config import OMNI_BASE_URL, OMNI_MODEL, config, env
+from backend.config import OMNI_BASE_URL, OMNI_MODEL, active_model, config, env
 
 
 def _build_cloud(on_result: ResultCallback, model: str, api_key: str | None) -> ASREngine:
@@ -41,26 +41,29 @@ def _build_omni(on_result: ResultCallback) -> ASREngine:
 
 
 def build_asr(on_result: ResultCallback) -> ASREngine:
+    from backend.authorization import AuthorizationCenter
+
     # 多方案：读 active 指向的方案
-    models = config.get("asr.models", None)
-    if models:
-        active = config.get("asr.active")
-        m = next((x for x in models if x.get("id") == active), (models[0] if models else None))
-        if m:
-            provider = m.get("provider", "cloud")
-            if provider == "cloud":
-                return _build_cloud(on_result, m.get("model", "fun-asr-flash-8k-realtime"), m.get("apiKey"))
-            if provider == "local":
-                return _build_local(on_result, m.get("model", "paraformer-zh"), m.get("localModelDir", ""))
-            if provider == "omni":
-                return _build_omni(on_result)
-            raise ValueError(f"未支持的 ASR provider: {provider}")
+    m = active_model(config, "asr")
+    if m:
+        provider = m.get("provider", "cloud")
+        if provider == "cloud":
+            # 未授权上云 → 静默回退本地 FunASR（不抛异常）
+            if not AuthorizationCenter().is_granted("cloud_asr"):
+                local_cfg = config.section("asr.local")
+                return _build_local(on_result, local_cfg.get("model", "paraformer-zh"), local_cfg.get("model_dir", ""))
+            return _build_cloud(on_result, m.get("model", "fun-asr-flash-8k-realtime"), m.get("apiKey"))
+        if provider == "local":
+            return _build_local(on_result, m.get("model", "paraformer-zh"), m.get("localModelDir", ""))
+        if provider == "omni":
+            return _build_omni(on_result)
+        raise ValueError(f"未支持的 ASR provider: {provider}")
 
     # 回退旧单一字段（兼容旧配置）
     provider = config.get("asr.provider", "cloud")
     if provider == "omni":
         return _build_omni(on_result)
-    if provider in ("cloud", "auto"):
+    if provider in ("cloud", "auto") and AuthorizationCenter().is_granted("cloud_asr"):
         cloud_cfg = config.section("asr.cloud")
         p = cloud_cfg.get("provider", "aliyun")
         if p == "aliyun":

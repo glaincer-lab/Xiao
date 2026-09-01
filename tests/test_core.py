@@ -12,6 +12,7 @@ fastapi / uvicorn 及 main.py 顶层 import 的各模块。缺依赖时先：
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from backend.config import OMNI_MODEL, Config
 from backend.llm.base import Completion
@@ -153,6 +154,10 @@ class TestSampling(unittest.TestCase):
         old = factory.config
         factory.config = Config(data)
         self.addCleanup(lambda: setattr(factory, "config", old))
+        # cloud_llm 授权默认关会回退本地 Ollama；采样字段接线测试需授权云端
+        auth_patcher = mock.patch("backend.authorization.AuthorizationCenter.is_granted", return_value=True)
+        auth_patcher.start()
+        self.addCleanup(auth_patcher.stop)
         return factory
 
     def test_empty_means_not_sent(self):

@@ -11,6 +11,7 @@ from backend.config import (
     OMNI_MODEL,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    active_model,
     config,
     env,
 )
@@ -67,6 +68,7 @@ def _build_scheme(m: dict) -> LLMClient:
             model=model or OLLAMA_MODEL,
             api_key="EMPTY",  # Ollama 无需真实 key
             temperature=temperature,
+            is_cloud=False,
             **sampling,
         )
 
@@ -76,6 +78,7 @@ def _build_scheme(m: dict) -> LLMClient:
             model=model or OMNI_MODEL,
             api_key=api_key or None,
             temperature=temperature,
+            is_cloud=False,
             **sampling,
         )
 
@@ -88,18 +91,22 @@ def _build_scheme(m: dict) -> LLMClient:
         model=model or model_default,
         api_key=api_key or (env(env_key) if env_key else None),
         temperature=temperature,
+        is_cloud=True,
         **sampling,
     )
 
 
 def build_llm() -> LLMClient:
+    from backend.authorization import AuthorizationCenter
+
     # 多方案：读 active 指向的方案（与 asr/tts 一致）
-    models = config.get("llm.models", None)
-    if models:
-        active = config.get("llm.active")
-        m = next((x for x in models if x.get("id") == active), (models[0] if models else None))
-        if m:
-            return _build_scheme(m)
+    m = active_model(config, "llm")
+    if m:
+        provider = m.get("provider", "deepseek")
+        # 未授权上云 → 静默回退本地 Ollama（不抛异常）
+        if provider in LLM_CLOUD_DEFAULTS and not AuthorizationCenter().is_granted("cloud_llm"):
+            return _build_scheme({"provider": "ollama"})
+        return _build_scheme(m)
 
     # 回退旧单一字段（兼容旧配置）
     provider = config.get("llm.provider", "cloud")
@@ -111,6 +118,7 @@ def build_llm() -> LLMClient:
             model=cfg.get("model", OLLAMA_MODEL),
             api_key="EMPTY",
             temperature=float(cfg.get("temperature", 0.3)),
+            is_cloud=False,
             **_sampling(
                 "ollama",
                 cfg.get("top_p"),
@@ -132,16 +140,21 @@ def build_llm() -> LLMClient:
             model=omni.get("model", OMNI_MODEL),
             api_key=omni.get("api_key") or None,
             temperature=temperature,
+            is_cloud=False,
         )
 
     if provider_cloud not in LLM_CLOUD_DEFAULTS:
         raise ValueError(f"未支持的 LLM provider: {provider_cloud}")
+    # 未授权上云 → 静默回退本地 Ollama（不抛异常）
+    if not AuthorizationCenter().is_granted("cloud_llm"):
+        return _build_scheme({"provider": "ollama"})
     base_url_default, model_default, env_key = LLM_CLOUD_DEFAULTS[provider_cloud]
     return OpenAICompatClient(
         base_url=cfg.get("base_url", base_url_default),
         model=model or model_default,
         api_key=api_key or (env(env_key) if env_key else None),
         temperature=temperature,
+        is_cloud=True,
         **_sampling(
             provider_cloud,
             cfg.get("top_p"),

@@ -17,6 +17,7 @@ class OpenAICompatClient(LLMClient):
         top_p: float | None = None,
         max_tokens: int | None = None,
         extra_body: dict | None = None,
+        is_cloud: bool = False,
     ) -> None:
         from openai import AsyncOpenAI  # 延迟导入
 
@@ -39,6 +40,7 @@ class OpenAICompatClient(LLMClient):
         self._top_p = top_p
         self._max_tokens = max_tokens
         self._extra_body = extra_body
+        self.is_cloud = is_cloud
 
     async def complete(
         self,
